@@ -35,19 +35,21 @@ COLONNE = COLONNE_TESTO + COLONNE_NUMERI
 
 UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo"]
 
-BLU_SERIE = "#2a78d6"
-GRIGIO_GRIGLIA = "#e1e0d9"
-GRIGIO_ETICHETTE = "#898781"
+# Palette del brand Resolve (dark navy + oro), come MORA.
+ORO = "#C9A96A"           # oro champagne — barre del grafico
+CREMA = "#ECE7DA"         # testo
+GRIGLIA = "#3C4C6E"       # linee griglia su fondo navy
+ETICHETTE = "#A9B4C9"     # etichette assi
 
 # Larghezza di lavoro della planimetria (px): la libreria di disegno
 # restituisce le coordinate nello spazio dell'immagine mostrata, perciò
 # fissiamo questa larghezza e ci lavoriamo sempre dentro.
 LARGHEZZA_PLAN = 820
-COL_CAL_LINEA = (235, 104, 52, 255)     # arancione — calibrazione
-COL_CAL_PUNTO = (235, 104, 52, 255)
-COL_ST_LINEA = (42, 120, 214, 255)      # blu — stanza
-COL_ST_PUNTO = (42, 120, 214, 255)
-COL_ST_FILL = (42, 120, 214, 70)
+COL_CAL_LINEA = (201, 169, 106, 255)    # oro — calibrazione
+COL_CAL_PUNTO = (201, 169, 106, 255)
+COL_ST_LINEA = (110, 143, 199, 255)     # azzurro — stanza
+COL_ST_PUNTO = (110, 143, 199, 255)
+COL_ST_FILL = (110, 143, 199, 80)
 
 
 # ------------------------------------------------------------------ utilità
@@ -120,9 +122,10 @@ def grafico_totali(totali):
         x=valori,
         y=categorie,
         orientation="h",
-        marker_color=BLU_SERIE,
+        marker_color=ORO,
         text=[euro(v) for v in valori],
         textposition="outside",
+        textfont=dict(color=CREMA),
         cliponaxis=False,
         hovertemplate="%{y}: %{text}<extra></extra>",
     ))
@@ -132,10 +135,11 @@ def grafico_totali(totali):
         margin=dict(l=0, r=80, t=10, b=10),
         height=max(200, 60 + 40 * len(categorie)),
         showlegend=False,
-        font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif'),
-        xaxis=dict(showgrid=True, gridcolor=GRIGIO_GRIGLIA, zeroline=False,
-                   tickfont=dict(color=GRIGIO_ETICHETTE)),
-        yaxis=dict(showgrid=False),
+        font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif',
+                  color=CREMA),
+        xaxis=dict(showgrid=True, gridcolor=GRIGLIA, zeroline=False,
+                   tickfont=dict(color=ETICHETTE)),
+        yaxis=dict(showgrid=False, tickfont=dict(color=CREMA)),
     )
     return fig
 
