@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cme_viewer</title>
+  <script src="./streamlit-component-lib.js"></script>
+  <script src="./main.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; }
+    #viewer {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      background: transparent;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    #image {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewer"><img id="image" draggable="false" /></div>
+</body>
+</html>

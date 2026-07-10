@@ -4,4 +4,3 @@ plotly
 openpyxl
 Pillow
 PyMuPDF
-streamlit-image-coordinates

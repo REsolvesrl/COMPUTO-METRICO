@@ -17,10 +17,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from PIL import Image, ImageDraw
-from streamlit_image_coordinates import streamlit_image_coordinates
 
 import calcoli
 import planimetria
+from cme_viewer import image_viewer
 
 st.set_page_config(
     page_title="CME — Computo Metrico",
@@ -41,12 +41,10 @@ CREMA = "#ECE7DA"         # testo
 GRIGLIA = "#3C4C6E"       # linee griglia su fondo navy
 ETICHETTE = "#A9B4C9"     # etichette assi
 
-# Planimetria. Teniamo l'immagine a una risoluzione "canonica" (CANON_MAX) che
-# è lo spazio in cui vivono la calibrazione e i punti: così zoom e ritaglio sono
-# solo un modo di guardarne una porzione e non intaccano la scala. DISPLAY_W è
-# la larghezza a cui mostriamo la porzione visibile (la vista).
+# Planimetria. Teniamo l'immagine a una risoluzione "canonica" (CANON_MAX): è lo
+# spazio in cui vivono la calibrazione e i punti. Lo zoom con la rotellina avviene
+# solo nel browser (componente cme_viewer) e non intacca queste coordinate.
 CANON_MAX = 2000
-DISPLAY_W = 820
 COL_CAL_LINEA = (201, 169, 106, 255)    # oro — calibrazione
 COL_CAL_PUNTO = (201, 169, 106, 255)
 COL_ST_LINEA = (110, 143, 199, 255)     # azzurro — stanza
@@ -176,84 +174,35 @@ def carica_immagine(file):
     return img
 
 
-def vista_intera(base):
-    """Rettangolo che copre tutta l'immagine (nessuno zoom)."""
-    return (0, 0, base.width, base.height)
+def disegna_overlay(base, punti, col_linea, col_punto, chiudi, riempi_col=None):
+    """Disegna punti, segmenti (ed eventuale poligono) sull'immagine.
 
-
-def prepara_vista(base, vista):
-    """Ritaglia la porzione visibile e la porta a DISPLAY_W di larghezza.
-
-    La vista è (x0, y0, x1, y1) in pixel dell'immagine originale ("canonici").
-    Se la porzione è piccola viene ingrandita (zoom) per cliccare con precisione.
+    I punti sono in coordinate dell'immagine ("canoniche"); si disegna a quella
+    risoluzione e lo zoom del browser ingrandisce anche il disegno. Spessori e
+    pallini sono proporzionati alla dimensione dell'immagine per restare visibili
+    quando si guarda l'intera planimetria.
     """
-    x0, y0, x1, y1 = (int(v) for v in vista)
-    ritaglio = base.crop((x0, y0, x1, y1))
-    altezza = max(1, round(ritaglio.height * DISPLAY_W / max(1, ritaglio.width)))
-    return ritaglio.resize((DISPLAY_W, altezza))
-
-
-def punto_a_display(punto_can, vista, dimensioni):
-    """Da coordinate originali a coordinate dell'immagine mostrata (per disegnare)."""
-    x0, y0, x1, y1 = vista
-    larg, alt = dimensioni
-    fx = (punto_can[0] - x0) / max(1e-9, x1 - x0)
-    fy = (punto_can[1] - y0) / max(1e-9, y1 - y0)
-    return (fx * larg, fy * alt)
-
-
-def punto_a_canonico(x_disp, y_disp, larg, alt, vista):
-    """Da coordinate dell'immagine mostrata a coordinate originali.
-
-    Usa le dimensioni (larg, alt) restituite dal componente: così la conversione
-    è corretta anche se il browser rimpicciolisce l'immagine per stare in pagina.
-    """
-    x0, y0, x1, y1 = vista
-    fx = x_disp / max(1e-9, larg)
-    fy = y_disp / max(1e-9, alt)
-    return (x0 + fx * (x1 - x0), y0 + fy * (y1 - y0))
-
-
-def box_zoom(base, p1, p2, minimo=30):
-    """Rettangolo di zoom valido dai due angoli trascinati (in coord. originali).
-
-    Ordina gli angoli, li limita ai bordi dell'immagine e scarta i box troppo
-    piccoli (trascinamenti accidentali). Restituisce None se non valido.
-    """
-    x0, x1 = sorted((p1[0], p2[0]))
-    y0, y1 = sorted((p1[1], p2[1]))
-    x0 = max(0, min(x0, base.width))
-    x1 = max(0, min(x1, base.width))
-    y0 = max(0, min(y0, base.height))
-    y1 = max(0, min(y1, base.height))
-    if (x1 - x0) < minimo or (y1 - y0) < minimo:
-        return None
-    return (x0, y0, x1, y1)
-
-
-def disegna_overlay(img_disp, punti_can, vista, col_linea, col_punto,
-                    chiudi, riempi_col=None):
-    """Disegna punti, segmenti (ed eventuale poligono) sull'immagine mostrata."""
-    punti = [punto_a_display(p, vista, img_disp.size) for p in punti_can]
+    spessore = max(2, round(base.width / 500))
+    raggio = max(5, round(base.width / 220))
     punti_int = [(int(x), int(y)) for x, y in punti]
-    img = img_disp.convert("RGBA")
+    img = base.convert("RGBA")
     strato = Image.new("RGBA", img.size, (0, 0, 0, 0))
     dis = ImageDraw.Draw(strato)
     if riempi_col and len(punti_int) >= 3:
         dis.polygon(punti_int, fill=riempi_col)
     if len(punti_int) >= 2:
         sequenza = punti_int + ([punti_int[0]] if chiudi else [])
-        dis.line(sequenza, fill=col_linea, width=3, joint="curve")
+        dis.line(sequenza, fill=col_linea, width=spessore, joint="curve")
     for x, y in punti_int:
-        dis.ellipse([x - 6, y - 6, x + 6, y + 6],
+        dis.ellipse([x - raggio, y - raggio, x + raggio, y + raggio],
                     fill=col_punto, outline=(255, 255, 255, 255), width=2)
     return Image.alpha_composite(img, strato).convert("RGB")
 
 
-def evento_nuovo(valore, chiave_ts):
-    """Restituisce l'evento (click o trascinamento) solo se è nuovo, altrimenti None.
+def click_nuovo(valore, chiave_ts):
+    """Se il click è nuovo restituisce (x, y) in coord. immagine, altrimenti None.
 
-    Ogni evento ha un timestamp: confrontandolo con l'ultimo elaborato evitiamo
+    Ogni click ha un timestamp: confrontandolo con l'ultimo elaborato evitiamo
     che i rerun di Streamlit re-inseriscano lo stesso punto.
     """
     if not valore:
@@ -262,7 +211,7 @@ def evento_nuovo(valore, chiave_ts):
     if ts == st.session_state.get(chiave_ts):
         return None
     st.session_state[chiave_ts] = ts
-    return valore
+    return (valore["x"], valore["y"])
 
 
 # ------------------------------------------------- stato iniziale e caricamento
@@ -282,8 +231,7 @@ st.session_state.setdefault("punti_cal", [])
 st.session_state.setdefault("punti_stanza", [])
 st.session_state.setdefault("ts_cal", None)
 st.session_state.setdefault("ts_st", None)
-st.session_state.setdefault("ts_zoom", None)
-st.session_state.setdefault("vista", None)  # rettangolo di zoom/ritaglio
+st.session_state.setdefault("reset_zoom", 0)  # cambiando, la vista si riadatta
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
 if "da_caricare" in st.session_state:
@@ -524,11 +472,10 @@ vale una misura nota** sul disegno, e da lì calcola tutte le altre.
 4. **Aggiungi al computo**: la superficie diventa una voce nella scheda
    «Computo metrico».
 
-🔍 **Zoom / ritaglia**: con la modalità *Zoom* trascini un rettangolo attorno
-a una zona per ingrandirla e cliccare gli angoli con precisione; la scala
-resta valida perché è ancorata al disegno originale. «Vista intera» riporta
-alla planimetria completa. Puoi zoomare in qualsiasi momento, anche mentre
-calibri o misuri.
+🖱️ **Zoom con la rotellina**: gira la **rotellina del mouse** per ingrandire
+verso il puntatore, **trascina** per spostarti, **clicca** per piazzare i punti.
+Zoomare aiuta a cliccare con precisione e non tocca la scala (resta ancorata al
+disegno). Il bottone «Reimposta vista» torna alla planimetria intera e centrata.
 
 ⚠️ La precisione dipende dalla qualità del disegno e dalla cura dei click:
 è pensata per stime e computi, non per usi catastali di precisione.
@@ -550,8 +497,7 @@ calibri o misuri.
                 st.session_state.punti_stanza = []
                 st.session_state.ts_cal = None
                 st.session_state.ts_st = None
-                st.session_state.ts_zoom = None
-                st.session_state.vista = vista_intera(img_caricata)
+                st.session_state.reset_zoom += 1
             except Exception as errore:  # noqa: BLE001
                 st.error(f"Non riesco a leggere questo file: {errore}")
 
@@ -559,10 +505,6 @@ calibri o misuri.
     if base is None:
         st.info("Carica una planimetria qui sopra per iniziare.")
     else:
-        if st.session_state.vista is None:
-            st.session_state.vista = vista_intera(base)
-        vista = st.session_state.vista
-
         if st.session_state.mpp:
             st.success(
                 f"✅ Scala impostata: 1 metro = "
@@ -570,60 +512,31 @@ calibri o misuri.
         else:
             st.warning("⚠️ Scala non ancora impostata: comincia da «Calibra».")
 
-        # Barra vista: quando si è ingranditi, si può tornare all'intera.
-        if vista != vista_intera(base):
-            colz1, colz2 = st.columns([3, 1])
-            colz1.caption("🔍 Vista ingrandita attiva: clicchi con più precisione.")
-            if colz2.button("↩️ Vista intera"):
-                st.session_state.vista = vista_intera(base)
-                st.rerun()
+        st.caption("🖱️ **Rotellina** per zoomare verso il puntatore, "
+                   "**trascina** per spostarti, **clic** per piazzare un punto.")
 
         modo = st.radio(
             "Cosa vuoi fare?",
-            ["📏 Calibra la scala", "📐 Misura una stanza", "🔍 Zoom / ritaglia"],
+            ["📏 Calibra la scala", "📐 Misura una stanza"],
             horizontal=True)
 
-        img_vista = prepara_vista(base, vista)
-
-        # -------------------------------------------------- zoom / ritaglio
-        if modo.startswith("🔍"):
-            st.caption("**Trascina** un rettangolo attorno alla zona da "
-                       "ingrandire: tieni premuto, sposta e rilascia. Poi vai "
-                       "su «Calibra» o «Misura» per lavorarci dentro; con "
-                       "«Vista intera» torni alla planimetria completa.")
-            valore = streamlit_image_coordinates(
-                img_vista, width=img_vista.width, key="click_zoom",
-                click_and_drag=True, cursor="crosshair")
-            evento = evento_nuovo(valore, "ts_zoom")
-            if evento and evento.get("x2") is not None:
-                p1 = punto_a_canonico(evento["x1"], evento["y1"],
-                                      evento["width"], evento["height"], vista)
-                p2 = punto_a_canonico(evento["x2"], evento["y2"],
-                                      evento["width"], evento["height"], vista)
-                nuova = box_zoom(base, p1, p2)
-                if nuova:
-                    st.session_state.vista = nuova
-                    st.rerun()
-                else:
-                    st.info("Rettangolo troppo piccolo: riprova trascinando "
-                            "una zona più ampia.")
+        if st.button("🔍 Reimposta vista (adatta e centra)"):
+            st.session_state.reset_zoom += 1
+            st.rerun()
 
         # ------------------------------------------------------ calibrazione
-        elif modo.startswith("📏"):
+        if modo.startswith("📏"):
             st.caption("Clicca i **due estremi** di una misura che conosci "
-                       "(es. un lato quotato). Usa lo **Zoom** per essere "
-                       "preciso; «Ricomincia» azzera i punti.")
+                       "(es. un lato quotato). Zooma con la rotellina per "
+                       "essere preciso; «Ricomincia» azzera i punti.")
             punti = st.session_state.punti_cal
-            img_cal = disegna_overlay(img_vista, punti, vista, COL_CAL_LINEA,
+            img_cal = disegna_overlay(base, punti, COL_CAL_LINEA,
                                       COL_CAL_PUNTO, chiudi=False)
-            valore = streamlit_image_coordinates(
-                img_cal, width=img_cal.width, key="click_cal",
-                cursor="crosshair")
-            evento = evento_nuovo(valore, "ts_cal")
-            if evento is not None and len(punti) < 2:
-                punti.append(punto_a_canonico(
-                    evento["x"], evento["y"], evento["width"],
-                    evento["height"], vista))
+            valore = image_viewer(img_cal, reset_token=st.session_state.reset_zoom,
+                                  key="viewer_cal")
+            nuovo = click_nuovo(valore, "ts_cal")
+            if nuovo is not None and len(punti) < 2:
+                punti.append(nuovo)
                 st.rerun()
 
             if st.button("↩️ Ricomincia calibrazione"):
@@ -653,21 +566,18 @@ calibri o misuri.
                 st.info("Prima imposta la scala con «Calibra la scala».")
             else:
                 st.caption("Clicca **uno dopo l'altro gli angoli** della "
-                           "stanza (usa lo **Zoom** per gli angoli piccoli). "
-                           "Servono almeno 3 punti; il perimetro si chiude da "
-                           "solo.")
+                           "stanza (zooma con la rotellina per gli angoli "
+                           "piccoli). Servono almeno 3 punti; il perimetro si "
+                           "chiude da solo.")
                 punti = st.session_state.punti_stanza
-                img_st = disegna_overlay(img_vista, punti, vista, COL_ST_LINEA,
+                img_st = disegna_overlay(base, punti, COL_ST_LINEA,
                                          COL_ST_PUNTO, chiudi=True,
                                          riempi_col=COL_ST_FILL)
-                valore = streamlit_image_coordinates(
-                    img_st, width=img_st.width, key="click_st",
-                    cursor="crosshair")
-                evento = evento_nuovo(valore, "ts_st")
-                if evento is not None:
-                    punti.append(punto_a_canonico(
-                        evento["x"], evento["y"], evento["width"],
-                        evento["height"], vista))
+                valore = image_viewer(img_st, reset_token=st.session_state.reset_zoom,
+                                      key="viewer_st")
+                nuovo = click_nuovo(valore, "ts_st")
+                if nuovo is not None:
+                    punti.append(nuovo)
                     st.rerun()
 
                 col_x, col_y = st.columns(2)
