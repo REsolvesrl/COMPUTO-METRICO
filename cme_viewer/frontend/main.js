@@ -1,6 +1,7 @@
 // cme_viewer — visualizzatore planimetrie con barra strumenti.
 // Tutte le coordinate scambiate col server sono nello spazio dell'immagine
 // originale ("canoniche"); zoom e spostamento sono solo visivi.
+// L'utente vede SOLO metri: mai pixel.
 
 "use strict";
 
@@ -21,9 +22,14 @@ let coloreAttivo = "#E57373", mpp = 0, fontPx = 14;
 let drawing = [];            // poligono in corso (coord. immagine)
 let cursorPos = null;        // mouse in coord. immagine (per il rubber band)
 let selZona = null, selParete = null;
-let drag = null;             // {kind:"pan"|"vertex"|"move"|"vector", ...}
+let drag = null;             // {kind:"pan"|"vertex"|"move"|"vector"|"label"}
 let vecStart = null, vecEnd = null;
+let misure = [];             // misure "al volo": SOLO locali, mai inviate
+let labelRects = [];         // rettangoli (schermo) delle etichette disegnate
 let seqN = 0;
+
+const COL_SCALA = "#FFD400";       // giallo vivo — vettore di scala
+const COL_MISURA = "#3D9BE9";      // azzurro — misure al volo
 
 // ------------------------------------------------------------- conversioni
 function img2scr(p) { return [p[0] * scale + tx, p[1] * scale + ty]; }
@@ -79,10 +85,10 @@ function hexRgba(hex, alpha) {
 }
 
 function fmt(n, dec) { return n.toFixed(dec).replace(".", ","); }
-function fmtLunghezza(pxLen) {
-  let t = Math.round(pxLen) + " px";
-  if (mpp > 0) t += "  ·  " + fmt(pxLen * mpp, 2) + " m";
-  return t;
+
+// Lunghezza SOLO in metri: senza scala non mostriamo nulla (mai pixel).
+function fmtMetri(pxLen) {
+  return (mpp > 0) ? fmt(pxLen * mpp, 2) + " m" : "";
 }
 
 // ------------------------------------------------------------------- invio
@@ -94,6 +100,9 @@ function arrotonda(pts) {
   return pts.map(function (p) {
     return [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10];
   });
+}
+function inviaSelezione() {
+  send({ tipo: "selezione", zona: selZona, parete: selParete });
 }
 
 // ------------------------------------------------------------------- vista
@@ -140,10 +149,12 @@ function pill(x, y, w, h, r) {
   ctx.closePath();
 }
 
+// Disegna un'etichetta centrata in cxy (coord. schermo) e ne restituisce il
+// rettangolo, per il trascinamento.
 function drawLabel(cxy, testo, size) {
-  if (!testo) return;
+  if (!testo) return null;
   const righe = String(testo).split("\n").filter(function (r) { return r; });
-  if (!righe.length) return;
+  if (!righe.length) return null;
   ctx.font = "600 " + size + "px system-ui, sans-serif";
   let maxW = 0;
   for (const r of righe) maxW = Math.max(maxW, ctx.measureText(r).width);
@@ -162,29 +173,54 @@ function drawLabel(cxy, testo, size) {
   for (let i = 0; i < righe.length; i++) {
     ctx.fillText(righe[i], cxy[0], y + 4 + lineH * (i + 0.5));
   }
+  return { x: x, y: y, w: w, h: h };
 }
 
 function tratteggio(on) {
-  ctx.setLineDash(on ? [7 / scale, 5 / scale] : []);
+  ctx.setLineDash(on ? [8 / scale, 6 / scale] : []);
 }
 
-function drawVettore(p1, p2, dashed, colore) {
-  ctx.strokeStyle = colore;
-  ctx.lineWidth = 3 / scale;
-  tratteggio(dashed);
-  ctx.beginPath();
-  ctx.moveTo(p1[0], p1[1]);
-  ctx.lineTo(p2[0], p2[1]);
-  ctx.stroke();
-  tratteggio(false);
-  // tacche perpendicolari alle estremità
+// Vettore ben visibile: alone bianco sotto, colore sopra, tacche alle
+// estremità. spessore in px schermo (viene diviso per lo zoom).
+function drawVettore(p1, p2, dashed, colore, spessore, evidenzia) {
+  const lw = (spessore || 5) / scale;
   const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
   const L = Math.hypot(dx, dy) || 1;
-  const nx = -dy / L * (8 / scale), ny = dx / L * (8 / scale);
+  const nx = -dy / L * (12 / scale), ny = dx / L * (12 / scale);
+
+  if (evidenzia) {                        // selezione: alone extra
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = lw + 8 / scale;
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(255,255,255,0.75)";   // alone di contrasto
+  ctx.lineWidth = lw + 4 / scale;
+  ctx.beginPath();
+  ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+  ctx.stroke();
+
+  ctx.strokeStyle = colore;
+  ctx.lineWidth = lw;
+  tratteggio(dashed);
+  ctx.beginPath();
+  ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+  ctx.stroke();
+  tratteggio(false);
   ctx.beginPath();
   ctx.moveTo(p1[0] - nx, p1[1] - ny); ctx.lineTo(p1[0] + nx, p1[1] + ny);
   ctx.moveTo(p2[0] - nx, p2[1] - ny); ctx.lineTo(p2[0] + nx, p2[1] + ny);
   ctx.stroke();
+}
+
+function posEtichettaZona(z) {
+  return img2scr(z.etichetta_pos || baricentro(z.punti));
+}
+function posEtichettaParete(p) {
+  if (p.etichetta_pos) return img2scr(p.etichetta_pos);
+  const m = img2scr([(p.p1[0] + p.p2[0]) / 2, (p.p1[1] + p.p2[1]) / 2]);
+  return [m[0], m[1] - 16];
 }
 
 function render() {
@@ -232,28 +268,43 @@ function render() {
   }
 
   for (const p of pareti) {
-    drawVettore(p.p1, p.p2, false, p.id === selParete ? "#E66767" : "#C9A96A");
+    drawVettore(p.p1, p.p2, false, p.colore || "#C9A96A", 5,
+                p.id === selParete);
   }
-  if (scalaTemp) drawVettore(scalaTemp.p1, scalaTemp.p2, true, "#C9A96A");
+  for (const m of misure) {
+    drawVettore(m.p1, m.p2, true, COL_MISURA, 4, false);
+  }
+  if (scalaTemp) drawVettore(scalaTemp.p1, scalaTemp.p2, true, COL_SCALA, 6);
   if (drag && drag.kind === "vector" && vecStart && vecEnd) {
-    drawVettore(vecStart, vecEnd, mode === "scala", "#C9A96A");
+    const col = (mode === "scala") ? COL_SCALA
+      : (mode === "misura") ? COL_MISURA : coloreParete();
+    drawVettore(vecStart, vecEnd, mode !== "parete", col,
+                mode === "scala" ? 6 : 5);
   }
 
   // --- spazio schermo (etichette e maniglie) ---
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  labelRects = [];
 
   for (const z of zone) {
-    drawLabel(img2scr(baricentro(z.punti)), z.etichetta, fontPx);
+    const r = drawLabel(posEtichettaZona(z), z.etichetta, fontPx);
+    if (r) labelRects.push({ r: r, el: "zona", obj: z });
   }
   for (const p of pareti) {
-    const m = img2scr([(p.p1[0] + p.p2[0]) / 2, (p.p1[1] + p.p2[1]) / 2]);
-    drawLabel([m[0], m[1] - 14], p.etichetta, Math.max(10, fontPx - 2));
+    const r = drawLabel(posEtichettaParete(p), p.etichetta,
+                        Math.max(10, fontPx - 2));
+    if (r) labelRects.push({ r: r, el: "parete", obj: p });
+  }
+  for (const m of misure) {
+    const c = img2scr([(m.p1[0] + m.p2[0]) / 2, (m.p1[1] + m.p2[1]) / 2]);
+    drawLabel([c[0], c[1] - 16], fmtMetri(dist(m.p1, m.p2)),
+              Math.max(10, fontPx - 2));
   }
   if (scalaTemp) {
-    const m = img2scr([(scalaTemp.p1[0] + scalaTemp.p2[0]) / 2,
+    const c = img2scr([(scalaTemp.p1[0] + scalaTemp.p2[0]) / 2,
                        (scalaTemp.p1[1] + scalaTemp.p2[1]) / 2]);
-    drawLabel([m[0], m[1] - 16],
-              fmtLunghezza(dist(scalaTemp.p1, scalaTemp.p2)),
+    drawLabel([c[0], c[1] - 18],
+              fmtMetri(dist(scalaTemp.p1, scalaTemp.p2)),
               Math.max(10, fontPx - 2));
   }
 
@@ -285,19 +336,25 @@ function render() {
     ctx.stroke();
   }
 
-  // misura "live" vicino al cursore
+  // misura "live" vicino al cursore (solo metri)
   if (cursorPos) {
     let testo = null;
     if (drag && drag.kind === "vector" && vecStart && vecEnd) {
-      testo = fmtLunghezza(dist(vecStart, vecEnd));
+      testo = fmtMetri(dist(vecStart, vecEnd));
     } else if (mode === "disegna" && drawing.length && mpp > 0) {
-      testo = fmt(dist(drawing[drawing.length - 1], cursorPos) * mpp, 2) + " m";
+      testo = fmtMetri(dist(drawing[drawing.length - 1], cursorPos));
     }
     if (testo) {
       const s = img2scr(cursorPos);
-      drawLabel([s[0] + 14, s[1] - 20], testo, Math.max(10, fontPx - 2));
+      drawLabel([s[0] + 16, s[1] - 22], testo, Math.max(10, fontPx - 2));
     }
   }
+}
+
+function coloreParete() {
+  // il colore della parete in corso arriva dal server nel prossimo render;
+  // durante il trascinamento usiamo un neutro ben visibile
+  return "#C9A96A";
 }
 
 // ------------------------------------------------------------------- eventi
@@ -306,6 +363,7 @@ function setMode(m) {
   drawing = [];
   vecStart = vecEnd = null;
   drag = null;
+  misure = [];                       // le misure al volo sono temporanee
   document.querySelectorAll(".tb-btn[data-mode]").forEach(function (b) {
     b.classList.toggle("attivo", b.dataset.mode === m);
   });
@@ -326,6 +384,14 @@ function chiudiPoligono() {
   render();
 }
 
+function hitLabel(s) {
+  for (let i = labelRects.length - 1; i >= 0; i--) {
+    const q = labelRects[i];
+    if (s[0] >= q.r.x && s[0] <= q.r.x + q.r.w &&
+        s[1] >= q.r.y && s[1] <= q.r.y + q.r.h) return q;
+  }
+  return null;
+}
 function hitVertice(z, s) {
   for (let i = 0; i < z.punti.length; i++) {
     if (dist(img2scr(z.punti[i]), s) < 9) return i;
@@ -340,11 +406,21 @@ function hitZona(p) {
 }
 function hitParete(s) {
   for (let i = pareti.length - 1; i >= 0; i--) {
-    if (distSeg(s, img2scr(pareti[i].p1), img2scr(pareti[i].p2)) < 7) {
+    if (distSeg(s, img2scr(pareti[i].p1), img2scr(pareti[i].p2)) < 8) {
       return pareti[i];
     }
   }
   return null;
+}
+
+function iniziaDragEtichetta(q, s, p) {
+  // posizione attuale dell'etichetta (personalizzata o predefinita)
+  const c = (q.el === "zona") ? posEtichettaZona(q.obj)
+                              : posEtichettaParete(q.obj);
+  const base = q.obj.etichetta_pos || scr2img(c);
+  drag = { kind: "label", tgt: q.obj, el: q.el, moved: false, base: base,
+           offx: p[0] - base[0],
+           offy: p[1] - base[1] };
 }
 
 function onDown(e) {
@@ -359,6 +435,15 @@ function onDown(e) {
     return;
   }
   if (e.button !== 0) return;
+
+  // le etichette si trascinano in Sposta e in Modifica
+  if (mode === "sposta" || mode === "modifica") {
+    const q = hitLabel(s);
+    if (q) {
+      iniziaDragEtichetta(q, s, p);
+      return;
+    }
+  }
 
   if (mode === "sposta") {
     drag = { kind: "pan", sx: e.clientX, sy: e.clientY, tx0: tx, ty0: ty };
@@ -391,29 +476,29 @@ function onDown(e) {
       } else {
         selZona = z.id;
         selParete = null;
-        send({ tipo: "zona_selezionata", id: z.id });
+        inviaSelezione();
       }
       render();
     } else {
-      const w = hitParete(s);
-      if (w) {
-        selParete = w.id;
-        if (selZona != null) {
+      const wHit = hitParete(s);
+      if (wHit) {
+        if (selParete !== wHit.id || selZona != null) {
+          selParete = wHit.id;
           selZona = null;
-          send({ tipo: "zona_selezionata", id: null });
+          inviaSelezione();
         }
         render();
       } else {
-        if (selZona != null) {
+        if (selZona != null || selParete != null) {
           selZona = null;
-          send({ tipo: "zona_selezionata", id: null });
+          selParete = null;
+          inviaSelezione();
         }
-        selParete = null;
         render();
       }
     }
 
-  } else if (mode === "scala" || mode === "parete") {
+  } else if (mode === "scala" || mode === "parete" || mode === "misura") {
     vecStart = p;
     vecEnd = null;
     drag = { kind: "vector" };
@@ -438,6 +523,10 @@ function onMove(e) {
       drag.z.punti = drag.orig.map(function (q) { return [q[0] + dx, q[1] + dy]; });
     } else if (drag.kind === "vector") {
       vecEnd = cursorPos.slice();
+    } else if (drag.kind === "label") {
+      drag.tgt.etichetta_pos = [cursorPos[0] - drag.offx,
+                                cursorPos[1] - drag.offy];
+      drag.moved = true;
     }
     render();
   } else if (mode === "disegna" && drawing.length) {
@@ -453,12 +542,16 @@ function onUp() {
     if (mode === "sposta") cv.style.cursor = "grab";
   } else if ((d.kind === "vertex" || d.kind === "move") && d.moved) {
     send({ tipo: "zona_modificata", id: d.z.id, punti: arrotonda(d.z.punti) });
+  } else if (d.kind === "label" && d.moved) {
+    send({ tipo: "etichetta_spostata", elemento: d.el, id: d.tgt.id,
+           pos: arrotonda([d.tgt.etichetta_pos])[0] });
   } else if (d.kind === "vector" && vecStart && vecEnd &&
              dist(img2scr(vecStart), img2scr(vecEnd)) > 8) {
     const p1 = arrotonda([vecStart])[0];
     const p2 = arrotonda([vecEnd])[0];
     if (mode === "scala") send({ tipo: "scala", p1: p1, p2: p2 });
-    else send({ tipo: "parete", p1: p1, p2: p2 });
+    else if (mode === "parete") send({ tipo: "parete", p1: p1, p2: p2 });
+    else if (mode === "misura") misure.push({ p1: p1, p2: p2 });
     vecStart = vecEnd = null;
   } else if (d.kind === "vector") {
     vecStart = vecEnd = null;
@@ -473,11 +566,12 @@ function onDbl() {
 function onKey(e) {
   if (e.key === "Escape") {
     if (drawing.length) drawing = [];
-    else if (selZona != null) {
+    else if (misure.length) misure = [];
+    else if (selZona != null || selParete != null) {
       selZona = null;
-      send({ tipo: "zona_selezionata", id: null });
+      selParete = null;
+      inviaSelezione();
     }
-    selParete = null;
     vecStart = vecEnd = null;
     drag = null;
     render();

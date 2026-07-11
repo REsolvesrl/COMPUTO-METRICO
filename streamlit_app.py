@@ -63,6 +63,13 @@ CATEGORIE_DEFAULT = [
     {"nome": "Cantina / Soffitta", "percento": 25.0},
 ]
 
+# Tipi di parete: colore sul disegno a seconda dell'intervento.
+TIPI_PARETE = {
+    "esistente": {"nome": "Esistente", "colore": "#C9A96A"},
+    "demolire": {"nome": "Da demolire", "colore": "#FFD400"},
+    "costruire": {"nome": "Da costruire", "colore": "#E53935"},
+}
+
 
 # ------------------------------------------------------------------ utilità
 
@@ -282,14 +289,26 @@ def gestisci_evento(ev, pianta):
         pianta["zone"] = [z for z in pianta["zone"] if z["id"] != ev.get("id")]
         if st.session_state.sel_zona == ev.get("id"):
             st.session_state.sel_zona = None
-    elif tipo == "zona_selezionata":
-        st.session_state.sel_zona = ev.get("id")
+    elif tipo == "selezione":
+        st.session_state.sel_zona = ev.get("zona")
+        st.session_state.sel_parete = ev.get("parete")
+    elif tipo == "etichetta_spostata":
+        elenco = pianta["zone"] if ev.get("elemento") == "zona" \
+            else pianta["pareti"]
+        for elemento in elenco:
+            if elemento["id"] == ev.get("id"):
+                elemento["etichetta_pos"] = [float(ev["pos"][0]),
+                                             float(ev["pos"][1])]
     elif tipo == "parete":
         pianta["pareti"].append({"id": nuovo_id(pianta),
-                                 "p1": list(ev["p1"]), "p2": list(ev["p2"])})
+                                 "p1": list(ev["p1"]), "p2": list(ev["p2"]),
+                                 "tipo": st.session_state.get(
+                                     "tipo_parete_codice", "esistente")})
     elif tipo == "parete_eliminata":
         pianta["pareti"] = [p for p in pianta["pareti"]
                             if p["id"] != ev.get("id")]
+        if st.session_state.sel_parete == ev.get("id"):
+            st.session_state.sel_parete = None
     elif tipo == "scala":
         st.session_state.scala_temp = {"p1": list(ev["p1"]),
                                        "p2": list(ev["p2"])}
@@ -354,6 +373,7 @@ st.session_state.setdefault("categorie", [dict(c) for c in CATEGORIE_DEFAULT])
 st.session_state.setdefault("ultimo_seq", None)
 st.session_state.setdefault("scala_temp", None)
 st.session_state.setdefault("sel_zona", None)
+st.session_state.setdefault("sel_parete", None)
 st.session_state.setdefault("upl_count", 0)
 st.session_state.setdefault("et_font", 14)
 st.session_state.setdefault("et_nome", True)
@@ -392,9 +412,11 @@ if "da_caricare" in st.session_state:
         st.session_state.piante = []
     st.session_state.pianta_idx = 0
     st.session_state.sel_zona = None
+    st.session_state.sel_parete = None
     st.session_state.scala_temp = None
     st.session_state.ultimo_seq = None
     st.session_state.pop("cat_attiva", None)
+    st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
 
 
@@ -643,13 +665,22 @@ multipagina (una pagina = una planimetria).
   **quadratini** per spostare gli angoli, trascina l'interno per spostarla
   tutta, **Canc** la elimina. Sotto al disegno compaiono i dettagli per
   rinominarla, cambiarle categoria o mandarla nel computo. Cliccando una
-  parete misurata la selezioni (e con **Canc** la elimini).
+  parete la selezioni: sotto puoi cambiarle **tipo di intervento** o
+  eliminarla (anche con **Canc**).
+- 📏 **Misura** — misure **al volo**: trascina tra due punti e leggi i
+  metri. Sono temporanee: spariscono con `Esc` o cambiando strumento, e
+  **non** finiscono nel computo.
+- 🧱 **Parete** — trascina da un capo all'altro di una parete: la misura
+  resta sul disegno. Scegli prima il **tipo**: *esistente* (oro), *da
+  demolire* (giallo) o *da costruire* (rosso).
 - ↔️ **Scala** — trascina lungo una **misura nota** (es. un lato quotato
-  4,50 m) e poi scrivi quanto vale: da lì in poi i pixel diventano metri.
-  Ogni planimetria ha la sua scala.
-- 🧱 **Parete** — trascina da un capo all'altro di una parete per misurarne
-  la lunghezza: l'etichetta resta sul disegno.
+  4,50 m) e poi scrivi quanto vale: da lì in poi tutto il disegno parla in
+  **metri**. Ogni planimetria ha la sua scala.
 - ＋ / － / ⛶ — zoom avanti, indietro e adatta alla finestra.
+
+💡 Le **etichette** si possono **trascinare** (in Sposta o Modifica) se
+coprono dettagli del disegno; la posizione viene ricordata anche nel
+salvataggio.
 
 **Categorie e percentuali** (in basso): a ogni categoria corrispondono un
 colore e un **peso commerciale** — es. un balcone al 30% conta 3 m²
@@ -723,7 +754,7 @@ incorporate il file può pesare qualche MB.
             col_map = mappa_colori()
             nomi_cat = [c["nome"] for c in st.session_state.categorie]
 
-            r_nome, r_cat = st.columns([2, 2])
+            r_nome, r_cat, r_par = st.columns([2, 2, 2])
             nuovo_nome = r_nome.text_input(
                 "Nome planimetria", value=pianta["nome"],
                 key=f"ren_{pianta['uid']}")
@@ -732,11 +763,19 @@ incorporate il file può pesare qualche MB.
                 "Categoria per le nuove aree (colore e %)",
                 nomi_cat or ["Superficie interna"], key="cat_attiva")
             colore_attivo = col_map.get(cat_attiva, PALETTE_ZONE[0])
+            nomi_tipi = [t["nome"] for t in TIPI_PARETE.values()]
+            codici_tipi = list(TIPI_PARETE)
+            tipo_scelto = r_par.selectbox(
+                "Tipo per le nuove pareti 🧱", nomi_tipi, key="tipo_parete",
+                help="Esistente = oro · Da demolire = giallo · "
+                     "Da costruire = rosso")
+            st.session_state.tipo_parete_codice = codici_tipi[
+                nomi_tipi.index(tipo_scelto)]
 
             if pianta["mpp"]:
-                st.caption(f"✅ Scala impostata: 1 m = "
-                           f"{numero_it(1 / pianta['mpp'], 1)} px · "
-                           f"✏️ disegna le aree, ↔️ per ricalibrare.")
+                st.caption("✅ Scala impostata — le misure sono in metri "
+                           "reali. ✏️ disegna le aree, 📏 misura al volo, "
+                           "↔️ per ricalibrare.")
             else:
                 st.warning("⚠️ Scala non impostata per questa planimetria: "
                            "scegli **↔️ Scala** nella barra sul disegno e "
@@ -750,10 +789,14 @@ incorporate il file può pesare qualche MB.
                 "colore": col_map.get(z["categoria"], "#9E9E9E"),
                 "etichetta": etichetta_zona(z, pianta["mpp"], perc_map,
                                             impostazioni),
+                "etichetta_pos": z.get("etichetta_pos"),
             } for z in pianta["zone"]]
             pareti_props = [{
                 "id": p["id"], "p1": p["p1"], "p2": p["p2"],
+                "colore": TIPI_PARETE.get(p.get("tipo", "esistente"),
+                                          TIPI_PARETE["esistente"])["colore"],
                 "etichetta": etichetta_parete(p, pianta["mpp"]),
+                "etichetta_pos": p.get("etichetta_pos"),
             } for p in pianta["pareti"]]
 
             valore = image_viewer(
@@ -777,8 +820,8 @@ incorporate il file può pesare qualche MB.
                     tuple(temp["p1"]), tuple(temp["p2"]))
                 s_in, s_ok, s_no = st.columns([2, 1, 1])
                 metri = s_in.number_input(
-                    f"Il segmento tracciato ({numero_it(dist_px, 0)} px) "
-                    "quanto misura in metri?",
+                    "Quanto misura in metri, nella realtà, il segmento "
+                    "giallo tracciato?",
                     min_value=0.0, step=0.01, format="%.2f", key="scala_metri")
                 s_ok.write("")
                 s_no.write("")
@@ -831,6 +874,33 @@ incorporate il file può pesare qualche MB.
                     pianta["zone"] = [z for z in pianta["zone"]
                                       if z["id"] != zona_sel["id"]]
                     st.session_state.sel_zona = None
+                    st.rerun()
+
+            # -------------------------------------------- parete selezionata
+            parete_sel = next((p for p in pianta["pareti"]
+                               if p["id"] == st.session_state.sel_parete),
+                              None)
+            if parete_sel is not None:
+                st.markdown("**Parete selezionata**")
+                b_tipo, b_len, b_del = st.columns([2, 1, 1])
+                codice_cur = parete_sel.get("tipo", "esistente")
+                idx_tipo = (codici_tipi.index(codice_cur)
+                            if codice_cur in codici_tipi else 0)
+                tipo_nuovo = b_tipo.selectbox(
+                    "Tipo di intervento", nomi_tipi, index=idx_tipo,
+                    key=f"pt_{pianta['uid']}_{parete_sel['id']}")
+                codice_nuovo = codici_tipi[nomi_tipi.index(tipo_nuovo)]
+                if codice_nuovo != codice_cur:
+                    parete_sel["tipo"] = codice_nuovo
+                    st.rerun()
+                b_len.metric("Lunghezza",
+                             etichetta_parete(parete_sel, pianta["mpp"]))
+                b_del.write("")
+                if b_del.button("🗑 Elimina",
+                                key=f"pdel_{parete_sel['id']}"):
+                    pianta["pareti"] = [p for p in pianta["pareti"]
+                                        if p["id"] != parete_sel["id"]]
+                    st.session_state.sel_parete = None
                     st.rerun()
 
         # --------------------------------------- categorie ed etichette

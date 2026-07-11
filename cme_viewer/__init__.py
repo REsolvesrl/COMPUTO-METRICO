@@ -10,12 +10,18 @@ Visualizzatore di planimetrie in stile CAD leggero:
 Tutte le coordinate scambiate col server sono nel sistema dell'immagine
 originale ("canoniche"): lo zoom è solo visivo e non altera mai la scala.
 
+Lo strumento 📏 Misura è solo locale (browser): le misure al volo non
+generano eventi e spariscono con Esc o cambiando strumento. Le etichette di
+zone e pareti si trascinano (in Sposta e Modifica) per non coprire il disegno.
+
 Il componente restituisce eventi come dizionari con un campo `seq` progressivo
 (per scartare i duplicati dovuti ai rerun) e un campo `tipo`:
 - {"tipo": "zona_chiusa", "punti": [[x, y], ...]}
 - {"tipo": "zona_modificata", "id": n, "punti": [[x, y], ...]}
 - {"tipo": "zona_eliminata", "id": n}
-- {"tipo": "zona_selezionata", "id": n | None}
+- {"tipo": "selezione", "zona": n | None, "parete": n | None}
+- {"tipo": "etichetta_spostata", "elemento": "zona" | "parete",
+   "id": n, "pos": [x, y]}
 - {"tipo": "scala", "p1": [x, y], "p2": [x, y]}
 - {"tipo": "parete", "p1": [x, y], "p2": [x, y]}
 - {"tipo": "parete_eliminata", "id": n}
