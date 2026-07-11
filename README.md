@@ -55,9 +55,9 @@ python -m pytest
 
 Il bottone **Salva progetto (.json)** scarica un file con tutto il progetto:
 computo **e planimetrie** (immagini incluse, con zone, pareti e scala). Per
-riprendere il lavoro si ricarica quel file dalla barra laterale (**Apri un
-progetto salvato**). Con le immagini incorporate il file può pesare
-qualche MB.
+riprendere il lavoro si ricarica quel file dal pannello **📋 Dati del
+progetto · Apri / Nuovo** in cima alla scheda Computo metrico. Con le
+immagini incorporate il file può pesare qualche MB.
 
 ## Misura da planimetria
 

@@ -435,36 +435,6 @@ if "da_caricare" in st.session_state:
     st.session_state.pop("scala_metri", None)
 
 
-# ------------------------------------------------------------------ sidebar
-
-with st.sidebar:
-    st.header("📋 Dati del progetto")
-    st.text_input("Nome del computo", key="prg_nome",
-                  placeholder="Es. Ristrutturazione app.to Via Roma 1")
-    st.text_input("Committente", key="prg_committente")
-    st.text_input("Oggetto dei lavori", key="prg_oggetto")
-    st.date_input("Data", key="prg_data", format="DD/MM/YYYY")
-    st.number_input("Aliquota IVA (%)", min_value=0.0, max_value=100.0,
-                    step=1.0, key="iva",
-                    help="22% ordinaria, 10% ristrutturazioni, 4% prima casa")
-
-    st.divider()
-    st.subheader("📂 Apri un progetto salvato")
-    file_json = st.file_uploader(
-        "Scegli un file .json salvato in precedenza", type=["json"])
-    if file_json is not None and st.button("Carica nel programma"):
-        try:
-            st.session_state.da_caricare = json.load(file_json)
-            st.rerun()
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            st.error("Il file non sembra un progetto salvato da questa app.")
-
-    st.divider()
-    if st.button("🗑️ Nuovo progetto (svuota tutto)"):
-        st.session_state.da_caricare = {}
-        st.rerun()
-
-
 # ------------------------------------------------------------------ pagina
 
 st.title("🏗️ Computo Metrico Estimativo")
@@ -477,9 +447,43 @@ tab_computo, tab_plan = st.tabs(["📝 Computo metrico", "📐 Misura da planime
 # ============================================================ SCHEDA COMPUTO
 
 with tab_computo:
+    # Dati del progetto e archivio (una volta erano nella barra laterale;
+    # tolta per dare tutta la larghezza alla planimetria).
+    with st.expander("📋 Dati del progetto · Apri / Nuovo"):
+        d1, d2 = st.columns(2)
+        d1.text_input("Nome del computo", key="prg_nome",
+                      placeholder="Es. Ristrutturazione app.to Via Roma 1")
+        d2.text_input("Committente", key="prg_committente")
+        d3, d4, d5 = st.columns([2, 1, 1])
+        d3.text_input("Oggetto dei lavori", key="prg_oggetto")
+        d4.date_input("Data", key="prg_data", format="DD/MM/YYYY")
+        d5.number_input("Aliquota IVA (%)", min_value=0.0, max_value=100.0,
+                        step=1.0, key="iva",
+                        help="22% ordinaria, 10% ristrutturazioni, "
+                             "4% prima casa")
+
+        st.divider()
+        a_apri, a_nuovo = st.columns([3, 1])
+        with a_apri:
+            file_json = st.file_uploader(
+                "📂 Apri un progetto salvato (.json)", type=["json"])
+            if file_json is not None and st.button("Carica nel programma"):
+                try:
+                    st.session_state.da_caricare = json.load(file_json)
+                    st.rerun()
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    st.error("Il file non sembra un progetto salvato da "
+                             "questa app.")
+        with a_nuovo:
+            st.write("")
+            st.write("")
+            if st.button("🗑️ Nuovo progetto (svuota tutto)"):
+                st.session_state.da_caricare = {}
+                st.rerun()
+
     with st.expander("ℹ️ Come si usa"):
         st.markdown("""
-1. Compila i **dati del progetto** nella barra laterale.
+1. Compila i **dati del progetto** nel pannello 📋 qui sopra.
 2. Aggiungi le **voci di lavorazione** nella tabella: clicca sull'ultima
    riga vuota per aggiungerne una.
 3. Per ogni voce indica le **dimensioni** (parti uguali, lunghezza,
@@ -592,9 +596,10 @@ with tab_computo:
 
         st.subheader("4 · Salva ed esporta")
         st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
-                   "planimetrie): conservalo e ricaricalo dalla barra laterale "
-                   "per riprendere. Excel e CSV servono per consegnare o "
-                   "rielaborare il computo.")
+                   "planimetrie): conservalo e ricaricalo dal pannello "
+                   "**📋 Dati del progetto · Apri / Nuovo** in cima alla "
+                   "pagina. Excel e CSV servono per consegnare o rielaborare "
+                   "il computo.")
 
         progetto = {
             "nome": st.session_state.prg_nome,
