@@ -28,7 +28,7 @@ let misure = [];             // misure "al volo": SOLO locali, mai inviate
 let labelRects = [];         // rettangoli (schermo) delle etichette disegnate
 let seqN = 0;
 
-const COL_SCALA = "#FFD400";       // giallo vivo — vettore di scala
+const COL_SCALA = "#111111";       // nero — vettore di scala
 const COL_MISURA = "#3D9BE9";      // azzurro — misure al volo
 
 // ------------------------------------------------------------- conversioni
@@ -150,28 +150,42 @@ function pill(x, y, w, h, r) {
 }
 
 // Disegna un'etichetta centrata in cxy (coord. schermo) e ne restituisce il
-// rettangolo, per il trascinamento.
-function drawLabel(cxy, testo, size) {
+// rettangolo, per il trascinamento. Con box=false niente riquadro bianco:
+// solo testo con un alone chiaro che lo rende leggibile sul disegno.
+function drawLabel(cxy, testo, size, box) {
+  if (box === undefined) box = true;
   if (!testo) return null;
   const righe = String(testo).split("\n").filter(function (r) { return r; });
   if (!righe.length) return null;
-  ctx.font = "600 " + size + "px system-ui, sans-serif";
+  ctx.font = "700 " + size + "px system-ui, sans-serif";
   let maxW = 0;
   for (const r of righe) maxW = Math.max(maxW, ctx.measureText(r).width);
   const lineH = size * 1.3;
   const w = maxW + 14, h = righe.length * lineH + 8;
   const x = cxy[0] - w / 2, y = cxy[1] - h / 2;
-  pill(x, y, w, h, 6);
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(26,39,68,0.30)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = "#1A2744";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  for (let i = 0; i < righe.length; i++) {
-    ctx.fillText(righe[i], cxy[0], y + 4 + lineH * (i + 0.5));
+  if (box) {
+    pill(x, y, w, h, 6);
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(26,39,68,0.30)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#1A2744";
+    for (let i = 0; i < righe.length; i++) {
+      ctx.fillText(righe[i], cxy[0], y + 4 + lineH * (i + 0.5));
+    }
+  } else {
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";   // alone per la leggibilità
+    ctx.lineWidth = 3.5;
+    ctx.fillStyle = "#111111";
+    for (let i = 0; i < righe.length; i++) {
+      const ty = y + 4 + lineH * (i + 0.5);
+      ctx.strokeText(righe[i], cxy[0], ty);
+      ctx.fillText(righe[i], cxy[0], ty);
+    }
   }
   return { x: x, y: y, w: w, h: h };
 }
@@ -292,20 +306,20 @@ function render() {
   }
   for (const p of pareti) {
     const r = drawLabel(posEtichettaParete(p), p.etichetta,
-                        Math.max(10, fontPx - 2));
+                        Math.max(10, fontPx - 2), false);
     if (r) labelRects.push({ r: r, el: "parete", obj: p });
   }
   for (const m of misure) {
     const c = img2scr([(m.p1[0] + m.p2[0]) / 2, (m.p1[1] + m.p2[1]) / 2]);
     drawLabel([c[0], c[1] - 16], fmtMetri(dist(m.p1, m.p2)),
-              Math.max(10, fontPx - 2));
+              Math.max(10, fontPx - 2), false);
   }
   if (scalaTemp) {
     const c = img2scr([(scalaTemp.p1[0] + scalaTemp.p2[0]) / 2,
                        (scalaTemp.p1[1] + scalaTemp.p2[1]) / 2]);
     drawLabel([c[0], c[1] - 18],
               fmtMetri(dist(scalaTemp.p1, scalaTemp.p2)),
-              Math.max(10, fontPx - 2));
+              Math.max(10, fontPx - 2), false);
   }
 
   // maniglie della zona selezionata

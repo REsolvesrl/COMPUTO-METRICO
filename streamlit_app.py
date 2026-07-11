@@ -64,11 +64,14 @@ CATEGORIE_DEFAULT = [
 ]
 
 # Tipi di parete: colore sul disegno a seconda dell'intervento.
+# "esistente" resta solo per compatibilità con progetti già salvati; le nuove
+# pareti si scelgono tra demolire e costruire (TIPI_PARETE_SCELTA).
 TIPI_PARETE = {
     "esistente": {"nome": "Esistente", "colore": "#C9A96A"},
     "demolire": {"nome": "Da demolire", "colore": "#FFD400"},
     "costruire": {"nome": "Da costruire", "colore": "#E53935"},
 }
+TIPI_PARETE_SCELTA = ["demolire", "costruire"]
 
 
 # ------------------------------------------------------------------ utilità
@@ -275,7 +278,7 @@ def gestisci_evento(ev, pianta):
         punti = [[float(x), float(y)] for x, y in ev.get("punti", [])]
         if len(punti) >= 3:
             nomi = [c["nome"] for c in st.session_state.categorie]
-            categoria = st.session_state.get("cat_attiva") or (
+            categoria = st.session_state.get("cat_attiva_nome") or (
                 nomi[0] if nomi else "Superficie interna")
             pianta["zone"].append({"id": nuovo_id(pianta),
                                    "categoria": categoria,
@@ -303,7 +306,7 @@ def gestisci_evento(ev, pianta):
         pianta["pareti"].append({"id": nuovo_id(pianta),
                                  "p1": list(ev["p1"]), "p2": list(ev["p2"]),
                                  "tipo": st.session_state.get(
-                                     "tipo_parete_codice", "esistente")})
+                                     "tipo_parete_codice", "demolire")})
     elif tipo == "parete_eliminata":
         pianta["pareti"] = [p for p in pianta["pareti"]
                             if p["id"] != ev.get("id")]
@@ -671,8 +674,8 @@ multipagina (una pagina = una planimetria).
   metri. Sono temporanee: spariscono con `Esc` o cambiando strumento, e
   **non** finiscono nel computo.
 - 🧱 **Parete** — trascina da un capo all'altro di una parete: la misura
-  resta sul disegno. Scegli prima il **tipo**: *esistente* (oro), *da
-  demolire* (giallo) o *da costruire* (rosso).
+  resta sul disegno. Scegli prima il **tipo**: *da demolire* (giallo) o
+  *da costruire* (rosso).
 - ↔️ **Scala** — trascina lungo una **misura nota** (es. un lato quotato
   4,50 m) e poi scrivi quanto vale: da lì in poi tutto il disegno parla in
   **metri**. Ogni planimetria ha la sua scala.
@@ -682,11 +685,12 @@ multipagina (una pagina = una planimetria).
 coprono dettagli del disegno; la posizione viene ricordata anche nel
 salvataggio.
 
-**Categorie e percentuali** (in basso): a ogni categoria corrispondono un
-colore e un **peso commerciale** — es. un balcone al 30% conta 3 m²
-commerciali ogni 10 m² reali. Il riepilogo **Superfici commerciali** somma
-tutte le zone di tutte le planimetrie applicando le percentuali: è la
-superficie commerciale del fabbricato, riportabile nel computo con un clic.
+**Categorie e percentuali**: a ogni categoria corrisponde un **peso
+commerciale** (accanto al nome nel menù, es. *Balcone scoperto — 30%*): un
+balcone al 30% conta 3 m² commerciali ogni 10 m² reali. Il riepilogo
+**Superfici commerciali** somma tutte le zone di tutte le planimetrie
+applicando le percentuali: è la superficie commerciale del fabbricato,
+riportabile nel computo con un clic.
 
 💾 Il **salvataggio del progetto** (.json) include anche le planimetrie con
 zone, pareti e scala: ricaricandolo ritrovi tutto. ⚠️ Con le immagini
@@ -754,6 +758,10 @@ incorporate il file può pesare qualche MB.
             col_map = mappa_colori()
             nomi_cat = [c["nome"] for c in st.session_state.categorie]
 
+            # etichette del menù categorie: "Nome — 30%"
+            etichette_cat = [f"{c['nome']} — {numero_it(c['percento'], 0)}%"
+                             for c in st.session_state.categorie]
+
             r_nome, r_cat, r_par = st.columns([2, 2, 2])
             nuovo_nome = r_nome.text_input(
                 "Nome planimetria", value=pianta["nome"],
@@ -761,14 +769,20 @@ incorporate il file può pesare qualche MB.
             pianta["nome"] = (nuovo_nome or "").strip() or pianta["nome"]
             cat_attiva = r_cat.selectbox(
                 "Categoria per le nuove aree (colore e %)",
-                nomi_cat or ["Superficie interna"], key="cat_attiva")
-            colore_attivo = col_map.get(cat_attiva, PALETTE_ZONE[0])
-            nomi_tipi = [t["nome"] for t in TIPI_PARETE.values()]
-            codici_tipi = list(TIPI_PARETE)
+                etichette_cat or ["Superficie interna — 100%"],
+                key="cat_attiva")
+            idx_attiva = (etichette_cat.index(cat_attiva)
+                          if cat_attiva in etichette_cat else 0)
+            cat_attiva_nome = nomi_cat[idx_attiva] if nomi_cat \
+                else "Superficie interna"
+            st.session_state.cat_attiva_nome = cat_attiva_nome
+            colore_attivo = col_map.get(cat_attiva_nome, PALETTE_ZONE[0])
+
+            nomi_tipi = [TIPI_PARETE[c]["nome"] for c in TIPI_PARETE_SCELTA]
+            codici_tipi = list(TIPI_PARETE_SCELTA)
             tipo_scelto = r_par.selectbox(
                 "Tipo per le nuove pareti 🧱", nomi_tipi, key="tipo_parete",
-                help="Esistente = oro · Da demolire = giallo · "
-                     "Da costruire = rosso")
+                help="Da demolire = giallo · Da costruire = rosso")
             st.session_state.tipo_parete_codice = codici_tipi[
                 nomi_tipi.index(tipo_scelto)]
 
@@ -850,11 +864,13 @@ incorporate il file può pesare qualche MB.
                 idx_cat = (nomi_cat.index(zona_sel["categoria"])
                            if zona_sel["categoria"] in nomi_cat else 0)
                 cat_nuova = a_cat.selectbox(
-                    "Categoria", nomi_cat or ["Superficie interna"],
+                    "Categoria", etichette_cat or ["Superficie interna — 100%"],
                     index=idx_cat,
                     key=f"zc_{pianta['uid']}_{zona_sel['id']}")
-                if nomi_cat and cat_nuova != zona_sel["categoria"]:
-                    zona_sel["categoria"] = cat_nuova
+                nome_cat_nuova = (nomi_cat[etichette_cat.index(cat_nuova)]
+                                  if cat_nuova in etichette_cat else None)
+                if nome_cat_nuova and nome_cat_nuova != zona_sel["categoria"]:
+                    zona_sel["categoria"] = nome_cat_nuova
                     st.rerun()
                 a_add.write("")
                 a_del.write("")
@@ -883,13 +899,19 @@ incorporate il file può pesare qualche MB.
             if parete_sel is not None:
                 st.markdown("**Parete selezionata**")
                 b_tipo, b_len, b_del = st.columns([2, 1, 1])
-                codice_cur = parete_sel.get("tipo", "esistente")
-                idx_tipo = (codici_tipi.index(codice_cur)
-                            if codice_cur in codici_tipi else 0)
+                codice_cur = parete_sel.get("tipo", "demolire")
+                # includi il tipo corrente anche se non è tra i selezionabili
+                # (es. "esistente" di un vecchio progetto): niente modifiche
+                # silenziose, si cambia solo se l'utente sceglie un'altra voce.
+                opz_codici = (codici_tipi if codice_cur in codici_tipi
+                              else [codice_cur] + codici_tipi)
+                opz_nomi = [TIPI_PARETE.get(c, TIPI_PARETE["demolire"])["nome"]
+                            for c in opz_codici]
                 tipo_nuovo = b_tipo.selectbox(
-                    "Tipo di intervento", nomi_tipi, index=idx_tipo,
+                    "Tipo di intervento", opz_nomi,
+                    index=opz_codici.index(codice_cur),
                     key=f"pt_{pianta['uid']}_{parete_sel['id']}")
-                codice_nuovo = codici_tipi[nomi_tipi.index(tipo_nuovo)]
+                codice_nuovo = opz_codici[opz_nomi.index(tipo_nuovo)]
                 if codice_nuovo != codice_cur:
                     parete_sel["tipo"] = codice_nuovo
                     st.rerun()
@@ -903,40 +925,16 @@ incorporate il file può pesare qualche MB.
                     st.session_state.sel_parete = None
                     st.rerun()
 
-        # --------------------------------------- categorie ed etichette
-        with st.expander("🎨 Categorie di superficie e percentuali"):
-            st.caption("A ogni categoria corrispondono un **colore** e la "
-                       "**percentuale commerciale** con cui i suoi m² pesano "
-                       "nel totale. Aggiungi o modifica le righe liberamente; "
-                       "⚠️ se rinomini una categoria, le zone già disegnate "
-                       "con il vecchio nome vanno aggiornate da «Modifica».")
-            df_cat = st.data_editor(
-                pd.DataFrame(st.session_state.categorie),
-                num_rows="dynamic", hide_index=True, key="editor_categorie",
-                column_config={
-                    "nome": st.column_config.TextColumn("Categoria"),
-                    "percento": st.column_config.NumberColumn(
-                        "% commerciale", min_value=0.0, max_value=200.0,
-                        step=5.0, format="%.0f %%"),
-                })
-            nuove = []
-            for _, riga in df_cat.iterrows():
-                nome_c = str(riga.get("nome") or "").strip()
-                if not nome_c or pd.isna(riga.get("percento")):
-                    continue
-                nuove.append({"nome": nome_c,
-                              "percento": float(riga["percento"])})
-            if nuove and nuove != st.session_state.categorie:
-                st.session_state.categorie = nuove
-                st.rerun()
-            legenda = " ".join(
-                f'<span style="display:inline-block;margin:2px 10px 2px 0;">'
-                f'<span style="display:inline-block;width:12px;height:12px;'
-                f'border-radius:3px;background:{col_map.get(c["nome"], "#9E9E9E")};'
-                f'margin-right:5px;vertical-align:-1px;"></span>'
-                f'{c["nome"]} · {numero_it(c["percento"], 0)}%</span>'
-                for c in st.session_state.categorie)
-            st.markdown(legenda, unsafe_allow_html=True)
+        # ----------------------------------------- legenda colori/percentuali
+        legenda = " ".join(
+            f'<span style="display:inline-block;margin:2px 12px 2px 0;">'
+            f'<span style="display:inline-block;width:12px;height:12px;'
+            f'border-radius:3px;background:{col_map.get(c["nome"], "#9E9E9E")};'
+            f'margin-right:5px;vertical-align:-1px;"></span>'
+            f'{c["nome"]} · {numero_it(c["percento"], 0)}%</span>'
+            for c in st.session_state.categorie)
+        st.caption("Categorie di superficie (colore · peso commerciale):")
+        st.markdown(legenda, unsafe_allow_html=True)
 
         with st.expander("🔤 Etichette sulle zone (layout)"):
             st.slider("Dimensione carattere", 10, 24, key="et_font")
