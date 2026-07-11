@@ -958,18 +958,22 @@ incorporate il file può pesare qualche MB.
             with st.expander("🪄 Rileva stanze automaticamente (beta)"):
                 st.caption(
                     "Il programma prova a riconoscere le **stanze chiuse dai "
-                    "muri** e le propone come aree della categoria scelta "
-                    "sopra: sono **proposte da rifinire** con ➤ Modifica "
-                    "(sposta i vertici, cambia categoria, elimina con Canc). "
-                    "Funziona meglio su disegni nitidi e con la **scala già "
-                    "impostata**; su foto storte o piene di scritte i "
-                    "risultati possono essere scarsi.")
+                    "muri** (ignorando scritte e quote) e le propone come "
+                    "aree della categoria scelta sopra: sono **proposte da "
+                    "rifinire** con ➤ Modifica (sposta i vertici, cambia "
+                    "categoria, elimina con Canc). Le proposte **non si "
+                    "sovrappongono** tra loro né alle zone già disegnate: "
+                    "puoi rilanciare il rilevamento per completare. Funziona "
+                    "meglio su disegni nitidi e con la **scala già "
+                    "impostata**.")
                 c_ril, c_ann = st.columns(2)
                 if c_ril.button("🪄 Rileva le stanze su questa planimetria",
                                 type="primary"):
                     with st.spinner("Analizzo la planimetria…"):
                         proposte = rilevamento.rileva_stanze(
-                            pianta["img"], pianta["mpp"])
+                            pianta["img"], pianta["mpp"],
+                            zone_esistenti=[z["punti"]
+                                            for z in pianta["zone"]])
                     if not proposte:
                         st.warning("Non ho riconosciuto stanze chiuse su "
                                    "questo disegno. Prova a impostare prima "

@@ -1,8 +1,16 @@
+import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
 from planimetria import area_poligono_pixel
 from rilevamento import rileva_stanze
+
+
+def maschera_poligono(poligono, dimensioni=(800, 600)):
+    """Rasterizza un poligono in una maschera booleana (per i confronti)."""
+    img = Image.new("L", dimensioni, 0)
+    ImageDraw.Draw(img).polygon([(x, y) for x, y in poligono], fill=255)
+    return np.asarray(img) > 0
 
 # Porta di 40 px ≈ 0,90 m → mpp 0,0225
 MPP = 0.0225
@@ -79,3 +87,40 @@ def test_le_scritte_dentro_le_stanze_non_disturbano():
     aree_pulita = sorted(area_poligono_pixel(p) for p in pulita)
     for a, b in zip(aree_testo, aree_pulita):
         assert a == pytest.approx(b, rel=0.03)   # il testo non erode le aree
+
+
+def test_parola_intera_rimossa():
+    # sulle foto le lettere si fondono: simuliamo una "parola" compatta
+    # (60×12 px ≈ 1,35 m × 0,27 m) in mezzo alla stanza sinistra
+    img = pianta_sintetica()
+    dis = ImageDraw.Draw(img)
+    dis.rectangle([150, 280, 210, 292], fill="black")
+    con_parola = rileva_stanze(img, MPP)
+    pulita = rileva_stanze(pianta_sintetica(), MPP)
+    assert len(con_parola) == len(pulita)
+    aree_parola = sorted(area_poligono_pixel(p) for p in con_parola)
+    aree_pulita = sorted(area_poligono_pixel(p) for p in pulita)
+    for a, b in zip(aree_parola, aree_pulita):
+        assert a == pytest.approx(b, rel=0.05)
+
+
+def test_le_proposte_non_si_sovrappongono():
+    poligoni = rileva_stanze(pianta_sintetica(), MPP)
+    assert len(poligoni) >= 2
+    maschere = [maschera_poligono(p) for p in poligoni]
+    for i in range(len(maschere)):
+        for j in range(i + 1, len(maschere)):
+            comune = int((maschere[i] & maschere[j]).sum())
+            minore = min(int(maschere[i].sum()), int(maschere[j].sum()))
+            assert comune <= 0.02 * minore   # sovrapposizione trascurabile
+
+
+def test_rispetta_le_zone_esistenti():
+    # la stanza sinistra è già stata disegnata: non va riproposta
+    esistente = [[60, 60], [395, 60], [395, 540], [60, 540]]
+    poligoni = rileva_stanze(pianta_sintetica(), MPP,
+                             zone_esistenti=[esistente])
+    assert len(poligoni) == 1
+    # l'unica proposta è la stanza destra (baricentro a destra del tramezzo)
+    xs = [x for x, _ in poligoni[0]]
+    assert min(xs) >= 395 - 30
