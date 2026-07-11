@@ -301,12 +301,37 @@ function render() {
   labelRects = [];
 
   for (const z of zone) {
-    const r = drawLabel(posEtichettaZona(z), z.etichetta, fontPx);
+    const pos = posEtichettaZona(z);
+    // linea di richiamo quando l'etichetta sta fuori dalla sua area
+    if (z.etichetta && z.etichetta_pos && z.punti.length >= 3 &&
+        !dentro(z.etichetta_pos, z.punti)) {
+      const b = img2scr(baricentro(z.punti));
+      ctx.strokeStyle = z.colore;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(b[0], b[1]);
+      ctx.lineTo(pos[0], pos[1]);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(b[0], b[1], 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = z.colore;
+      ctx.fill();
+    }
+    const r = drawLabel(pos, z.etichetta, fontPx);
     if (r) labelRects.push({ r: r, el: "zona", obj: z });
   }
   for (const p of pareti) {
-    const r = drawLabel(posEtichettaParete(p), p.etichetta,
-                        Math.max(10, fontPx - 2), false);
+    const pos = posEtichettaParete(p);
+    const mid = img2scr([(p.p1[0] + p.p2[0]) / 2, (p.p1[1] + p.p2[1]) / 2]);
+    if (p.etichetta && dist(pos, mid) > 30) {   // spostata lontano: richiamo
+      ctx.strokeStyle = p.colore || "#C9A96A";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(mid[0], mid[1]);
+      ctx.lineTo(pos[0], pos[1]);
+      ctx.stroke();
+    }
+    const r = drawLabel(pos, p.etichetta, Math.max(10, fontPx - 2), false);
     if (r) labelRects.push({ r: r, el: "parete", obj: p });
   }
   for (const m of misure) {

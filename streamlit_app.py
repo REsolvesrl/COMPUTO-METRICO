@@ -752,12 +752,16 @@ with tab_plan:
                             "m2": st.session_state.et_m2,
                             "percento": st.session_state.et_pct,
                             "perimetro": st.session_state.et_perim}
+            # etichette fuori dalle aree (se l'utente non le ha spostate)
+            pos_default = planimetria.posiziona_etichette(
+                pianta["zone"], pianta["img"].width, pianta["img"].height)
             zone_props = [{
                 "id": z["id"], "punti": z["punti"],
                 "colore": col_map.get(z["categoria"], "#9E9E9E"),
                 "etichetta": etichetta_zona(z, pianta["mpp"], perc_map,
                                             impostazioni),
-                "etichetta_pos": z.get("etichetta_pos"),
+                "etichetta_pos": (z.get("etichetta_pos")
+                                  or pos_default.get(z["id"])),
             } for z in pianta["zone"]]
             pareti_props = [{
                 "id": p["id"], "p1": p["p1"], "p2": p["p2"],

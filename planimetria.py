@@ -73,6 +73,87 @@ def perimetro_reale_m(punti, mpp):
     return round(perimetro_poligono_pixel(punti) * mpp, 3)
 
 
+def punto_in_poligono(punto, punti):
+    """True se il punto (x, y) cade dentro il poligono (ray casting)."""
+    x, y = punto
+    dentro = False
+    n = len(punti)
+    j = n - 1
+    for i in range(n):
+        xi, yi = punti[i][0], punti[i][1]
+        xj, yj = punti[j][0], punti[j][1]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            dentro = not dentro
+        j = i
+    return dentro
+
+
+def posiziona_etichette(zone, larghezza, altezza):
+    """Posizioni predefinite delle etichette: FUORI dalle aree, ma vicine.
+
+    zone: [{"id", "punti", "etichetta_pos" (opzionale)}, ...]. Per ogni zona
+    senza posizione personalizzata si prova, in ordine, un punto a destra,
+    sinistra, sopra, sotto e agli angoli del suo riquadro: vince il primo
+    che non cade dentro NESSUNA zona, resta nell'immagine e non si accavalla
+    alle etichette già piazzate. Se nessun candidato va bene si ripiega sul
+    baricentro (dentro l'area).
+
+    Ritorna {id: [x, y]} solo per le zone senza posizione personalizzata.
+    """
+    piazzate = [tuple(z["etichetta_pos"]) for z in zone
+                if z.get("etichetta_pos")]
+    distacco_x = larghezza * 0.05
+    distacco_y = altezza * 0.055
+    dx_min = larghezza * 0.085          # ingombro tipico di un'etichetta
+    dy_min = altezza * 0.05
+    margine = larghezza * 0.01
+    risultato = {}
+
+    for zona in zone:
+        if zona.get("etichetta_pos"):
+            continue
+        punti = zona.get("punti") or []
+        if len(punti) < 3:
+            continue
+        xs = [p[0] for p in punti]
+        ys = [p[1] for p in punti]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        candidati = [
+            (x1 + distacco_x, cy), (x0 - distacco_x, cy),
+            (cx, y0 - distacco_y), (cx, y1 + distacco_y),
+            (x1 + distacco_x, y0), (x0 - distacco_x, y0),
+            (x1 + distacco_x, y1), (x0 - distacco_x, y1),
+        ]
+
+        def valido(px, py, controlla_distanza):
+            if not (margine <= px <= larghezza - margine
+                    and margine <= py <= altezza - margine):
+                return False
+            if any(punto_in_poligono((px, py), q.get("punti") or [])
+                   for q in zone if len(q.get("punti") or []) >= 3):
+                return False
+            if controlla_distanza and any(
+                    abs(px - ox) < dx_min and abs(py - oy) < dy_min
+                    for ox, oy in piazzate):
+                return False
+            return True
+
+        scelto = None
+        for con_distanza in (True, False):
+            for px, py in candidati:
+                if valido(px, py, con_distanza):
+                    scelto = (px, py)
+                    break
+            if scelto:
+                break
+        if scelto is None:
+            scelto = (cx, cy)
+        risultato[zona["id"]] = [round(scelto[0], 1), round(scelto[1], 1)]
+        piazzate.append(scelto)
+    return risultato
+
+
 def riepilogo_locali(piante):
     """Elenco per-locale (zona) delle piante con scala: superficie e perimetro.
 

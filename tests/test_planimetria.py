@@ -10,6 +10,8 @@ from planimetria import (
     metri_per_pixel,
     perimetro_poligono_pixel,
     perimetro_reale_m,
+    posiziona_etichette,
+    punto_in_poligono,
     riepilogo_locali,
     riepilogo_superfici,
 )
@@ -165,6 +167,55 @@ def test_riepilogo_ignora_le_piante_senza_zone():
 
 
 # ------------------------------------------------- locali (perimetri)
+
+def test_punto_in_poligono():
+    quadrato = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    assert punto_in_poligono((5, 5), quadrato)
+    assert not punto_in_poligono((15, 5), quadrato)
+    assert not punto_in_poligono((-1, -1), quadrato)
+
+
+def test_etichette_fuori_dalle_zone():
+    # due stanze affiancate al centro di un'immagine 1000×800
+    zone = [
+        {"id": 1, "punti": [[300, 200], [500, 200], [500, 600], [300, 600]]},
+        {"id": 2, "punti": [[500, 200], [700, 200], [700, 600], [500, 600]]},
+    ]
+    posizioni = posiziona_etichette(zone, 1000, 800)
+    assert set(posizioni) == {1, 2}
+    for xy in posizioni.values():
+        for z in zone:
+            assert not punto_in_poligono(xy, z["punti"])
+        assert 0 <= xy[0] <= 1000 and 0 <= xy[1] <= 800
+
+
+def test_etichette_non_accavallate():
+    zone = [
+        {"id": 1, "punti": [[300, 200], [500, 200], [500, 400], [300, 400]]},
+        {"id": 2, "punti": [[300, 400], [500, 400], [500, 600], [300, 600]]},
+    ]
+    posizioni = posiziona_etichette(zone, 1000, 800)
+    (x1, y1), (x2, y2) = posizioni[1], posizioni[2]
+    assert abs(x1 - x2) >= 1000 * 0.085 or abs(y1 - y2) >= 800 * 0.05
+
+
+def test_etichette_rispetta_la_posizione_personalizzata():
+    zone = [
+        {"id": 1, "punti": [[0, 0], [100, 0], [100, 100], [0, 100]],
+         "etichetta_pos": [50, 50]},
+        {"id": 2, "punti": [[200, 0], [300, 0], [300, 100], [200, 100]]},
+    ]
+    posizioni = posiziona_etichette(zone, 1000, 800)
+    assert 1 not in posizioni          # già personalizzata: non si tocca
+    assert 2 in posizioni
+
+
+def test_etichette_ripiego_al_baricentro():
+    # zona che copre TUTTA l'immagine: nessun "fuori" possibile
+    zone = [{"id": 1, "punti": [[0, 0], [100, 0], [100, 80], [0, 80]]}]
+    posizioni = posiziona_etichette(zone, 100, 80)
+    assert posizioni[1] == [50.0, 40.0]
+
 
 def test_riepilogo_locali_superficie_e_perimetro():
     piante = [
