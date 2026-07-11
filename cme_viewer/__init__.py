@@ -1,14 +1,24 @@
 """Componente Streamlit «cme_viewer».
 
-Mostra un'immagine con **zoom a rotellina** (verso il cursore), **spostamento**
-con il trascinamento e **click** che restituisce le coordinate nel sistema
-dell'immagine originale. Lo zoom è solo visivo (lato browser): il server riceve
-sempre coordinate "canoniche", quindi la calibrazione resta valida a ogni zoom.
+Visualizzatore di planimetrie in stile CAD leggero:
+- **zoom con la rotellina** (verso il cursore) e **spostamento** col trascinamento;
+- **barra strumenti** flottante sul disegno: Sposta, Area, Modifica, Scala, Parete,
+  zoom +/− e adatta;
+- disegno di **zone** (poligoni) colorate con etichetta, **modifica** (vertici,
+  spostamento, eliminazione), **vettore di scala** e **misura pareti**.
 
-Uso:
-    from cme_viewer import image_viewer
-    punto = image_viewer(immagine_pil, reset_token=n, key="...")
-    # punto == {"x": ..., "y": ..., "unix_time": ...} oppure None
+Tutte le coordinate scambiate col server sono nel sistema dell'immagine
+originale ("canoniche"): lo zoom è solo visivo e non altera mai la scala.
+
+Il componente restituisce eventi come dizionari con un campo `seq` progressivo
+(per scartare i duplicati dovuti ai rerun) e un campo `tipo`:
+- {"tipo": "zona_chiusa", "punti": [[x, y], ...]}
+- {"tipo": "zona_modificata", "id": n, "punti": [[x, y], ...]}
+- {"tipo": "zona_eliminata", "id": n}
+- {"tipo": "zona_selezionata", "id": n | None}
+- {"tipo": "scala", "p1": [x, y], "p2": [x, y]}
+- {"tipo": "parete", "p1": [x, y], "p2": [x, y]}
+- {"tipo": "parete_eliminata", "id": n}
 """
 
 import base64
@@ -21,15 +31,26 @@ _frontend = (Path(__file__).parent / "frontend").resolve()
 _component = components.declare_component("cme_viewer", path=str(_frontend))
 
 
-def image_viewer(image, reset_token=0, cursor="crosshair", key=None):
-    """Restituisce il punto cliccato (coord. in pixel dell'immagine) o None.
-
-    image: immagine PIL da mostrare (già con eventuali disegni sopra).
-    reset_token: cambiando questo valore la vista torna adattata all'immagine
-        (usato al caricamento di una nuova planimetria o col bottone «reimposta»).
-    """
+def pil_a_src(image, qualita=85):
+    """Codifica un'immagine PIL come data-URL JPEG (da fare una volta sola)."""
     buffer = BytesIO()
-    image.save(buffer, format="PNG")
-    src = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
-    return _component(src=src, reset_token=reset_token, cursor=cursor,
+    image.save(buffer, format="JPEG", quality=qualita)
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+
+def image_viewer(src, zone=(), pareti=(), scala_temp=None,
+                 colore_attivo="#E57373", mpp=0.0, font_px=14, key=None):
+    """Mostra la planimetria e restituisce l'ultimo evento (o None).
+
+    src: data-URL dell'immagine (usa pil_a_src una sola volta per pianta).
+    zone: [{"id", "punti", "colore", "etichetta"}] — poligoni già disegnati.
+    pareti: [{"id", "p1", "p2", "etichetta"}] — pareti misurate.
+    scala_temp: {"p1", "p2"} — vettore di scala in attesa della misura reale.
+    colore_attivo: colore della zona in corso di disegno (categoria scelta).
+    mpp: metri per pixel (0 = scala non impostata) — per le misure "live".
+    font_px: dimensione del carattere delle etichette.
+    """
+    return _component(src=src, zone=list(zone), pareti=list(pareti),
+                      scala_temp=scala_temp, colore_attivo=colore_attivo,
+                      mpp=float(mpp or 0.0), font_px=int(font_px),
                       key=key, default=None)

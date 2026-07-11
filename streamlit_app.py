@@ -2,12 +2,15 @@
 
 Interfaccia Streamlit a due schede:
 1. Computo metrico — tabella voci, quantità calcolate, totali, export.
-2. Misura da planimetria — carichi un'immagine/PDF, calibri la scala su una
-   misura nota e disegni le stanze per ottenere i m², da riversare nel computo.
+2. Misura da planimetria — più planimetrie per progetto, zone colorate per
+   categoria con percentuale commerciale, scala a vettore, misura pareti e
+   riepilogo delle superfici commerciali del fabbricato.
 
-La logica di calcolo vive in calcoli.py; la geometria in planimetria.py.
+La logica di calcolo vive in calcoli.py; la geometria in planimetria.py;
+il visualizzatore interattivo in cme_viewer/.
 """
 
+import base64
 import io
 import json
 from datetime import date
@@ -16,11 +19,11 @@ import fitz  # PyMuPDF, per leggere i PDF
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import calcoli
 import planimetria
-from cme_viewer import image_viewer
+from cme_viewer import image_viewer, pil_a_src
 
 st.set_page_config(
     page_title="CME — Computo Metrico",
@@ -41,15 +44,24 @@ CREMA = "#ECE7DA"         # testo
 GRIGLIA = "#3C4C6E"       # linee griglia su fondo navy
 ETICHETTE = "#A9B4C9"     # etichette assi
 
-# Planimetria. Teniamo l'immagine a una risoluzione "canonica" (CANON_MAX): è lo
-# spazio in cui vivono la calibrazione e i punti. Lo zoom con la rotellina avviene
-# solo nel browser (componente cme_viewer) e non intacca queste coordinate.
+# Planimetria. Le immagini sono tenute a una risoluzione "canonica" (CANON_MAX):
+# è lo spazio in cui vivono scala, zone e pareti. Zoom e spostamento avvengono
+# solo nel browser (componente cme_viewer) e non toccano queste coordinate.
 CANON_MAX = 2000
-COL_CAL_LINEA = (201, 169, 106, 255)    # oro — calibrazione
-COL_CAL_PUNTO = (201, 169, 106, 255)
-COL_ST_LINEA = (110, 143, 199, 255)     # azzurro — stanza
-COL_ST_PUNTO = (110, 143, 199, 255)
-COL_ST_FILL = (110, 143, 199, 80)
+
+# Colori delle categorie di superficie (assegnati in ordine).
+PALETTE_ZONE = ["#E57373", "#F0A840", "#E8D44D", "#66BB6A", "#4DB6AC",
+                "#64B5F6", "#9575CD", "#F06292"]
+
+CATEGORIE_DEFAULT = [
+    {"nome": "Superficie interna", "percento": 100.0},
+    {"nome": "Balcone scoperto", "percento": 30.0},
+    {"nome": "Balcone coperto", "percento": 35.0},
+    {"nome": "Terrazzo", "percento": 25.0},
+    {"nome": "Giardino", "percento": 10.0},
+    {"nome": "Garage / Box", "percento": 50.0},
+    {"nome": "Cantina / Soffitta", "percento": 25.0},
+]
 
 
 # ------------------------------------------------------------------ utilità
@@ -144,74 +156,185 @@ def grafico_totali(totali):
     return fig
 
 
-def excel_bytes(df_computo, df_riepilogo, df_progetto):
+def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_computo.to_excel(writer, sheet_name="Computo", index=False)
         df_riepilogo.to_excel(writer, sheet_name="Riepilogo", index=False)
+        if df_superfici is not None and len(df_superfici):
+            df_superfici.to_excel(writer, sheet_name="Superfici", index=False)
         df_progetto.to_excel(writer, sheet_name="Dati progetto", index=False)
     return buffer.getvalue()
 
 
 # -------------------------------------------------------------- planimetria
 
-def carica_immagine(file):
-    """Legge il file caricato e restituisce un'immagine RGB ridimensionata.
+def carica_immagini(file):
+    """Legge il file caricato: elenco di immagini RGB (una per pagina se PDF).
 
-    Accetta immagini (PNG/JPG…) e PDF (di cui si usa la prima pagina).
+    Le immagini sono ridimensionate alla risoluzione canonica CANON_MAX.
     """
     dati = file.getvalue()
+    immagini = []
     if file.name.lower().endswith(".pdf") or file.type == "application/pdf":
         documento = fitz.open(stream=dati, filetype="pdf")
-        pagina = documento[0]
-        pix = pagina.get_pixmap(dpi=200)
-        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        for pagina in list(documento)[:10]:
+            pix = pagina.get_pixmap(dpi=200)
+            immagini.append(
+                Image.frombytes("RGB", (pix.width, pix.height), pix.samples))
     else:
-        img = Image.open(io.BytesIO(dati)).convert("RGB")
-    if img.width > CANON_MAX:
-        altezza = round(img.height * CANON_MAX / img.width)
-        img = img.resize((CANON_MAX, altezza))
-    return img
+        immagini.append(Image.open(io.BytesIO(dati)).convert("RGB"))
+    pronte = []
+    for img in immagini:
+        if img.width > CANON_MAX:
+            altezza = round(img.height * CANON_MAX / img.width)
+            img = img.resize((CANON_MAX, altezza))
+        pronte.append(img)
+    return pronte
 
 
-def disegna_overlay(base, punti, col_linea, col_punto, chiudi, riempi_col=None):
-    """Disegna punti, segmenti (ed eventuale poligono) sull'immagine.
-
-    I punti sono in coordinate dell'immagine ("canoniche"); si disegna a quella
-    risoluzione e lo zoom del browser ingrandisce anche il disegno. Spessori e
-    pallini sono proporzionati alla dimensione dell'immagine per restare visibili
-    quando si guarda l'intera planimetria.
-    """
-    spessore = max(2, round(base.width / 500))
-    raggio = max(5, round(base.width / 220))
-    punti_int = [(int(x), int(y)) for x, y in punti]
-    img = base.convert("RGBA")
-    strato = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    dis = ImageDraw.Draw(strato)
-    if riempi_col and len(punti_int) >= 3:
-        dis.polygon(punti_int, fill=riempi_col)
-    if len(punti_int) >= 2:
-        sequenza = punti_int + ([punti_int[0]] if chiudi else [])
-        dis.line(sequenza, fill=col_linea, width=spessore, joint="curve")
-    for x, y in punti_int:
-        dis.ellipse([x - raggio, y - raggio, x + raggio, y + raggio],
-                    fill=col_punto, outline=(255, 255, 255, 255), width=2)
-    return Image.alpha_composite(img, strato).convert("RGB")
+def nuova_pianta(img, nome):
+    """Crea la struttura-dati di una planimetria del progetto."""
+    st.session_state.uid_piante += 1
+    thumb = img.copy()
+    thumb.thumbnail((240, 240))
+    return {"uid": st.session_state.uid_piante, "nome": nome, "img": img,
+            "thumb": thumb, "src": pil_a_src(img), "mpp": None,
+            "zone": [], "pareti": [], "prossimo_id": 1}
 
 
-def click_nuovo(valore, chiave_ts):
-    """Se il click è nuovo restituisce (x, y) in coord. immagine, altrimenti None.
+def aggiungi_planimetrie(file):
+    """Aggiunge al progetto le pagine del file caricato e le seleziona."""
+    immagini = carica_immagini(file)
+    base = file.name.rsplit(".", 1)[0]
+    for i, img in enumerate(immagini):
+        nome = base if len(immagini) == 1 else f"{base} · pag. {i + 1}"
+        st.session_state.piante.append(nuova_pianta(img, nome))
+    st.session_state.pianta_idx = len(st.session_state.piante) - len(immagini)
+    st.session_state.sel_zona = None
+    st.session_state.scala_temp = None
+    st.session_state.upl_count += 1
 
-    Ogni click ha un timestamp: confrontandolo con l'ultimo elaborato evitiamo
-    che i rerun di Streamlit re-inseriscano lo stesso punto.
-    """
+
+def nuovo_id(pianta):
+    pianta["prossimo_id"] += 1
+    return pianta["prossimo_id"] - 1
+
+
+def mappa_percentuali():
+    return {c["nome"]: float(c["percento"]) for c in st.session_state.categorie}
+
+
+def mappa_colori():
+    return {c["nome"]: PALETTE_ZONE[i % len(PALETTE_ZONE)]
+            for i, c in enumerate(st.session_state.categorie)}
+
+
+def etichetta_zona(zona, mpp, perc_map, impostazioni):
+    righe = []
+    if impostazioni["nome"]:
+        righe.append(zona.get("nome") or zona["categoria"])
+    if impostazioni["m2"] and mpp:
+        area = planimetria.area_reale_m2(zona["punti"], mpp)
+        righe.append(f"{numero_it(area, 2)} m²")
+    if impostazioni["percento"]:
+        perc = perc_map.get(zona["categoria"], 100.0)
+        righe.append(f"{numero_it(perc, 0)} %")
+    return "\n".join(righe)
+
+
+def etichetta_parete(parete, mpp):
+    if not mpp:
+        return "— m"
+    metri = planimetria.distanza_pixel(parete["p1"], parete["p2"]) * mpp
+    return f"{numero_it(metri, 2)} m"
+
+
+def evento_viewer(valore):
+    """Restituisce l'evento del componente solo se è nuovo (dedup su seq)."""
     if not valore:
         return None
-    ts = valore.get("unix_time")
-    if ts == st.session_state.get(chiave_ts):
+    seq = valore.get("seq")
+    if seq is None or seq == st.session_state.ultimo_seq:
         return None
-    st.session_state[chiave_ts] = ts
-    return (valore["x"], valore["y"])
+    st.session_state.ultimo_seq = seq
+    return valore
+
+
+def gestisci_evento(ev, pianta):
+    """Applica l'evento del visualizzatore allo stato e riesegue la pagina."""
+    tipo = ev.get("tipo")
+    if tipo == "zona_chiusa":
+        punti = [[float(x), float(y)] for x, y in ev.get("punti", [])]
+        if len(punti) >= 3:
+            nomi = [c["nome"] for c in st.session_state.categorie]
+            categoria = st.session_state.get("cat_attiva") or (
+                nomi[0] if nomi else "Superficie interna")
+            pianta["zone"].append({"id": nuovo_id(pianta),
+                                   "categoria": categoria,
+                                   "nome": None, "punti": punti})
+    elif tipo == "zona_modificata":
+        for zona in pianta["zone"]:
+            if zona["id"] == ev.get("id"):
+                zona["punti"] = [[float(x), float(y)]
+                                 for x, y in ev.get("punti", [])]
+    elif tipo == "zona_eliminata":
+        pianta["zone"] = [z for z in pianta["zone"] if z["id"] != ev.get("id")]
+        if st.session_state.sel_zona == ev.get("id"):
+            st.session_state.sel_zona = None
+    elif tipo == "zona_selezionata":
+        st.session_state.sel_zona = ev.get("id")
+    elif tipo == "parete":
+        pianta["pareti"].append({"id": nuovo_id(pianta),
+                                 "p1": list(ev["p1"]), "p2": list(ev["p2"])})
+    elif tipo == "parete_eliminata":
+        pianta["pareti"] = [p for p in pianta["pareti"]
+                            if p["id"] != ev.get("id")]
+    elif tipo == "scala":
+        st.session_state.scala_temp = {"p1": list(ev["p1"]),
+                                       "p2": list(ev["p2"])}
+    st.rerun()
+
+
+def pianta_a_json(pianta):
+    """Versione serializzabile della pianta (immagine inclusa, base64 JPEG)."""
+    return {"nome": pianta["nome"], "mpp": pianta["mpp"],
+            "zone": pianta["zone"], "pareti": pianta["pareti"],
+            "immagine": pianta["src"].split(",", 1)[1]}
+
+
+def pianta_da_json(dati):
+    img = Image.open(io.BytesIO(base64.b64decode(dati["immagine"])))
+    pianta = nuova_pianta(img.convert("RGB"), dati.get("nome") or "Planimetria")
+    pianta["mpp"] = dati.get("mpp")
+    pianta["zone"] = dati.get("zone") or []
+    pianta["pareti"] = dati.get("pareti") or []
+    ids = ([z.get("id", 0) for z in pianta["zone"]]
+           + [p.get("id", 0) for p in pianta["pareti"]])
+    pianta["prossimo_id"] = (max(ids) + 1) if ids else 1
+    return pianta
+
+
+def progetto_json_bytes():
+    """L'intero progetto (computo + planimetrie) come JSON scaricabile."""
+    payload = {
+        "progetto": {
+            "nome": st.session_state.prg_nome,
+            "committente": st.session_state.prg_committente,
+            "oggetto": st.session_state.prg_oggetto,
+            "data": st.session_state.prg_data.isoformat(),
+            "aliquota_iva": st.session_state.iva,
+        },
+        "voci": voci_da_df(st.session_state.df_voci),
+        "categorie": st.session_state.categorie,
+        "etichette": {"font": st.session_state.et_font,
+                      "nome": st.session_state.et_nome,
+                      "m2": st.session_state.et_m2,
+                      "percento": st.session_state.et_pct},
+        "piante": [pianta_a_json(p) for p in st.session_state.piante],
+    }
+    return json.dumps(payload, ensure_ascii=False,
+                      separators=(",", ":")).encode("utf-8")
 
 
 # ------------------------------------------------- stato iniziale e caricamento
@@ -224,14 +347,18 @@ st.session_state.setdefault("prg_oggetto", "")
 st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 22.0)
 # planimetria
-st.session_state.setdefault("plan_img", None)
-st.session_state.setdefault("plan_sig", None)
-st.session_state.setdefault("mpp", None)
-st.session_state.setdefault("punti_cal", [])
-st.session_state.setdefault("punti_stanza", [])
-st.session_state.setdefault("ts_cal", None)
-st.session_state.setdefault("ts_st", None)
-st.session_state.setdefault("reset_zoom", 0)  # cambiando, la vista si riadatta
+st.session_state.setdefault("piante", [])
+st.session_state.setdefault("pianta_idx", 0)
+st.session_state.setdefault("uid_piante", 0)
+st.session_state.setdefault("categorie", [dict(c) for c in CATEGORIE_DEFAULT])
+st.session_state.setdefault("ultimo_seq", None)
+st.session_state.setdefault("scala_temp", None)
+st.session_state.setdefault("sel_zona", None)
+st.session_state.setdefault("upl_count", 0)
+st.session_state.setdefault("et_font", 14)
+st.session_state.setdefault("et_nome", True)
+st.session_state.setdefault("et_m2", True)
+st.session_state.setdefault("et_pct", True)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
 if "da_caricare" in st.session_state:
@@ -250,6 +377,25 @@ if "da_caricare" in st.session_state:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     st.session_state.df_voci = df if len(df) else df_vuoto()
     st.session_state.versione_editor += 1
+    # planimetrie e impostazioni
+    st.session_state.categorie = (dati.get("categorie")
+                                  or [dict(c) for c in CATEGORIE_DEFAULT])
+    etichette = dati.get("etichette") or {}
+    st.session_state.et_font = int(etichette.get("font", 14))
+    st.session_state.et_nome = bool(etichette.get("nome", True))
+    st.session_state.et_m2 = bool(etichette.get("m2", True))
+    st.session_state.et_pct = bool(etichette.get("percento", True))
+    try:
+        st.session_state.piante = [pianta_da_json(p)
+                                   for p in dati.get("piante") or []]
+    except Exception:  # noqa: BLE001 — file rovinato: meglio senza piante
+        st.session_state.piante = []
+    st.session_state.pianta_idx = 0
+    st.session_state.sel_zona = None
+    st.session_state.scala_temp = None
+    st.session_state.ultimo_seq = None
+    st.session_state.pop("cat_attiva", None)
+    st.session_state.pop("scala_metri", None)
 
 
 # ------------------------------------------------------------------ sidebar
@@ -266,7 +412,7 @@ with st.sidebar:
                     help="22% ordinaria, 10% ristrutturazioni, 4% prima casa")
 
     st.divider()
-    st.subheader("📂 Apri un computo salvato")
+    st.subheader("📂 Apri un progetto salvato")
     file_json = st.file_uploader(
         "Scegli un file .json salvato in precedenza", type=["json"])
     if file_json is not None and st.button("Carica nel programma"):
@@ -274,10 +420,10 @@ with st.sidebar:
             st.session_state.da_caricare = json.load(file_json)
             st.rerun()
         except (json.JSONDecodeError, UnicodeDecodeError):
-            st.error("Il file non sembra un computo salvato da questa app.")
+            st.error("Il file non sembra un progetto salvato da questa app.")
 
     st.divider()
-    if st.button("🗑️ Nuovo computo (svuota tutto)"):
+    if st.button("🗑️ Nuovo progetto (svuota tutto)"):
         st.session_state.da_caricare = {}
         st.rerun()
 
@@ -349,7 +495,14 @@ with tab_computo:
 
     if not voci_calcolate:
         st.info("Aggiungi la prima voce nella tabella qui sopra, oppure misura "
-                "una stanza nella scheda «Misura da planimetria».")
+                "le superfici nella scheda «Misura da planimetria».")
+        st.download_button(
+            "💾 Salva progetto (.json)",
+            data=progetto_json_bytes(),
+            file_name=nome_file("json"),
+            mime="application/json",
+            help="Salva anche le planimetrie con zone e scala.",
+        )
     else:
         st.subheader("2 · Computo calcolato")
         df_calcolato = pd.DataFrame(voci_calcolate).reindex(
@@ -401,9 +554,10 @@ with tab_computo:
         col3.metric("Totale IVA inclusa", euro(totale_ivato))
 
         st.subheader("4 · Salva ed esporta")
-        st.caption("Il file **.json** è il salvataggio del lavoro: conservalo e "
-                   "ricaricalo dalla barra laterale per riprendere. Excel e CSV "
-                   "servono per consegnare o rielaborare il computo.")
+        st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
+                   "planimetrie): conservalo e ricaricalo dalla barra laterale "
+                   "per riprendere. Excel e CSV servono per consegnare o "
+                   "rielaborare il computo.")
 
         progetto = {
             "nome": st.session_state.prg_nome,
@@ -429,17 +583,33 @@ with tab_computo:
                        progetto["aliquota_iva"]],
         })
 
+        righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
+            st.session_state.piante, mappa_percentuali())
+        df_superfici_excel = None
+        if righe_sup:
+            df_superfici_excel = pd.DataFrame([{
+                "Pianta": r["pianta"], "Categoria": r["categoria"],
+                "N. zone": r["zone"], "m² reali": r["m2"],
+                "%": r["percento"], "m² commerciali": r["m2_commerciale"],
+            } for r in righe_sup])
+            df_superfici_excel = pd.concat([
+                df_superfici_excel,
+                pd.DataFrame([{"Pianta": "TOTALE", "Categoria": "",
+                               "N. zone": None, "m² reali": tot_sup,
+                               "%": None, "m² commerciali": tot_comm}]),
+            ], ignore_index=True)
+
         col_json, col_xlsx, col_csv = st.columns(3)
         col_json.download_button(
-            "💾 Salva computo (.json)",
-            data=json.dumps({"progetto": progetto, "voci": voci},
-                            ensure_ascii=False, indent=2).encode("utf-8"),
+            "💾 Salva progetto (.json)",
+            data=progetto_json_bytes(),
             file_name=nome_file("json"),
             mime="application/json",
         )
         col_xlsx.download_button(
             "📊 Esporta Excel (.xlsx)",
-            data=excel_bytes(df_calcolato, df_riepilogo_excel, df_progetto_excel),
+            data=excel_bytes(df_calcolato, df_riepilogo_excel,
+                             df_progetto_excel, df_superfici_excel),
             file_name=nome_file("xlsx"),
             mime="application/vnd.openxmlformats-officedocument."
                  "spreadsheetml.sheet",
@@ -456,167 +626,293 @@ with tab_computo:
 # ========================================================= SCHEDA PLANIMETRIA
 
 with tab_plan:
-    st.subheader("Misura le superfici da una planimetria")
     with st.expander("ℹ️ Come funziona (leggimi la prima volta)"):
         st.markdown("""
-Il metodo è quello dei software professionali: si dice al programma **quanto
-vale una misura nota** sul disegno, e da lì calcola tutte le altre.
+Ogni **planimetria** del progetto (piano terra, piano primo…) compare
+nell'elenco a sinistra: puoi aggiungerne quante vuoi, anche da un PDF
+multipagina (una pagina = una planimetria).
 
-1. **Carica** la planimetria (foto, scansione o PDF). Deve avere almeno una
-   **quota nota** (una misura scritta, es. un lato di 4,50 m).
-2. **Calibra la scala**: clicca i due estremi di quella misura nota sul
-   disegno e scrivi quanti metri vale. *Più lungo è il segmento che scegli,
-   più precisa sarà la misura.*
-3. **Misura le stanze**: clicca uno dopo l'altro gli angoli di una stanza; il
-   perimetro si chiude da solo e ottieni la **superficie in m²**.
-4. **Aggiungi al computo**: la superficie diventa una voce nella scheda
-   «Computo metrico».
+**La barra sul disegno:**
+- ✋ **Sposta** — trascina per muoverti; la **rotellina** zooma verso il
+  puntatore (funziona sempre, in ogni modalità).
+- ✏️ **Area** — clicca gli angoli di una stanza; chiudi cliccando di nuovo
+  sul **primo punto** (cerchietto) o con **doppio clic**. `Backspace` toglie
+  l'ultimo punto, `Esc` annulla. L'area prende la **categoria** scelta sopra
+  al disegno (colore e percentuale).
+- ➤ **Modifica** — clicca una zona per selezionarla: trascina i
+  **quadratini** per spostare gli angoli, trascina l'interno per spostarla
+  tutta, **Canc** la elimina. Sotto al disegno compaiono i dettagli per
+  rinominarla, cambiarle categoria o mandarla nel computo. Cliccando una
+  parete misurata la selezioni (e con **Canc** la elimini).
+- ↔️ **Scala** — trascina lungo una **misura nota** (es. un lato quotato
+  4,50 m) e poi scrivi quanto vale: da lì in poi i pixel diventano metri.
+  Ogni planimetria ha la sua scala.
+- 🧱 **Parete** — trascina da un capo all'altro di una parete per misurarne
+  la lunghezza: l'etichetta resta sul disegno.
+- ＋ / － / ⛶ — zoom avanti, indietro e adatta alla finestra.
 
-🖱️ **Zoom con la rotellina**: gira la **rotellina del mouse** per ingrandire
-verso il puntatore, **trascina** per spostarti, **clicca** per piazzare i punti.
-Zoomare aiuta a cliccare con precisione e non tocca la scala (resta ancorata al
-disegno). Il bottone «Reimposta vista» torna alla planimetria intera e centrata.
+**Categorie e percentuali** (in basso): a ogni categoria corrispondono un
+colore e un **peso commerciale** — es. un balcone al 30% conta 3 m²
+commerciali ogni 10 m² reali. Il riepilogo **Superfici commerciali** somma
+tutte le zone di tutte le planimetrie applicando le percentuali: è la
+superficie commerciale del fabbricato, riportabile nel computo con un clic.
+
+💾 Il **salvataggio del progetto** (.json) include anche le planimetrie con
+zone, pareti e scala: ricaricandolo ritrovi tutto. ⚠️ Con le immagini
+incorporate il file può pesare qualche MB.
 
 ⚠️ La precisione dipende dalla qualità del disegno e dalla cura dei click:
-è pensata per stime e computi, non per usi catastali di precisione.
+è pensata per stime e computi, non per usi catastali.
 """)
 
-    file_plan = st.file_uploader(
-        "Carica la planimetria (PNG, JPG o PDF)",
-        type=["png", "jpg", "jpeg", "pdf"])
+    piante = st.session_state.piante
 
-    if file_plan is not None:
-        sig = (file_plan.name, file_plan.size)
-        if sig != st.session_state.plan_sig:
+    if not piante:
+        st.info("Carica la prima planimetria per iniziare (puoi aggiungerne "
+                "altre in seguito, per esempio un piano per pagina).")
+        file_plan = st.file_uploader(
+            "Carica una planimetria (PNG, JPG o PDF)",
+            type=["png", "jpg", "jpeg", "pdf"],
+            key=f"upl_{st.session_state.upl_count}")
+        if file_plan is not None:
             try:
-                img_caricata = carica_immagine(file_plan)
-                st.session_state.plan_img = img_caricata
-                st.session_state.plan_sig = sig
-                st.session_state.mpp = None
-                st.session_state.punti_cal = []
-                st.session_state.punti_stanza = []
-                st.session_state.ts_cal = None
-                st.session_state.ts_st = None
-                st.session_state.reset_zoom += 1
+                aggiungi_planimetrie(file_plan)
+                st.rerun()
             except Exception as errore:  # noqa: BLE001
                 st.error(f"Non riesco a leggere questo file: {errore}")
-
-    base = st.session_state.plan_img
-    if base is None:
-        st.info("Carica una planimetria qui sopra per iniziare.")
     else:
-        if st.session_state.mpp:
-            st.success(
-                f"✅ Scala impostata: 1 metro = "
-                f"{numero_it(1 / st.session_state.mpp, 1)} px sul disegno.")
-        else:
-            st.warning("⚠️ Scala non ancora impostata: comincia da «Calibra».")
+        col_pagine, col_area = st.columns([1, 4], gap="medium")
 
-        st.caption("🖱️ **Rotellina** per zoomare verso il puntatore, "
-                   "**trascina** per spostarti, **clic** per piazzare un punto.")
+        # ------------------------------------------------ elenco planimetrie
+        with col_pagine:
+            st.markdown("**Planimetrie**")
+            for i, p in enumerate(piante):
+                attiva = (i == st.session_state.pianta_idx)
+                c_nome, c_x = st.columns([5, 1])
+                if c_nome.button(("✅ " if attiva else "📄 ") + p["nome"],
+                                 key=f"pg_{p['uid']}", width="stretch"):
+                    st.session_state.pianta_idx = i
+                    st.session_state.sel_zona = None
+                    st.session_state.scala_temp = None
+                    st.rerun()
+                if c_x.button("✖", key=f"pgx_{p['uid']}",
+                              help="Rimuovi questa planimetria"):
+                    piante.pop(i)
+                    st.session_state.pianta_idx = max(
+                        0, min(st.session_state.pianta_idx, len(piante) - 1))
+                    st.session_state.sel_zona = None
+                    st.session_state.scala_temp = None
+                    st.rerun()
+                st.image(p["thumb"], width="stretch")
+            st.divider()
+            file_plan = st.file_uploader(
+                "➕ Aggiungi planimetria",
+                type=["png", "jpg", "jpeg", "pdf"],
+                key=f"upl_{st.session_state.upl_count}")
+            if file_plan is not None:
+                try:
+                    aggiungi_planimetrie(file_plan)
+                    st.rerun()
+                except Exception as errore:  # noqa: BLE001
+                    st.error(f"Non riesco a leggere questo file: {errore}")
 
-        modo = st.radio(
-            "Cosa vuoi fare?",
-            ["📏 Calibra la scala", "📐 Misura una stanza"],
-            horizontal=True)
+        # ------------------------------------------------- area di disegno
+        with col_area:
+            pianta = piante[st.session_state.pianta_idx]
+            perc_map = mappa_percentuali()
+            col_map = mappa_colori()
+            nomi_cat = [c["nome"] for c in st.session_state.categorie]
 
-        if st.button("🔍 Reimposta vista (adatta e centra)"):
-            st.session_state.reset_zoom += 1
-            st.rerun()
+            r_nome, r_cat = st.columns([2, 2])
+            nuovo_nome = r_nome.text_input(
+                "Nome planimetria", value=pianta["nome"],
+                key=f"ren_{pianta['uid']}")
+            pianta["nome"] = (nuovo_nome or "").strip() or pianta["nome"]
+            cat_attiva = r_cat.selectbox(
+                "Categoria per le nuove aree (colore e %)",
+                nomi_cat or ["Superficie interna"], key="cat_attiva")
+            colore_attivo = col_map.get(cat_attiva, PALETTE_ZONE[0])
 
-        # ------------------------------------------------------ calibrazione
-        if modo.startswith("📏"):
-            st.caption("Clicca i **due estremi** di una misura che conosci "
-                       "(es. un lato quotato). Zooma con la rotellina per "
-                       "essere preciso; «Ricomincia» azzera i punti.")
-            punti = st.session_state.punti_cal
-            img_cal = disegna_overlay(base, punti, COL_CAL_LINEA,
-                                      COL_CAL_PUNTO, chiudi=False)
-            valore = image_viewer(img_cal, reset_token=st.session_state.reset_zoom,
-                                  key="viewer_cal")
-            nuovo = click_nuovo(valore, "ts_cal")
-            if nuovo is not None and len(punti) < 2:
-                punti.append(nuovo)
-                st.rerun()
-
-            if st.button("↩️ Ricomincia calibrazione"):
-                st.session_state.punti_cal = []
-                st.rerun()
-            if len(punti) < 2:
-                st.info(f"Punti inseriti: {len(punti)} di 2.")
+            if pianta["mpp"]:
+                st.caption(f"✅ Scala impostata: 1 m = "
+                           f"{numero_it(1 / pianta['mpp'], 1)} px · "
+                           f"✏️ disegna le aree, ↔️ per ricalibrare.")
             else:
-                dist_px = planimetria.distanza_pixel(punti[0], punti[1])
-                st.write(f"Segmento tracciato: **{numero_it(dist_px, 0)} px**.")
-                reale = st.number_input(
-                    "Quanto misura realmente? (metri)",
-                    min_value=0.0, step=0.01, value=0.0, format="%.2f",
-                    key="cal_reale")
-                if st.button("📏 Imposta la scala", type="primary"):
-                    if reale > 0:
-                        st.session_state.mpp = planimetria.metri_per_pixel(
-                            dist_px, reale)
-                        st.success("Scala impostata! Passa a «Misura».")
+                st.warning("⚠️ Scala non impostata per questa planimetria: "
+                           "scegli **↔️ Scala** nella barra sul disegno e "
+                           "trascina lungo una misura nota (es. lato quotato).")
+
+            impostazioni = {"nome": st.session_state.et_nome,
+                            "m2": st.session_state.et_m2,
+                            "percento": st.session_state.et_pct}
+            zone_props = [{
+                "id": z["id"], "punti": z["punti"],
+                "colore": col_map.get(z["categoria"], "#9E9E9E"),
+                "etichetta": etichetta_zona(z, pianta["mpp"], perc_map,
+                                            impostazioni),
+            } for z in pianta["zone"]]
+            pareti_props = [{
+                "id": p["id"], "p1": p["p1"], "p2": p["p2"],
+                "etichetta": etichetta_parete(p, pianta["mpp"]),
+            } for p in pianta["pareti"]]
+
+            valore = image_viewer(
+                pianta["src"],
+                zone=zone_props,
+                pareti=pareti_props,
+                scala_temp=st.session_state.scala_temp,
+                colore_attivo=colore_attivo,
+                mpp=pianta["mpp"] or 0.0,
+                font_px=st.session_state.et_font,
+                key=f"viewer_{pianta['uid']}",
+            )
+            ev = evento_viewer(valore)
+            if ev:
+                gestisci_evento(ev, pianta)
+
+            # ------------------------------------ scala in attesa di misura
+            if st.session_state.scala_temp:
+                temp = st.session_state.scala_temp
+                dist_px = planimetria.distanza_pixel(
+                    tuple(temp["p1"]), tuple(temp["p2"]))
+                s_in, s_ok, s_no = st.columns([2, 1, 1])
+                metri = s_in.number_input(
+                    f"Il segmento tracciato ({numero_it(dist_px, 0)} px) "
+                    "quanto misura in metri?",
+                    min_value=0.0, step=0.01, format="%.2f", key="scala_metri")
+                s_ok.write("")
+                s_no.write("")
+                if s_ok.button("📏 Imposta scala", type="primary"):
+                    if metri > 0:
+                        pianta["mpp"] = planimetria.metri_per_pixel(
+                            dist_px, metri)
+                        st.session_state.scala_temp = None
                         st.rerun()
                     else:
                         st.error("Scrivi la misura reale in metri (> 0).")
-
-        # ------------------------------------------------------ misura stanza
-        else:
-            if not st.session_state.mpp:
-                st.info("Prima imposta la scala con «Calibra la scala».")
-            else:
-                st.caption("Clicca **uno dopo l'altro gli angoli** della "
-                           "stanza (zooma con la rotellina per gli angoli "
-                           "piccoli). Servono almeno 3 punti; il perimetro si "
-                           "chiude da solo.")
-                punti = st.session_state.punti_stanza
-                img_st = disegna_overlay(base, punti, COL_ST_LINEA,
-                                         COL_ST_PUNTO, chiudi=True,
-                                         riempi_col=COL_ST_FILL)
-                valore = image_viewer(img_st, reset_token=st.session_state.reset_zoom,
-                                      key="viewer_st")
-                nuovo = click_nuovo(valore, "ts_st")
-                if nuovo is not None:
-                    punti.append(nuovo)
+                if s_no.button("Annulla"):
+                    st.session_state.scala_temp = None
                     st.rerun()
 
-                col_x, col_y = st.columns(2)
-                with col_x:
-                    if st.button("↩️ Annulla ultimo punto") and punti:
-                        punti.pop()
-                        st.rerun()
-                with col_y:
-                    if st.button("🔄 Nuova stanza (cancella punti)"):
-                        st.session_state.punti_stanza = []
-                        st.rerun()
-
-                if len(punti) < 3:
-                    st.info(f"Angoli inseriti: {len(punti)} (min. 3).")
-                else:
-                    mpp = st.session_state.mpp
-                    area = planimetria.area_reale_m2(punti, mpp)
-                    perim = planimetria.perimetro_reale_m(punti, mpp)
-                    c1, c2 = st.columns(2)
-                    c1.metric("Superficie", f"{numero_it(area, 2)} m²")
-                    c2.metric("Perimetro", f"{numero_it(perim, 2)} m")
-
-                    st.markdown("**Aggiungi questa stanza al computo:**")
-                    d1, d2, d3 = st.columns(3)
-                    nome_stanza = d1.text_input(
-                        "Descrizione", value="Superficie stanza",
-                        key="st_nome")
-                    cat_stanza = d2.text_input(
-                        "Categoria", value="Superfici", key="st_cat")
-                    prezzo_stanza = d3.number_input(
-                        "Prezzo €/m² (facolt.)", min_value=0.0, step=0.01,
-                        value=0.0, format="%.2f", key="st_prezzo")
-                    if st.button("➕ Aggiungi al computo", type="primary"):
+            # --------------------------------------------- zona selezionata
+            zona_sel = next((z for z in pianta["zone"]
+                             if z["id"] == st.session_state.sel_zona), None)
+            if zona_sel is not None:
+                st.markdown("**Zona selezionata**")
+                a_nome, a_cat, a_add, a_del = st.columns([2, 2, 1, 1])
+                nome_z = a_nome.text_input(
+                    "Nome (facoltativo)", value=zona_sel.get("nome") or "",
+                    key=f"zn_{pianta['uid']}_{zona_sel['id']}")
+                zona_sel["nome"] = nome_z.strip() or None
+                idx_cat = (nomi_cat.index(zona_sel["categoria"])
+                           if zona_sel["categoria"] in nomi_cat else 0)
+                cat_nuova = a_cat.selectbox(
+                    "Categoria", nomi_cat or ["Superficie interna"],
+                    index=idx_cat,
+                    key=f"zc_{pianta['uid']}_{zona_sel['id']}")
+                if nomi_cat and cat_nuova != zona_sel["categoria"]:
+                    zona_sel["categoria"] = cat_nuova
+                    st.rerun()
+                a_add.write("")
+                a_del.write("")
+                if pianta["mpp"]:
+                    area_sel = planimetria.area_reale_m2(
+                        zona_sel["punti"], pianta["mpp"])
+                    if a_add.button("➕ Al computo",
+                                    help="Aggiunge questa superficie come "
+                                         "voce del computo"):
                         aggiungi_voce_computo(
-                            cat_stanza, nome_stanza, "m²",
-                            round(area, 2), prezzo_stanza)
-                        st.session_state.punti_stanza = []
-                        st.success(
-                            f"«{nome_stanza}» ({numero_it(area, 2)} m²) "
-                            "aggiunta al computo. La trovi nella scheda "
-                            "«Computo metrico».")
-                        st.rerun()
+                            "Superfici",
+                            f"{zona_sel.get('nome') or zona_sel['categoria']}"
+                            f" — {pianta['nome']}",
+                            "m²", round(area_sel, 2), None)
+                        st.toast("Aggiunta al computo ✔")
+                if a_del.button("🗑 Elimina"):
+                    pianta["zone"] = [z for z in pianta["zone"]
+                                      if z["id"] != zona_sel["id"]]
+                    st.session_state.sel_zona = None
+                    st.rerun()
+
+        # --------------------------------------- categorie ed etichette
+        with st.expander("🎨 Categorie di superficie e percentuali"):
+            st.caption("A ogni categoria corrispondono un **colore** e la "
+                       "**percentuale commerciale** con cui i suoi m² pesano "
+                       "nel totale. Aggiungi o modifica le righe liberamente; "
+                       "⚠️ se rinomini una categoria, le zone già disegnate "
+                       "con il vecchio nome vanno aggiornate da «Modifica».")
+            df_cat = st.data_editor(
+                pd.DataFrame(st.session_state.categorie),
+                num_rows="dynamic", hide_index=True, key="editor_categorie",
+                column_config={
+                    "nome": st.column_config.TextColumn("Categoria"),
+                    "percento": st.column_config.NumberColumn(
+                        "% commerciale", min_value=0.0, max_value=200.0,
+                        step=5.0, format="%.0f %%"),
+                })
+            nuove = []
+            for _, riga in df_cat.iterrows():
+                nome_c = str(riga.get("nome") or "").strip()
+                if not nome_c or pd.isna(riga.get("percento")):
+                    continue
+                nuove.append({"nome": nome_c,
+                              "percento": float(riga["percento"])})
+            if nuove and nuove != st.session_state.categorie:
+                st.session_state.categorie = nuove
+                st.rerun()
+            legenda = " ".join(
+                f'<span style="display:inline-block;margin:2px 10px 2px 0;">'
+                f'<span style="display:inline-block;width:12px;height:12px;'
+                f'border-radius:3px;background:{col_map.get(c["nome"], "#9E9E9E")};'
+                f'margin-right:5px;vertical-align:-1px;"></span>'
+                f'{c["nome"]} · {numero_it(c["percento"], 0)}%</span>'
+                for c in st.session_state.categorie)
+            st.markdown(legenda, unsafe_allow_html=True)
+
+        with st.expander("🔤 Etichette sulle zone (layout)"):
+            st.slider("Dimensione carattere", 10, 24, key="et_font")
+            e1, e2, e3 = st.columns(3)
+            e1.checkbox("Nome / categoria", key="et_nome")
+            e2.checkbox("Superficie (m²)", key="et_m2")
+            e3.checkbox("Percentuale", key="et_pct")
+
+        # ------------------------------------------- superfici commerciali
+        st.subheader("🧮 Superfici commerciali (tutte le planimetrie)")
+        righe_sup, tot_sup, tot_comm, senza_scala = (
+            planimetria.riepilogo_superfici(piante, mappa_percentuali()))
+        if senza_scala:
+            st.warning("Escluse dal totale perché **senza scala**: "
+                       + ", ".join(senza_scala))
+        if not righe_sup:
+            st.info("Disegna le aree con ✏️ sulla planimetria: qui compare il "
+                    "riepilogo per categoria con le percentuali applicate.")
+        else:
+            df_sup_vista = pd.DataFrame([{
+                "Pianta": r["pianta"],
+                "Categoria": r["categoria"],
+                "Zone": r["zone"],
+                "m² reali": numero_it(r["m2"], 2),
+                "%": numero_it(r["percento"], 0) + " %",
+                "m² commerciali": numero_it(r["m2_commerciale"], 2),
+            } for r in righe_sup])
+            st.dataframe(df_sup_vista, hide_index=True)
+            m1, m2 = st.columns(2)
+            m1.metric("Superficie reale totale",
+                      f"{numero_it(tot_sup, 2)} m²")
+            m2.metric("Superficie commerciale totale",
+                      f"{numero_it(tot_comm, 2)} m²")
+            if st.button("➕ Riporta la superficie commerciale nel computo",
+                         type="primary"):
+                aggiungi_voce_computo(
+                    "Superfici",
+                    "Superficie commerciale — "
+                    + (st.session_state.prg_nome or "fabbricato"),
+                    "m²", round(tot_comm, 2), None)
+                st.toast("Superficie commerciale aggiunta al computo ✔")
+
+        st.divider()
+        st.download_button(
+            "💾 Salva progetto (.json) — computo e planimetrie",
+            data=progetto_json_bytes(),
+            file_name=nome_file("json"),
+            mime="application/json",
+        )

@@ -10,6 +10,7 @@ from planimetria import (
     metri_per_pixel,
     perimetro_poligono_pixel,
     perimetro_reale_m,
+    riepilogo_superfici,
 )
 
 
@@ -94,3 +95,69 @@ def test_integrazione_stanza_reale():
     mpp = 0.02
     punti = [(0, 0), (260, 0), (260, 205), (0, 205)]
     assert area_reale_m2(punti, mpp) == pytest.approx(21.32, abs=0.01)
+
+
+# ------------------------------------------------------ superfici commerciali
+
+# quadrato 200×200 px: con mpp 0,025 vale 5 m × 5 m = 25 m²
+QUADRATO_200 = [(0, 0), (200, 0), (200, 200), (0, 200)]
+
+
+def test_riepilogo_superfici_pesi_e_totali():
+    piante = [
+        {"nome": "Piano terra", "mpp": 0.025, "zone": [
+            {"categoria": "Superficie interna", "punti": QUADRATO_200},
+            {"categoria": "Balcone scoperto", "punti": QUADRATO_200},
+        ]},
+        {"nome": "Piano primo", "mpp": 0.025, "zone": [
+            {"categoria": "Superficie interna", "punti": QUADRATO_200},
+        ]},
+    ]
+    percentuali = {"Superficie interna": 100.0, "Balcone scoperto": 30.0}
+    righe, totale, commerciale, senza = riepilogo_superfici(piante, percentuali)
+    assert totale == 75.0                       # 25 + 25 + 25
+    assert commerciale == 57.5                  # 25 + 7,5 + 25
+    assert senza == []
+    balcone = next(r for r in righe if r["categoria"] == "Balcone scoperto")
+    assert balcone["m2"] == 25.0
+    assert balcone["m2_commerciale"] == 7.5
+    assert balcone["percento"] == 30.0
+
+
+def test_riepilogo_raggruppa_zone_della_stessa_categoria():
+    piante = [{"nome": "P", "mpp": 0.025, "zone": [
+        {"categoria": "Superficie interna", "punti": QUADRATO_200},
+        {"categoria": "Superficie interna", "punti": QUADRATO_200},
+    ]}]
+    righe, totale, _, _ = riepilogo_superfici(
+        piante, {"Superficie interna": 100.0})
+    assert len(righe) == 1
+    assert righe[0]["zone"] == 2
+    assert righe[0]["m2"] == 50.0
+    assert totale == 50.0
+
+
+def test_riepilogo_esclude_le_piante_senza_scala():
+    piante = [{"nome": "Senza scala", "mpp": None, "zone": [
+        {"categoria": "Superficie interna", "punti": QUADRATO_200},
+    ]}]
+    righe, totale, commerciale, senza = riepilogo_superfici(piante, {})
+    assert righe == []
+    assert totale == 0.0
+    assert commerciale == 0.0
+    assert senza == ["Senza scala"]
+
+
+def test_riepilogo_categoria_sconosciuta_vale_100():
+    piante = [{"nome": "P", "mpp": 0.025, "zone": [
+        {"categoria": "Categoria inventata", "punti": QUADRATO_200},
+    ]}]
+    righe, _, commerciale, _ = riepilogo_superfici(piante, {})
+    assert righe[0]["percento"] == 100.0
+    assert commerciale == 25.0
+
+
+def test_riepilogo_ignora_le_piante_senza_zone():
+    piante = [{"nome": "Vuota", "mpp": 0.02, "zone": []}]
+    righe, totale, commerciale, senza = riepilogo_superfici(piante, {})
+    assert righe == [] and totale == 0.0 and commerciale == 0.0 and senza == []

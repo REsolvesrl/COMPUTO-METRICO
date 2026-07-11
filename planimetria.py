@@ -71,3 +71,52 @@ def area_reale_m2(punti, mpp):
 def perimetro_reale_m(punti, mpp):
     """Perimetro reale in metri del poligono, dato il fattore di scala mpp."""
     return round(perimetro_poligono_pixel(punti) * mpp, 3)
+
+
+def riepilogo_superfici(piante, percentuali):
+    """Riepilogo delle superfici di tutte le planimetrie di un progetto.
+
+    piante: elenco di dizionari {"nome", "mpp", "zone": [{"categoria", "punti"}]}.
+    percentuali: {nome_categoria: percento} — il peso "commerciale" di ogni
+        categoria (es. balcone 30). Le categorie sconosciute valgono 100.
+
+    Ritorna (righe, totale_m2, totale_commerciale, senza_scala):
+    - righe: aggregate per (pianta, categoria) con numero di zone, m² reali,
+      percento e m² commerciali (reali × percento / 100);
+    - senza_scala: nomi delle piante con zone ma senza scala impostata,
+      escluse dai totali.
+    """
+    righe = []
+    totale_m2 = 0.0
+    totale_comm = 0.0
+    senza_scala = []
+    for pianta in piante:
+        nome = pianta.get("nome") or "Planimetria"
+        mpp = pianta.get("mpp")
+        zone = pianta.get("zone") or []
+        if not zone:
+            continue
+        if not mpp:
+            senza_scala.append(nome)
+            continue
+        gruppi = {}
+        for zona in zone:
+            categoria = zona.get("categoria") or "Senza categoria"
+            gruppo = gruppi.setdefault(categoria, {"zone": 0, "m2": 0.0})
+            gruppo["zone"] += 1
+            gruppo["m2"] += area_reale_m2(zona.get("punti") or [], mpp)
+        for categoria, gruppo in gruppi.items():
+            percento = float(percentuali.get(categoria, 100.0))
+            m2 = round(gruppo["m2"], 3)
+            m2_comm = round(m2 * percento / 100.0, 3)
+            righe.append({
+                "pianta": nome,
+                "categoria": categoria,
+                "zone": gruppo["zone"],
+                "percento": percento,
+                "m2": m2,
+                "m2_commerciale": m2_comm,
+            })
+            totale_m2 += m2
+            totale_comm += m2_comm
+    return righe, round(totale_m2, 2), round(totale_comm, 2), senza_scala

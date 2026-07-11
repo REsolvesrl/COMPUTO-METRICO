@@ -7,26 +7,80 @@
   <script src="./streamlit-component-lib.js"></script>
   <script src="./main.js"></script>
   <style>
-    html, body { margin: 0; padding: 0; overflow: hidden; }
-    #viewer {
+    html, body { margin: 0; padding: 0; overflow: hidden;
+                 font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    #wrap {
       position: relative;
-      overflow: hidden;
       width: 100%;
-      background: transparent;
+      overflow: hidden;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.12);
+    }
+    #cv {
+      display: block;
+      outline: none;
       touch-action: none;
-      cursor: crosshair;
-    }
-    #image {
-      position: absolute;
-      top: 0;
-      left: 0;
-      transform-origin: 0 0;
       user-select: none;
-      -webkit-user-drag: none;
     }
+    /* Barra strumenti flottante (stile AreaPlan, colori Resolve) */
+    #toolbar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 5px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+      z-index: 5;
+    }
+    .tb-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 58px;
+      padding: 5px 2px 4px;
+      border: 1px solid rgba(26, 39, 68, 0.15);
+      border-radius: 7px;
+      background: #ffffff;
+      color: #1A2744;
+      cursor: pointer;
+    }
+    .tb-btn:hover { background: #f1ede2; }
+    .tb-btn.attivo { background: #C9A96A; border-color: #B08F4F; color: #ffffff; }
+    .tb-btn .ico { font-size: 17px; line-height: 1.15; }
+    .tb-btn .lbl { font-size: 8.5px; font-weight: 600; letter-spacing: .03em;
+                   text-transform: uppercase; margin-top: 1px; }
+    .tb-riga { display: flex; gap: 3px; }
+    .tb-riga .tb-btn { width: 26px; padding: 4px 0; }
+    .tb-riga .tb-btn .ico { font-size: 13px; }
+    .tb-sep { height: 1px; margin: 2px 4px; background: rgba(26, 39, 68, 0.15); }
   </style>
 </head>
 <body>
-  <div id="viewer"><img id="image" draggable="false" /></div>
+  <div id="wrap">
+    <div id="toolbar">
+      <button class="tb-btn attivo" data-mode="sposta" title="Sposta la vista (trascina); la rotellina zooma sempre">
+        <span class="ico">✋</span><span class="lbl">Sposta</span></button>
+      <button class="tb-btn" data-mode="disegna" title="Disegna un'area: clicca gli angoli, chiudi sul primo punto o con doppio clic">
+        <span class="ico">✏️</span><span class="lbl">Area</span></button>
+      <button class="tb-btn" data-mode="modifica" title="Seleziona e modifica: trascina i vertici, Canc elimina">
+        <span class="ico">➤</span><span class="lbl">Modifica</span></button>
+      <button class="tb-btn" data-mode="scala" title="Imposta la scala: trascina lungo una misura nota">
+        <span class="ico">↔️</span><span class="lbl">Scala</span></button>
+      <button class="tb-btn" data-mode="parete" title="Misura una parete: trascina da un capo all'altro">
+        <span class="ico">🧱</span><span class="lbl">Parete</span></button>
+      <div class="tb-sep"></div>
+      <div class="tb-riga">
+        <button class="tb-btn" id="b-zin" title="Zoom avanti"><span class="ico">＋</span></button>
+        <button class="tb-btn" id="b-zout" title="Zoom indietro"><span class="ico">－</span></button>
+        <button class="tb-btn" id="b-fit" title="Adatta alla finestra"><span class="ico">⛶</span></button>
+      </div>
+    </div>
+    <canvas id="cv" tabindex="0"></canvas>
+  </div>
 </body>
 </html>
