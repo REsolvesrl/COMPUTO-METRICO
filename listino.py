@@ -26,7 +26,11 @@ VOCI = [
                     "cassone e smaltimento)",
      "nota": "Comprende demolizione, discesa macerie, noleggio/ritiro del "
              "cassone, montascale e smaltimento. Attorno ai muri demoliti "
-             "considera ~1 m di pavimento per ogni metro lineare di muro."},
+             "considera ~1 m di pavimento per ogni metro lineare di muro.",
+     "analisi": "**Analisi costi**: demolizione 20 €/m² · discesa macerie "
+                "25 €/m² · consegna cassone (4-6 m³) 60 € · ritiro cassone "
+                "e smaltimento 300 € · montascale mezza giornata 200 € · "
+                "noleggio cassone 5 €/giorno."},
     {"codice": "1.02", "categoria": "Demolizioni", "um": "m²", "prezzo": 100.0,
      "descrizione": "Demolizione murature",
      "nota": "Quantità = lunghezza del muro × altezza (es. 5 m × 3 m = "

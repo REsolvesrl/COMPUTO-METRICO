@@ -41,6 +41,17 @@ COLONNE = COLONNE_TESTO + COLONNE_NUMERI
 UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo",
               "punto", "utenza"]
 
+# Colori delle categorie del listino: (pallino/hex, colore markdown titolo).
+COLORI_CATEGORIE = {
+    "Demolizioni": ("#E57373", "red"),
+    "Ricostruzioni e ripristini": ("#66BB6A", "green"),
+    "Idraulico": ("#64B5F6", "blue"),
+    "Elettricista": ("#F0A840", "orange"),
+    "Serramenti": ("#9575CD", "violet"),
+    "Aree esterne": ("#B0BEC5", "gray"),
+}
+ALTRE_VOCI = "Voci aggiuntive"
+
 # Palette del brand Resolve (dark navy + oro), come MORA.
 ORO = "#C9A96A"           # oro champagne — barre del grafico
 CREMA = "#ECE7DA"         # testo
@@ -139,6 +150,61 @@ def nome_file(estensione):
     base = (st.session_state.prg_nome or "computo").strip().replace(" ", "_")
     base = "".join(c for c in base if c.isalnum() or c in "_-") or "computo"
     return f"{base}.{estensione}"
+
+
+# ------------------------------------------------------- checklist listino
+
+def quantita_prezzo_listino(voce):
+    """Quantità e prezzo correnti (dai widget) di una voce del listino."""
+    quantita = float(st.session_state.get(f"lq_{voce['codice']}") or 0.0)
+    prezzo = float(st.session_state.get(f"lp_{voce['codice']}")
+                   or voce["prezzo"])
+    return quantita, prezzo
+
+
+def totale_categoria_listino(categoria):
+    """Somma quantità × prezzo delle voci compilate della categoria."""
+    totale = 0.0
+    for voce in listino.voci_della_categoria(categoria):
+        quantita, prezzo = quantita_prezzo_listino(voce)
+        totale += quantita * prezzo
+    return round(totale, 2)
+
+
+def voci_dal_listino():
+    """Le voci del listino con quantità > 0, nel formato del computo."""
+    voci = []
+    for voce in listino.VOCI:
+        quantita, prezzo = quantita_prezzo_listino(voce)
+        if quantita > 0:
+            voci.append({"categoria": voce["categoria"],
+                         "codice": voce["codice"],
+                         "descrizione": voce["descrizione"],
+                         "um": voce["um"], "parti": None, "lunghezza": None,
+                         "larghezza": None, "altezza": None,
+                         "quantita_manuale": quantita, "prezzo": prezzo})
+    return voci
+
+
+def riga_voce_listino(voce):
+    """Una riga della checklist: descrizione, quantità, prezzo, parziale."""
+    c_voce, c_qta, c_prezzo, c_parz = st.columns(
+        [3.4, 1, 1, 1], vertical_alignment="center")
+    aiuto = voce.get("nota")
+    if voce.get("analisi"):
+        aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
+    c_voce.markdown(f"**{voce['codice']}** {voce['descrizione']} · "
+                    f":gray[{voce['um']}]", help=aiuto)
+    quantita = c_qta.number_input(
+        "Quantità", min_value=0.0, step=1.0, format="%.2f",
+        key=f"lq_{voce['codice']}", label_visibility="collapsed")
+    prezzo = c_prezzo.number_input(
+        "Prezzo €", min_value=0.0, step=1.0, format="%.2f",
+        key=f"lp_{voce['codice']}", label_visibility="collapsed")
+    if quantita > 0:
+        c_parz.markdown(f"**{euro(quantita * prezzo)}**")
+    else:
+        c_parz.markdown(":gray[0,00 €]")
 
 
 def grafico_totali(totali):
@@ -357,6 +423,17 @@ def progetto_json_bytes():
             "imprevisti": st.session_state.imprevisti,
         },
         "voci": voci_da_df(st.session_state.df_voci),
+        "listino_stato": {
+            v["codice"]: {
+                "q": float(st.session_state.get(f"lq_{v['codice']}") or 0.0),
+                "p": float(st.session_state.get(f"lp_{v['codice']}")
+                           or v["prezzo"]),
+            }
+            for v in listino.VOCI
+            if (st.session_state.get(f"lq_{v['codice']}") or 0.0) > 0
+            or float(st.session_state.get(f"lp_{v['codice']}")
+                     or v["prezzo"]) != v["prezzo"]
+        },
         "categorie": st.session_state.categorie,
         "etichette": {"font": st.session_state.et_font,
                       "nome": st.session_state.et_nome,
@@ -380,6 +457,9 @@ st.session_state.setdefault("prg_oggetto", "")
 st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 22.0)
 st.session_state.setdefault("imprevisti", 5.0)
+for _voce in listino.VOCI:
+    st.session_state.setdefault(f"lq_{_voce['codice']}", 0.0)
+    st.session_state.setdefault(f"lp_{_voce['codice']}", float(_voce["prezzo"]))
 # planimetria
 st.session_state.setdefault("piante", [])
 st.session_state.setdefault("pianta_idx", 0)
@@ -407,6 +487,13 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 22.0))
     st.session_state.imprevisti = float(progetto.get("imprevisti", 5.0))
+    stato_listino = dati.get("listino_stato") or {}
+    for _voce in listino.VOCI:
+        elemento = stato_listino.get(_voce["codice"]) or {}
+        st.session_state[f"lq_{_voce['codice']}"] = float(
+            elemento.get("q", 0.0))
+        st.session_state[f"lp_{_voce['codice']}"] = float(
+            elemento.get("p", _voce["prezzo"]))
     try:
         st.session_state.prg_data = date.fromisoformat(progetto.get("data", ""))
     except (TypeError, ValueError):
@@ -494,222 +581,222 @@ with tab_computo:
                 st.rerun()
 
     # ------------------------------------------------------ listino guida
-    with st.expander("📚 Listino voci guida (prezzi indicativi, modificabili)"):
-        st.caption("Voci pronte all'uso con **prezzi medi indicativi**: le "
-                   "aggiungi al computo e poi modifichi prezzo e quantità in "
-                   "tabella come qualsiasi altra voce. Con «Aggiungi tutta la "
-                   "categoria» ti crei una **checklist guidata** da compilare "
-                   "voce per voce (le righe senza quantità valgono 0 €).")
-        l_cat, l_voce = st.columns([1, 2])
-        cat_listino = l_cat.selectbox("Categoria", listino.CATEGORIE,
-                                      key="lst_cat")
-        voci_cat = listino.voci_della_categoria(cat_listino)
-        etichette_voci = [
-            f"{v['codice']} · {v['descrizione']} — {euro(v['prezzo'])}/{v['um']}"
-            for v in voci_cat]
-        scelta_voce = l_voce.selectbox("Voce del listino", etichette_voci,
-                                       key=f"lst_voce_{cat_listino}")
-        voce_listino = voci_cat[etichette_voci.index(scelta_voce)]
-        if voce_listino.get("nota"):
-            st.caption("💡 " + voce_listino["nota"])
-        l_qta, l_uno, l_tutte = st.columns([1, 1, 2])
-        qta_listino = l_qta.number_input(
-            f"Quantità ({voce_listino['um']})", min_value=0.0, step=1.0,
-            key="lst_qta")
-        l_uno.write("")
-        l_tutte.write("")
-        if l_uno.button("➕ Aggiungi la voce"):
-            aggiungi_voce_computo(
-                cat_listino, voce_listino["descrizione"], voce_listino["um"],
-                qta_listino if qta_listino > 0 else None,
-                voce_listino["prezzo"], codice=voce_listino["codice"])
-            st.toast(f"«{voce_listino['codice']}» aggiunta al computo ✔")
-        if l_tutte.button(f"➕➕ Aggiungi tutta la categoria «{cat_listino}» "
-                          "(quantità da compilare)"):
-            for v in voci_cat:
-                aggiungi_voce_computo(
-                    cat_listino, v["descrizione"], v["um"], None,
-                    v["prezzo"], codice=v["codice"])
-            st.toast(f"{len(voci_cat)} voci di «{cat_listino}» aggiunte ✔")
+    # -------------------------------------- categorie (sx) e riepilogo (dx)
+    col_sx, col_dx = st.columns([2.6, 1.4], gap="medium")
 
-    st.subheader("1 · Voci di lavorazione")
-    st.caption("Doppio clic su una cella per scriverci. La riga vuota in fondo "
-               "aggiunge una voce; per cancellare una riga selezionala "
-               "(casella a sinistra) e premi Canc.")
+    with col_sx:
+        for indice, cat in enumerate(listino.CATEGORIE, start=1):
+            colore_md = COLORI_CATEGORIE[cat][1]
+            tot_cat = totale_categoria_listino(cat)
+            with st.expander(f":{colore_md}[**{indice} · {cat}**] — "
+                             f"Totale: {euro(tot_cat)}"):
+                h_voce, h_qta, h_prezzo, h_parz = st.columns([3.4, 1, 1, 1])
+                h_voce.caption("Voce · unità")
+                h_qta.caption("Quantità")
+                h_prezzo.caption("Prezzo €")
+                h_parz.caption("Parziale")
+                for voce in listino.voci_della_categoria(cat):
+                    riga_voce_listino(voce)
 
-    df_editato = st.data_editor(
-        st.session_state.df_voci,
-        num_rows="dynamic",
-        hide_index=True,
-        key=f"editor_voci_{st.session_state.versione_editor}",
-        column_config={
-            "categoria": st.column_config.TextColumn(
-                "Categoria", help="Es. Demolizioni, Murature, Impianti…"),
-            "codice": st.column_config.TextColumn(
-                "Codice", help="Codice voce, facoltativo (es. 01.A01.001)"),
-            "descrizione": st.column_config.TextColumn(
-                "Descrizione", width="large"),
-            "um": st.column_config.SelectboxColumn(
-                "U.M.", options=UM_OPZIONI, help="Unità di misura"),
-            "parti": st.column_config.NumberColumn(
-                "Parti", help="Numero di parti uguali. "
-                              "Negativo = detrazione (es. -1)."),
-            "lunghezza": st.column_config.NumberColumn("Lungh. (m)"),
-            "larghezza": st.column_config.NumberColumn("Largh. (m)"),
-            "altezza": st.column_config.NumberColumn(
-                "Alt. / Peso", help="Altezza in m, oppure peso unitario"),
-            "quantita_manuale": st.column_config.NumberColumn(
-                "Quantità (manuale)",
-                help="Compilala solo se lasci vuote le dimensioni"),
-            "prezzo": st.column_config.NumberColumn(
-                "Prezzo unit. (€)", format="%.2f"),
-        },
-    )
-    st.session_state.df_voci = df_editato
+        # tabella libera: personalizzate e voci arrivate dalla planimetria
+        tot_extra = calcoli.totale_generale(
+            calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
+        with st.expander(f"**➕ {ALTRE_VOCI}** (personalizzate e dalla "
+                         f"planimetria) — Totale: {euro(tot_extra)}"):
+            st.caption("Tabella libera: qui arrivano anche superfici, "
+                       "battiscopa e tinteggiature dalla scheda planimetria. "
+                       "Doppio clic per scrivere; la riga vuota in fondo "
+                       "aggiunge una voce; Canc elimina la riga selezionata. "
+                       "Compila le dimensioni oppure la quantità manuale.")
+            df_editato = st.data_editor(
+                st.session_state.df_voci,
+                num_rows="dynamic",
+                hide_index=True,
+                key=f"editor_voci_{st.session_state.versione_editor}",
+                column_config={
+                    "categoria": st.column_config.TextColumn(
+                        "Categoria",
+                        help="Es. Demolizioni, Murature, Impianti…"),
+                    "codice": st.column_config.TextColumn(
+                        "Codice",
+                        help="Codice voce, facoltativo (es. 01.A01.001)"),
+                    "descrizione": st.column_config.TextColumn(
+                        "Descrizione", width="large"),
+                    "um": st.column_config.SelectboxColumn(
+                        "U.M.", options=UM_OPZIONI, help="Unità di misura"),
+                    "parti": st.column_config.NumberColumn(
+                        "Parti", help="Numero di parti uguali. "
+                                      "Negativo = detrazione (es. -1)."),
+                    "lunghezza": st.column_config.NumberColumn("Lungh. (m)"),
+                    "larghezza": st.column_config.NumberColumn("Largh. (m)"),
+                    "altezza": st.column_config.NumberColumn(
+                        "Alt. / Peso",
+                        help="Altezza in m, oppure peso unitario"),
+                    "quantita_manuale": st.column_config.NumberColumn(
+                        "Quantità (manuale)",
+                        help="Compilala solo se lasci vuote le dimensioni"),
+                    "prezzo": st.column_config.NumberColumn(
+                        "Prezzo unit. (€)", format="%.2f"),
+                },
+            )
+            st.session_state.df_voci = df_editato
 
-    voci = voci_da_df(df_editato)
-    voci_calcolate = calcoli.calcola_computo(voci)
-
-    if not voci_calcolate:
-        st.info("Aggiungi la prima voce nella tabella qui sopra, oppure misura "
-                "le superfici nella scheda «Misura da planimetria».")
-        st.download_button(
-            "💾 Salva progetto (.json)",
-            data=progetto_json_bytes(),
-            file_name=nome_file("json"),
-            mime="application/json",
-            help="Salva anche le planimetrie con zone e scala.",
-        )
-    else:
-        st.subheader("2 · Computo calcolato")
-        df_calcolato = pd.DataFrame(voci_calcolate).reindex(
-            columns=COLONNE + ["quantita", "importo"])
-        df_vista = pd.DataFrame({
-            "Categoria": df_calcolato["categoria"].fillna(""),
-            "Codice": df_calcolato["codice"].fillna(""),
-            "Descrizione": df_calcolato["descrizione"].fillna(""),
-            "U.M.": df_calcolato["um"].fillna(""),
-            "Quantità": df_calcolato["quantita"].map(numero_it),
-            "Prezzo unit.": df_calcolato["prezzo"].map(euro),
-            "Importo": df_calcolato["importo"].map(euro),
-        })
-        st.dataframe(df_vista, hide_index=True)
-
-        st.subheader("3 · Riepilogo")
-        totali = calcoli.totali_per_categoria(voci_calcolate)
+    # --------------------------------------------------- riepilogo costi
+    with col_dx:
+        st.markdown("#### 💰 Riepilogo costi")
+        voci_tutte = voci_dal_listino() + voci_da_df(st.session_state.df_voci)
+        voci_calcolate = calcoli.calcola_computo(voci_tutte)
         totale = calcoli.totale_generale(voci_calcolate)
-        incidenze = calcoli.incidenze_percentuali(totali, totale)
+
+        if totale == 0:
+            st.caption("Inserisci le quantità nelle categorie per vedere "
+                       "la distribuzione dei costi.")
+        righe_dot = [(f"{i}. {cat}", COLORI_CATEGORIE[cat][0],
+                      totale_categoria_listino(cat))
+                     for i, cat in enumerate(listino.CATEGORIE, start=1)]
+        tot_extra_dot = calcoli.totale_generale(
+            calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
+        righe_dot.append((ALTRE_VOCI, "#C9A96A", tot_extra_dot))
+        html_dot = "".join(
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:center;margin:4px 0;font-size:0.9rem;">'
+            f'<span><span style="display:inline-block;width:10px;'
+            f'height:10px;border-radius:50%;background:{colore};'
+            f'margin-right:8px;"></span>{nome}</span>'
+            f'<b>{euro(importo)}</b></div>'
+            for nome, colore, importo in righe_dot)
+        st.markdown(html_dot, unsafe_allow_html=True)
+        st.divider()
+
         imp_importo, totale_imprevisti = calcoli.totale_con_imprevisti(
             totale, st.session_state.imprevisti)
         iva_importo, totale_ivato = calcoli.totale_con_iva(
             totale_imprevisti, st.session_state.iva)
 
-        df_riepilogo = pd.DataFrame({
-            "Categoria": list(totali),
-            "Importo": [totali[c] for c in totali],
-            "Incidenza %": [incidenze[c] for c in totali],
-        }).sort_values("Importo", ascending=False, ignore_index=True)
+        r_somma, r_imp = st.columns(2)
+        r_somma.metric("Somma parziali", euro(totale))
+        r_imp.metric(
+            f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
+            euro(imp_importo))
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,#243459,#1A2744);'
+            'border:1px solid #C9A96A;border-radius:12px;'
+            'padding:12px 16px;margin:6px 0 10px;">'
+            '<div style="font-size:0.75rem;color:#C9A96A;'
+            'letter-spacing:.06em;">💎 TOTALE FINALE (con imprevisti)</div>'
+            '<div style="font-size:1.7rem;font-weight:700;color:#ECE7DA;">'
+            f'{euro(totale_imprevisti)}</div></div>',
+            unsafe_allow_html=True)
+        r_iva, r_tot = st.columns(2)
+        r_iva.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
+                     euro(iva_importo))
+        r_tot.metric("Totale IVA inclusa", euro(totale_ivato))
 
-        col_tabella, col_grafico = st.columns([2, 3])
-        with col_tabella:
-            st.dataframe(
-                pd.DataFrame({
-                    "Categoria": df_riepilogo["Categoria"],
-                    "Importo": df_riepilogo["Importo"].map(euro),
-                    "Incidenza": df_riepilogo["Incidenza %"].map(
-                        lambda p: numero_it(p, 2) + " %"),
-                }),
-                hide_index=True,
-            )
-        with col_grafico:
-            if len(totali) >= 2:
-                st.plotly_chart(grafico_totali(totali),
-                                config={"displayModeBar": False})
+        totali = calcoli.totali_per_categoria(voci_calcolate)
+        if len(totali) >= 2:
+            st.plotly_chart(grafico_totali(totali),
+                            config={"displayModeBar": False})
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Somma lavori", euro(totale))
-        col2.metric(f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
-                    euro(imp_importo))
-        col3.metric("Totale con imprevisti", euro(totale_imprevisti))
-        col4.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
-                    euro(iva_importo))
-        col5.metric("Totale finale (IVA incl.)", euro(totale_ivato))
+    # ------------------------------------------------- tabella ed export
+    if voci_calcolate:
+        df_calcolato = pd.DataFrame(voci_calcolate).reindex(
+            columns=COLONNE + ["quantita", "importo"])
+        with st.expander("📄 Computo calcolato (tabella completa)"):
+            df_vista = pd.DataFrame({
+                "Categoria": df_calcolato["categoria"].fillna(""),
+                "Codice": df_calcolato["codice"].fillna(""),
+                "Descrizione": df_calcolato["descrizione"].fillna(""),
+                "U.M.": df_calcolato["um"].fillna(""),
+                "Quantità": df_calcolato["quantita"].map(numero_it),
+                "Prezzo unit.": df_calcolato["prezzo"].map(euro),
+                "Importo": df_calcolato["importo"].map(euro),
+            })
+            st.dataframe(df_vista, hide_index=True)
+    else:
+        df_calcolato = pd.DataFrame(
+            columns=COLONNE + ["quantita", "importo"])
 
-        st.subheader("4 · Salva ed esporta")
-        st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
-                   "planimetrie): conservalo e ricaricalo dal pannello "
-                   "**📋 Dati del progetto · Apri / Nuovo** in cima alla "
-                   "pagina. Excel e CSV servono per consegnare o rielaborare "
-                   "il computo.")
+    st.subheader("💾 Salva ed esporta")
+    st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
+               "planimetrie): conservalo e ricaricalo dal pannello "
+               "**📋 Dati del progetto · Apri / Nuovo** in cima alla "
+               "pagina. Excel e CSV servono per consegnare o rielaborare "
+               "il computo.")
 
-        progetto = {
-            "nome": st.session_state.prg_nome,
-            "committente": st.session_state.prg_committente,
-            "oggetto": st.session_state.prg_oggetto,
-            "data": st.session_state.prg_data.isoformat(),
-            "aliquota_iva": st.session_state.iva,
-            "imprevisti": st.session_state.imprevisti,
-        }
-        df_riepilogo_excel = pd.concat([
-            df_riepilogo,
-            pd.DataFrame({
-                "Categoria": [
-                    "Somma lavori",
-                    f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
-                    "Totale con imprevisti",
-                    f"IVA {numero_it(st.session_state.iva, 0)}%",
-                    "Totale finale (IVA inclusa)"],
-                "Importo": [totale, imp_importo, totale_imprevisti,
-                            iva_importo, totale_ivato],
-                "Incidenza %": [100.0, None, None, None, None],
-            }),
+    progetto = {
+        "nome": st.session_state.prg_nome,
+        "committente": st.session_state.prg_committente,
+        "oggetto": st.session_state.prg_oggetto,
+        "data": st.session_state.prg_data.isoformat(),
+        "aliquota_iva": st.session_state.iva,
+        "imprevisti": st.session_state.imprevisti,
+    }
+    incidenze = calcoli.incidenze_percentuali(totali, totale)
+    df_riepilogo = pd.DataFrame({
+        "Categoria": list(totali),
+        "Importo": [totali[c] for c in totali],
+        "Incidenza %": [incidenze[c] for c in totali],
+    }).sort_values("Importo", ascending=False, ignore_index=True)
+    df_riepilogo_excel = pd.concat([
+        df_riepilogo,
+        pd.DataFrame({
+            "Categoria": [
+                "Somma lavori",
+                f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
+                "Totale con imprevisti",
+                f"IVA {numero_it(st.session_state.iva, 0)}%",
+                "Totale finale (IVA inclusa)"],
+            "Importo": [totale, imp_importo, totale_imprevisti,
+                        iva_importo, totale_ivato],
+            "Incidenza %": [100.0, None, None, None, None],
+        }),
+    ], ignore_index=True)
+    df_progetto_excel = pd.DataFrame({
+        "Campo": ["Nome", "Committente", "Oggetto", "Data",
+                  "Aliquota IVA %", "Imprevisti %"],
+        "Valore": [progetto["nome"], progetto["committente"],
+                   progetto["oggetto"], progetto["data"],
+                   progetto["aliquota_iva"], progetto["imprevisti"]],
+    })
+
+    righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
+        st.session_state.piante, mappa_percentuali())
+    df_superfici_excel = None
+    if righe_sup:
+        df_superfici_excel = pd.DataFrame([{
+            "Pianta": r["pianta"], "Categoria": r["categoria"],
+            "N. zone": r["zone"], "m² reali": r["m2"],
+            "%": r["percento"], "m² commerciali": r["m2_commerciale"],
+        } for r in righe_sup])
+        df_superfici_excel = pd.concat([
+            df_superfici_excel,
+            pd.DataFrame([{"Pianta": "TOTALE", "Categoria": "",
+                           "N. zone": None, "m² reali": tot_sup,
+                           "%": None, "m² commerciali": tot_comm}]),
         ], ignore_index=True)
-        df_progetto_excel = pd.DataFrame({
-            "Campo": ["Nome", "Committente", "Oggetto", "Data",
-                      "Aliquota IVA %", "Imprevisti %"],
-            "Valore": [progetto["nome"], progetto["committente"],
-                       progetto["oggetto"], progetto["data"],
-                       progetto["aliquota_iva"], progetto["imprevisti"]],
-        })
 
-        righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
-            st.session_state.piante, mappa_percentuali())
-        df_superfici_excel = None
-        if righe_sup:
-            df_superfici_excel = pd.DataFrame([{
-                "Pianta": r["pianta"], "Categoria": r["categoria"],
-                "N. zone": r["zone"], "m² reali": r["m2"],
-                "%": r["percento"], "m² commerciali": r["m2_commerciale"],
-            } for r in righe_sup])
-            df_superfici_excel = pd.concat([
-                df_superfici_excel,
-                pd.DataFrame([{"Pianta": "TOTALE", "Categoria": "",
-                               "N. zone": None, "m² reali": tot_sup,
-                               "%": None, "m² commerciali": tot_comm}]),
-            ], ignore_index=True)
-
-        col_json, col_xlsx, col_csv = st.columns(3)
-        col_json.download_button(
-            "💾 Salva progetto (.json)",
-            data=progetto_json_bytes(),
-            file_name=nome_file("json"),
-            mime="application/json",
-        )
-        col_xlsx.download_button(
-            "📊 Esporta Excel (.xlsx)",
-            data=excel_bytes(df_calcolato, df_riepilogo_excel,
-                             df_progetto_excel, df_superfici_excel),
-            file_name=nome_file("xlsx"),
-            mime="application/vnd.openxmlformats-officedocument."
-                 "spreadsheetml.sheet",
-        )
-        col_csv.download_button(
-            "📄 Esporta CSV",
-            data=df_calcolato.to_csv(index=False, sep=";", decimal=",")
-                             .encode("utf-8-sig"),
-            file_name=nome_file("csv"),
-            mime="text/csv",
-        )
+    col_json, col_xlsx, col_csv = st.columns(3)
+    col_json.download_button(
+        "💾 Salva progetto (.json)",
+        data=progetto_json_bytes(),
+        file_name=nome_file("json"),
+        mime="application/json",
+    )
+    col_xlsx.download_button(
+        "📊 Esporta Excel (.xlsx)",
+        data=excel_bytes(df_calcolato, df_riepilogo_excel,
+                         df_progetto_excel, df_superfici_excel),
+        file_name=nome_file("xlsx"),
+        mime="application/vnd.openxmlformats-officedocument."
+             "spreadsheetml.sheet",
+    )
+    col_csv.download_button(
+        "📄 Esporta CSV",
+        data=df_calcolato.to_csv(index=False, sep=";", decimal=",")
+                         .encode("utf-8-sig"),
+        file_name=nome_file("csv"),
+        mime="text/csv",
+    )
 
 
 # ========================================================= SCHEDA PLANIMETRIA
