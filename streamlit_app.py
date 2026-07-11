@@ -186,6 +186,51 @@ def voci_dal_listino():
     return voci
 
 
+def css_schede_computo():
+    """CSS delle schede colorate del computo (stile «card» per categoria).
+
+    Ogni scheda è avvolta in un st.container(key="card_…"): Streamlit
+    assegna al contenitore la classe .st-key-card_… e da lì coloriamo
+    sfondo e bordo dell'expander. Il titolo diventa una riga flex, così
+    il «Totale» (l'ultimo grassetto del titolo) va allineato a destra.
+    """
+    regole = ["""
+[class*="st-key-card_"] [data-testid="stExpander"] details {
+    border-radius: 12px;
+}
+[class*="st-key-card_"] summary [data-testid="stMarkdownContainer"] {
+    width: 100%;
+}
+[class*="st-key-card_"] summary [data-testid="stMarkdownContainer"] p {
+    display: flex;
+    align-items: baseline;
+    width: 100%;
+    font-size: 1.25rem;
+}
+[class*="st-key-card_"] summary p > strong:last-child {
+    margin-left: auto;
+    font-weight: 700;
+    padding-left: 0.5rem;
+    white-space: nowrap;
+}
+"""]
+    colori_carte = {f"card_{i}": COLORI_CATEGORIE[cat][0]
+                    for i, cat in enumerate(listino.CATEGORIE, start=1)}
+    colori_carte["card_extra"] = ORO
+    for chiave, colore in colori_carte.items():
+        regole.append(f"""
+.st-key-{chiave} [data-testid="stExpander"] details {{
+    background: {colore}26;
+    border: 1px solid {colore}99;
+}}
+.st-key-{chiave} [data-testid="stExpander"] summary:hover {{
+    background: {colore}33;
+    border-radius: 12px;
+}}
+""")
+    return "<style>" + "".join(regole) + "</style>"
+
+
 def riga_voce_listino(voce):
     """Una riga della checklist: descrizione, quantità, prezzo, parziale."""
     c_voce, c_qta, c_prezzo, c_parz = st.columns(
@@ -455,7 +500,7 @@ st.session_state.setdefault("prg_nome", "")
 st.session_state.setdefault("prg_committente", "")
 st.session_state.setdefault("prg_oggetto", "")
 st.session_state.setdefault("prg_data", date.today())
-st.session_state.setdefault("iva", 22.0)
+st.session_state.setdefault("iva", 10.0)   # 10%: aliquota tipica in edilizia
 st.session_state.setdefault("imprevisti", 5.0)
 for _voce in listino.VOCI:
     st.session_state.setdefault(f"lq_{_voce['codice']}", 0.0)
@@ -485,7 +530,7 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_nome = progetto.get("nome", "")
     st.session_state.prg_committente = progetto.get("committente", "")
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
-    st.session_state.iva = float(progetto.get("aliquota_iva", 22.0))
+    st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
     st.session_state.imprevisti = float(progetto.get("imprevisti", 5.0))
     stato_listino = dati.get("listino_stato") or {}
     for _voce in listino.VOCI:
@@ -553,8 +598,8 @@ with tab_computo:
         d4.date_input("Data", key="prg_data", format="DD/MM/YYYY")
         d5.number_input("Aliquota IVA (%)", min_value=0.0, max_value=100.0,
                         step=1.0, key="iva",
-                        help="22% ordinaria, 10% ristrutturazioni, "
-                             "4% prima casa")
+                        help="10% ristrutturazioni (predefinita), "
+                             "22% ordinaria, 4% prima casa")
         d6.number_input("Imprevisti (%)", min_value=0.0, max_value=50.0,
                         step=1.0, key="imprevisti",
                         help="Accantonamento sul totale lavori per le "
@@ -582,27 +627,32 @@ with tab_computo:
 
     # ------------------------------------------------------ listino guida
     # -------------------------------------- categorie (sx) e riepilogo (dx)
-    col_sx, col_dx = st.columns([2.6, 1.4], gap="medium")
+    st.markdown(css_schede_computo(), unsafe_allow_html=True)
+    col_sx, col_dx = st.columns([3.3, 0.7], gap="medium")
 
     with col_sx:
         for indice, cat in enumerate(listino.CATEGORIE, start=1):
             colore_md = COLORI_CATEGORIE[cat][1]
             tot_cat = totale_categoria_listino(cat)
-            with st.expander(f":{colore_md}[**{indice} · {cat}**] — "
-                             f"Totale: {euro(tot_cat)}"):
-                h_voce, h_qta, h_prezzo, h_parz = st.columns([3.4, 1, 1, 1])
-                h_voce.caption("Voce · unità")
-                h_qta.caption("Quantità")
-                h_prezzo.caption("Prezzo €")
-                h_parz.caption("Parziale")
-                for voce in listino.voci_della_categoria(cat):
-                    riga_voce_listino(voce)
+            with st.container(key=f"card_{indice}"):
+                with st.expander(f":{colore_md}[**{indice} · {cat}**] "
+                                 f"**Totale: {euro(tot_cat)}**"):
+                    h_voce, h_qta, h_prezzo, h_parz = st.columns(
+                        [3.4, 1, 1, 1])
+                    h_voce.caption("Voce · unità")
+                    h_qta.caption("Quantità")
+                    h_prezzo.caption("Prezzo €")
+                    h_parz.caption("Parziale")
+                    for voce in listino.voci_della_categoria(cat):
+                        riga_voce_listino(voce)
 
         # tabella libera: personalizzate e voci arrivate dalla planimetria
         tot_extra = calcoli.totale_generale(
             calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
-        with st.expander(f"**➕ {ALTRE_VOCI}** (personalizzate e dalla "
-                         f"planimetria) — Totale: {euro(tot_extra)}"):
+        contenitore_extra = st.container(key="card_extra")
+        with contenitore_extra, st.expander(
+                f"**➕ {ALTRE_VOCI}** (personalizzate e dalla planimetria) "
+                f"**Totale: {euro(tot_extra)}**"):
             st.caption("Tabella libera: qui arrivano anche superfici, "
                        "battiscopa e tinteggiature dalla scheda planimetria. "
                        "Doppio clic per scrivere; la riga vuota in fondo "
@@ -673,24 +723,22 @@ with tab_computo:
         iva_importo, totale_ivato = calcoli.totale_con_iva(
             totale_imprevisti, st.session_state.iva)
 
-        r_somma, r_imp = st.columns(2)
-        r_somma.metric("Somma parziali", euro(totale))
-        r_imp.metric(
+        st.metric("Somma parziali", euro(totale))
+        st.metric(
             f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
             euro(imp_importo))
         st.markdown(
             '<div style="background:linear-gradient(135deg,#243459,#1A2744);'
             'border:1px solid #C9A96A;border-radius:12px;'
-            'padding:12px 16px;margin:6px 0 10px;">'
-            '<div style="font-size:0.75rem;color:#C9A96A;'
-            'letter-spacing:.06em;">💎 TOTALE FINALE (con imprevisti)</div>'
-            '<div style="font-size:1.7rem;font-weight:700;color:#ECE7DA;">'
+            'padding:12px 14px;margin:6px 0 10px;">'
+            '<div style="font-size:0.72rem;color:#C9A96A;'
+            'letter-spacing:.05em;">💎 TOTALE FINALE</div>'
+            '<div style="font-size:1.45rem;font-weight:700;color:#ECE7DA;">'
             f'{euro(totale_imprevisti)}</div></div>',
             unsafe_allow_html=True)
-        r_iva, r_tot = st.columns(2)
-        r_iva.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
-                     euro(iva_importo))
-        r_tot.metric("Totale IVA inclusa", euro(totale_ivato))
+        st.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
+                  euro(iva_importo))
+        st.metric("Totale IVA inclusa", euro(totale_ivato))
 
         totali = calcoli.totali_per_categoria(voci_calcolate)
         if len(totali) >= 2:
