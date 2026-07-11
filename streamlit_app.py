@@ -69,8 +69,8 @@ CATEGORIE_DEFAULT = [
 # pareti si scelgono tra demolire e costruire (TIPI_PARETE_SCELTA).
 TIPI_PARETE = {
     "esistente": {"nome": "Esistente", "colore": "#C9A96A"},
-    "demolire": {"nome": "Da demolire", "colore": "#FFD400"},
-    "costruire": {"nome": "Da costruire", "colore": "#E53935"},
+    "demolire": {"nome": "Da demolire", "colore": "#E53935"},
+    "costruire": {"nome": "Da costruire", "colore": "#FFD400"},
 }
 TIPI_PARETE_SCELTA = ["demolire", "costruire"]
 
@@ -735,7 +735,7 @@ with tab_plan:
             codici_tipi = list(TIPI_PARETE_SCELTA)
             tipo_scelto = r_par.selectbox(
                 "Tipo per le nuove pareti 🧱", nomi_tipi, key="tipo_parete",
-                help="Da demolire = giallo · Da costruire = rosso")
+                help="Da demolire = rosso · Da costruire = giallo")
             st.session_state.tipo_parete_codice = codici_tipi[
                 nomi_tipi.index(tipo_scelto)]
 
@@ -789,7 +789,7 @@ with tab_plan:
                 s_in, s_ok, s_no = st.columns([2, 1, 1])
                 metri = s_in.number_input(
                     "Quanto misura in metri, nella realtà, il segmento "
-                    "giallo tracciato?",
+                    "nero tracciato?",
                     min_value=0.0, step=0.01, format="%.2f", key="scala_metri")
                 s_ok.write("")
                 s_no.write("")
