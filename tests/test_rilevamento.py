@@ -1,0 +1,65 @@
+import pytest
+from PIL import Image, ImageDraw
+
+from planimetria import area_poligono_pixel
+from rilevamento import rileva_stanze
+
+# Porta di 40 px ≈ 0,90 m → mpp 0,0225
+MPP = 0.0225
+
+
+def pianta_sintetica():
+    """Planimetria di prova: due stanze divise da un tramezzo con porta.
+
+    Perimetro esterno da (50,50) a (750,550) con muri spessi 10 px;
+    tramezzo verticale a x=400 con un varco (porta) da y=250 a y=290.
+    Interni attesi: sinistra 60..395 × 60..540, destra 405..740 × 60..540
+    → due stanze da 335 × 480 px.
+    """
+    img = Image.new("RGB", (800, 600), "white")
+    dis = ImageDraw.Draw(img)
+    dis.rectangle([50, 50, 750, 550], outline="black", width=10)
+    dis.rectangle([395, 50, 405, 250], fill="black")
+    dis.rectangle([395, 290, 405, 550], fill="black")
+    return img
+
+
+def test_rileva_le_due_stanze():
+    poligoni = rileva_stanze(pianta_sintetica(), MPP)
+    assert len(poligoni) >= 2
+    aree = sorted((area_poligono_pixel(p) for p in poligoni), reverse=True)
+    attesa = 335 * 480          # interno di ciascuna stanza, in px²
+    assert aree[0] == pytest.approx(attesa, rel=0.15)
+    assert aree[1] == pytest.approx(attesa, rel=0.15)
+
+
+def test_le_stanze_sono_dentro_i_muri():
+    # nessun poligono deve rappresentare l'esterno del fabbricato
+    for poligono in rileva_stanze(pianta_sintetica(), MPP):
+        for x, y in poligono:
+            assert 55 <= x <= 745
+            assert 55 <= y <= 545
+
+
+def test_funziona_anche_senza_scala():
+    assert len(rileva_stanze(pianta_sintetica(), None)) >= 2
+
+
+def test_ordinati_per_area_decrescente():
+    poligoni = rileva_stanze(pianta_sintetica(), MPP)
+    aree = [area_poligono_pixel(p) for p in poligoni]
+    assert aree == sorted(aree, reverse=True)
+
+
+def test_immagine_vuota_nessuna_stanza():
+    # senza muri non ci sono regioni chiuse: lo sfondo tocca i bordi
+    img = Image.new("RGB", (400, 300), "white")
+    assert rileva_stanze(img, 0.02) == []
+
+
+def test_stanza_minuscola_scartata():
+    # un quadratino 20×20 px (0,45 m × 0,45 m) è sotto i 2 m² minimi
+    img = Image.new("RGB", (400, 300), "white")
+    dis = ImageDraw.Draw(img)
+    dis.rectangle([100, 100, 130, 130], outline="black", width=5)
+    assert rileva_stanze(img, MPP) == []

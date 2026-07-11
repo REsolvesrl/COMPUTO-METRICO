@@ -76,13 +76,23 @@ commerciale** del fabbricato, riportabile nel computo con un clic.
 La geometria (calibrazione, formula di Gauss per l'area, riepilogo
 superfici) vive in `planimetria.py` ed è coperta dai test.
 
+## Rilevamento automatico delle stanze (beta)
+
+Il pulsante **🪄 Rileva stanze** analizza la planimetria con OpenCV
+(visione classica, `rilevamento.py`): binarizza il disegno, sigilla i
+varchi delle porte dilatando i muri, isola le regioni chiuse e ne
+ricostruisce il contorno fino ai muri veri. Le stanze trovate diventano
+aree proposte, da rifinire a mano con gli strumenti di modifica.
+
 ## Prossimi passi (roadmap)
 
 - [x] Misura delle superfici da planimetria (v2).
 - [x] Zoom a rotellina, più planimetrie, zone con percentuali, superficie
       commerciale (v3, stile AreaPlan).
+- [x] Rilevamento automatico delle stanze (beta, OpenCV).
 - [ ] Pareti da demolire / costruire con aggiornamento automatico del
       computo.
+- [ ] Riconoscimento muri con modelli di computer vision (fase 2).
 - [ ] Listino personale riutilizzabile delle voci più usate.
 - [ ] Import da prezzari regionali (Excel/CSV).
 - [x] Pubblicazione su Streamlit Community Cloud.

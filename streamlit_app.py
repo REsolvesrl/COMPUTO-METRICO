@@ -23,6 +23,7 @@ from PIL import Image
 
 import calcoli
 import planimetria
+import rilevamento
 from cme_viewer import image_viewer, pil_a_src
 
 st.set_page_config(
@@ -378,6 +379,7 @@ st.session_state.setdefault("scala_temp", None)
 st.session_state.setdefault("sel_zona", None)
 st.session_state.setdefault("sel_parete", None)
 st.session_state.setdefault("upl_count", 0)
+st.session_state.setdefault("ultimo_rilevamento", None)
 st.session_state.setdefault("et_font", 14)
 st.session_state.setdefault("et_nome", True)
 st.session_state.setdefault("et_m2", True)
@@ -418,6 +420,7 @@ if "da_caricare" in st.session_state:
     st.session_state.sel_parete = None
     st.session_state.scala_temp = None
     st.session_state.ultimo_seq = None
+    st.session_state.ultimo_rilevamento = None
     st.session_state.pop("cat_attiva", None)
     st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
@@ -685,6 +688,11 @@ multipagina (una pagina = una planimetria).
 coprono dettagli del disegno; la posizione viene ricordata anche nel
 salvataggio.
 
+🪄 **Rileva stanze (beta)**: sotto al disegno c'è un pulsante che prova a
+riconoscere da solo le stanze chiuse dai muri e le propone come aree, da
+rifinire con ➤ Modifica. Imposta prima la scala per risultati migliori;
+c'è anche l'annulla se la proposta non convince.
+
 **Categorie e percentuali**: a ogni categoria corrisponde un **peso
 commerciale** (accanto al nome nel menù, es. *Balcone scoperto — 30%*): un
 balcone al 30% conta 3 m² commerciali ogni 10 m² reali. Il riepilogo
@@ -924,6 +932,51 @@ incorporate il file può pesare qualche MB.
                                         if p["id"] != parete_sel["id"]]
                     st.session_state.sel_parete = None
                     st.rerun()
+
+            # ---------------------------------- rilevamento automatico (beta)
+            with st.expander("🪄 Rileva stanze automaticamente (beta)"):
+                st.caption(
+                    "Il programma prova a riconoscere le **stanze chiuse dai "
+                    "muri** e le propone come aree della categoria scelta "
+                    "sopra: sono **proposte da rifinire** con ➤ Modifica "
+                    "(sposta i vertici, cambia categoria, elimina con Canc). "
+                    "Funziona meglio su disegni nitidi e con la **scala già "
+                    "impostata**; su foto storte o piene di scritte i "
+                    "risultati possono essere scarsi.")
+                c_ril, c_ann = st.columns(2)
+                if c_ril.button("🪄 Rileva le stanze su questa planimetria",
+                                type="primary"):
+                    with st.spinner("Analizzo la planimetria…"):
+                        proposte = rilevamento.rileva_stanze(
+                            pianta["img"], pianta["mpp"])
+                    if not proposte:
+                        st.warning("Non ho riconosciuto stanze chiuse su "
+                                   "questo disegno. Prova a impostare prima "
+                                   "la scala, o disegna le aree a mano.")
+                    else:
+                        nuovi_id = []
+                        for punti in proposte:
+                            zid = nuovo_id(pianta)
+                            pianta["zone"].append({
+                                "id": zid,
+                                "categoria": cat_attiva_nome,
+                                "nome": None,
+                                "punti": punti,
+                            })
+                            nuovi_id.append(zid)
+                        st.session_state.ultimo_rilevamento = {
+                            "uid": pianta["uid"], "ids": nuovi_id}
+                        st.toast(f"Trovate {len(proposte)} stanze ✔")
+                        st.rerun()
+                ril = st.session_state.ultimo_rilevamento
+                if ril and ril["uid"] == pianta["uid"]:
+                    if c_ann.button("↩️ Annulla ultimo rilevamento "
+                                    f"({len(ril['ids'])} aree)"):
+                        pianta["zone"] = [z for z in pianta["zone"]
+                                          if z["id"] not in ril["ids"]]
+                        st.session_state.ultimo_rilevamento = None
+                        st.session_state.sel_zona = None
+                        st.rerun()
 
         # ----------------------------------------- legenda colori/percentuali
         legenda = " ".join(
