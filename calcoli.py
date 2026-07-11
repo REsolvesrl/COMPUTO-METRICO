@@ -88,3 +88,14 @@ def totale_con_iva(totale, aliquota_iva):
     """Restituisce (importo IVA, totale IVA inclusa)."""
     iva = round(totale * aliquota_iva / 100, 2)
     return iva, round(totale + iva, 2)
+
+
+def totale_con_imprevisti(totale, percento_imprevisti):
+    """Restituisce (importo imprevisti, totale con imprevisti).
+
+    Gli imprevisti sono un accantonamento percentuale sul totale lavori
+    (tipicamente il 5%) che copre le sorprese di cantiere; si applicano
+    prima dell'IVA.
+    """
+    imprevisti = round(totale * percento_imprevisti / 100, 2)
+    return imprevisti, round(totale + imprevisti, 2)

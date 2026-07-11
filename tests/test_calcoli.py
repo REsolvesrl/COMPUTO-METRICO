@@ -4,6 +4,7 @@ from calcoli import (
     calcola_voce,
     incidenze_percentuali,
     quantita_voce,
+    totale_con_imprevisti,
     totale_con_iva,
     totale_generale,
     totali_per_categoria,
@@ -124,3 +125,16 @@ def test_totale_con_iva_al_dieci_percento():
     iva, totale = totale_con_iva(1234.56, 10.0)
     assert iva == 123.46
     assert totale == 1358.02
+
+
+def test_totale_con_imprevisti():
+    # come nell'esempio del computo: 41.503,20 + 5% = 43.578,36
+    imprevisti, totale = totale_con_imprevisti(41503.20, 5.0)
+    assert imprevisti == 2075.16
+    assert totale == 43578.36
+
+
+def test_totale_con_imprevisti_a_zero():
+    imprevisti, totale = totale_con_imprevisti(1000.0, 0.0)
+    assert imprevisti == 0.0
+    assert totale == 1000.0

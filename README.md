@@ -4,7 +4,9 @@ App web per il settore edile, live su
 <https://computometrico.streamlit.app/>:
 
 - **Computo metrico**: voci di lavorazione con quantità calcolate dalle
-  dimensioni, totali per categoria con incidenze percentuali, IVA,
+  dimensioni, **listino guida** con ~50 voci pronte (demolizioni,
+  ricostruzioni, impianti, serramenti…) a prezzi indicativi modificabili,
+  totali per categoria con incidenze percentuali, **imprevisti %** e IVA,
   salvataggio del lavoro ed export in Excel/CSV.
 - **Misura da planimetria** (stile AreaPlan): più planimetrie per progetto,
   zone colorate per categoria con percentuale commerciale, scala a vettore,

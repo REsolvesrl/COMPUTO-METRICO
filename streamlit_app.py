@@ -22,6 +22,7 @@ import streamlit as st
 from PIL import Image
 
 import calcoli
+import listino
 import planimetria
 import rilevamento
 from cme_viewer import image_viewer, pil_a_src
@@ -37,7 +38,8 @@ COLONNE_NUMERI = ["parti", "lunghezza", "larghezza", "altezza",
                   "quantita_manuale", "prezzo"]
 COLONNE = COLONNE_TESTO + COLONNE_NUMERI
 
-UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo"]
+UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo",
+              "punto", "utenza"]
 
 # Palette del brand Resolve (dark navy + oro), come MORA.
 ORO = "#C9A96A"           # oro champagne — barre del grafico
@@ -118,10 +120,12 @@ def voci_da_df(df):
     return voci
 
 
-def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo):
-    """Appende una voce alla tabella del computo (usata dalla planimetria)."""
+def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo,
+                          codice=None):
+    """Appende una voce alla tabella del computo (planimetria e listino)."""
     riga = {col: None for col in COLONNE}
     riga["categoria"] = categoria or None
+    riga["codice"] = codice or None
     riga["descrizione"] = descrizione or None
     riga["um"] = um
     riga["quantita_manuale"] = quantita
@@ -350,6 +354,7 @@ def progetto_json_bytes():
             "oggetto": st.session_state.prg_oggetto,
             "data": st.session_state.prg_data.isoformat(),
             "aliquota_iva": st.session_state.iva,
+            "imprevisti": st.session_state.imprevisti,
         },
         "voci": voci_da_df(st.session_state.df_voci),
         "categorie": st.session_state.categorie,
@@ -374,6 +379,7 @@ st.session_state.setdefault("prg_committente", "")
 st.session_state.setdefault("prg_oggetto", "")
 st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 22.0)
+st.session_state.setdefault("imprevisti", 5.0)
 # planimetria
 st.session_state.setdefault("piante", [])
 st.session_state.setdefault("pianta_idx", 0)
@@ -400,6 +406,7 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_committente = progetto.get("committente", "")
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 22.0))
+    st.session_state.imprevisti = float(progetto.get("imprevisti", 5.0))
     try:
         st.session_state.prg_data = date.fromisoformat(progetto.get("data", ""))
     except (TypeError, ValueError):
@@ -454,13 +461,18 @@ with tab_computo:
         d1.text_input("Nome del computo", key="prg_nome",
                       placeholder="Es. Ristrutturazione app.to Via Roma 1")
         d2.text_input("Committente", key="prg_committente")
-        d3, d4, d5 = st.columns([2, 1, 1])
+        d3, d4, d5, d6 = st.columns([2, 1, 1, 1])
         d3.text_input("Oggetto dei lavori", key="prg_oggetto")
         d4.date_input("Data", key="prg_data", format="DD/MM/YYYY")
         d5.number_input("Aliquota IVA (%)", min_value=0.0, max_value=100.0,
                         step=1.0, key="iva",
                         help="22% ordinaria, 10% ristrutturazioni, "
                              "4% prima casa")
+        d6.number_input("Imprevisti (%)", min_value=0.0, max_value=50.0,
+                        step=1.0, key="imprevisti",
+                        help="Accantonamento sul totale lavori per le "
+                             "sorprese di cantiere (tipicamente 5%), "
+                             "applicato prima dell'IVA.")
 
         st.divider()
         a_apri, a_nuovo = st.columns([3, 1])
@@ -480,6 +492,45 @@ with tab_computo:
             if st.button("🗑️ Nuovo progetto (svuota tutto)"):
                 st.session_state.da_caricare = {}
                 st.rerun()
+
+    # ------------------------------------------------------ listino guida
+    with st.expander("📚 Listino voci guida (prezzi indicativi, modificabili)"):
+        st.caption("Voci pronte all'uso con **prezzi medi indicativi**: le "
+                   "aggiungi al computo e poi modifichi prezzo e quantità in "
+                   "tabella come qualsiasi altra voce. Con «Aggiungi tutta la "
+                   "categoria» ti crei una **checklist guidata** da compilare "
+                   "voce per voce (le righe senza quantità valgono 0 €).")
+        l_cat, l_voce = st.columns([1, 2])
+        cat_listino = l_cat.selectbox("Categoria", listino.CATEGORIE,
+                                      key="lst_cat")
+        voci_cat = listino.voci_della_categoria(cat_listino)
+        etichette_voci = [
+            f"{v['codice']} · {v['descrizione']} — {euro(v['prezzo'])}/{v['um']}"
+            for v in voci_cat]
+        scelta_voce = l_voce.selectbox("Voce del listino", etichette_voci,
+                                       key=f"lst_voce_{cat_listino}")
+        voce_listino = voci_cat[etichette_voci.index(scelta_voce)]
+        if voce_listino.get("nota"):
+            st.caption("💡 " + voce_listino["nota"])
+        l_qta, l_uno, l_tutte = st.columns([1, 1, 2])
+        qta_listino = l_qta.number_input(
+            f"Quantità ({voce_listino['um']})", min_value=0.0, step=1.0,
+            key="lst_qta")
+        l_uno.write("")
+        l_tutte.write("")
+        if l_uno.button("➕ Aggiungi la voce"):
+            aggiungi_voce_computo(
+                cat_listino, voce_listino["descrizione"], voce_listino["um"],
+                qta_listino if qta_listino > 0 else None,
+                voce_listino["prezzo"], codice=voce_listino["codice"])
+            st.toast(f"«{voce_listino['codice']}» aggiunta al computo ✔")
+        if l_tutte.button(f"➕➕ Aggiungi tutta la categoria «{cat_listino}» "
+                          "(quantità da compilare)"):
+            for v in voci_cat:
+                aggiungi_voce_computo(
+                    cat_listino, v["descrizione"], v["um"], None,
+                    v["prezzo"], codice=v["codice"])
+            st.toast(f"{len(voci_cat)} voci di «{cat_listino}» aggiunte ✔")
 
     st.subheader("1 · Voci di lavorazione")
     st.caption("Doppio clic su una cella per scriverci. La riga vuota in fondo "
@@ -548,8 +599,10 @@ with tab_computo:
         totali = calcoli.totali_per_categoria(voci_calcolate)
         totale = calcoli.totale_generale(voci_calcolate)
         incidenze = calcoli.incidenze_percentuali(totali, totale)
+        imp_importo, totale_imprevisti = calcoli.totale_con_imprevisti(
+            totale, st.session_state.imprevisti)
         iva_importo, totale_ivato = calcoli.totale_con_iva(
-            totale, st.session_state.iva)
+            totale_imprevisti, st.session_state.iva)
 
         df_riepilogo = pd.DataFrame({
             "Categoria": list(totali),
@@ -573,11 +626,14 @@ with tab_computo:
                 st.plotly_chart(grafico_totali(totali),
                                 config={"displayModeBar": False})
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Totale lavori", euro(totale))
-        col2.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Somma lavori", euro(totale))
+        col2.metric(f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
+                    euro(imp_importo))
+        col3.metric("Totale con imprevisti", euro(totale_imprevisti))
+        col4.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
                     euro(iva_importo))
-        col3.metric("Totale IVA inclusa", euro(totale_ivato))
+        col5.metric("Totale finale (IVA incl.)", euro(totale_ivato))
 
         st.subheader("4 · Salva ed esporta")
         st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
@@ -592,22 +648,28 @@ with tab_computo:
             "oggetto": st.session_state.prg_oggetto,
             "data": st.session_state.prg_data.isoformat(),
             "aliquota_iva": st.session_state.iva,
+            "imprevisti": st.session_state.imprevisti,
         }
         df_riepilogo_excel = pd.concat([
             df_riepilogo,
             pd.DataFrame({
-                "Categoria": ["Totale lavori",
-                              f"IVA {numero_it(st.session_state.iva, 0)}%",
-                              "Totale IVA inclusa"],
-                "Importo": [totale, iva_importo, totale_ivato],
-                "Incidenza %": [100.0, None, None],
+                "Categoria": [
+                    "Somma lavori",
+                    f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
+                    "Totale con imprevisti",
+                    f"IVA {numero_it(st.session_state.iva, 0)}%",
+                    "Totale finale (IVA inclusa)"],
+                "Importo": [totale, imp_importo, totale_imprevisti,
+                            iva_importo, totale_ivato],
+                "Incidenza %": [100.0, None, None, None, None],
             }),
         ], ignore_index=True)
         df_progetto_excel = pd.DataFrame({
-            "Campo": ["Nome", "Committente", "Oggetto", "Data", "Aliquota IVA %"],
+            "Campo": ["Nome", "Committente", "Oggetto", "Data",
+                      "Aliquota IVA %", "Imprevisti %"],
             "Valore": [progetto["nome"], progetto["committente"],
                        progetto["oggetto"], progetto["data"],
-                       progetto["aliquota_iva"]],
+                       progetto["aliquota_iva"], progetto["imprevisti"]],
         })
 
         righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
