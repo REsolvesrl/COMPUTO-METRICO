@@ -481,21 +481,6 @@ with tab_computo:
                 st.session_state.da_caricare = {}
                 st.rerun()
 
-    with st.expander("ℹ️ Come si usa"):
-        st.markdown("""
-1. Compila i **dati del progetto** nel pannello 📋 qui sopra.
-2. Aggiungi le **voci di lavorazione** nella tabella: clicca sull'ultima
-   riga vuota per aggiungerne una.
-3. Per ogni voce indica le **dimensioni** (parti uguali, lunghezza,
-   larghezza, altezza/peso): la quantità si calcola da sola moltiplicando i
-   campi compilati. Le caselle vuote non contano. *In alternativa* lascia
-   vuote le dimensioni e scrivi la **quantità manuale**.
-4. Per una **detrazione** (es. scomputare il vano di una porta) usa un
-   numero di **parti negativo**, es. `-1`.
-5. Le superfici misurate nella scheda **Misura da planimetria** finiscono
-   qui automaticamente come nuove voci.
-""")
-
     st.subheader("1 · Voci di lavorazione")
     st.caption("Doppio clic su una cella per scriverci. La riga vuota in fondo "
                "aggiunge una voce; per cancellare una riga selezionala "
@@ -668,67 +653,6 @@ with tab_computo:
 # ========================================================= SCHEDA PLANIMETRIA
 
 with tab_plan:
-    with st.expander("ℹ️ Come funziona (leggimi la prima volta)"):
-        st.markdown("""
-Ogni **planimetria** del progetto (piano terra, piano primo…) compare
-nell'elenco a sinistra: puoi aggiungerne quante vuoi, anche da un PDF
-multipagina (una pagina = una planimetria).
-
-**La barra sul disegno:**
-- ✋ **Sposta** — trascina per muoverti; la **rotellina** zooma verso il
-  puntatore (funziona sempre, in ogni modalità).
-- ✏️ **Area** — clicca gli angoli di una stanza; chiudi cliccando di nuovo
-  sul **primo punto** (cerchietto) o con **doppio clic**. `Backspace` toglie
-  l'ultimo punto, `Esc` annulla. L'area prende la **categoria** scelta sopra
-  al disegno (colore e percentuale).
-- ➤ **Modifica** — clicca una zona per selezionarla: trascina i
-  **quadratini** per spostare gli angoli, trascina l'interno per spostarla
-  tutta, **Canc** la elimina. Sotto al disegno compaiono i dettagli per
-  rinominarla, cambiarle categoria o mandarla nel computo. Cliccando una
-  parete la selezioni: sotto puoi cambiarle **tipo di intervento** o
-  eliminarla (anche con **Canc**).
-- 📏 **Misura** — misure **al volo**: trascina tra due punti e leggi i
-  metri. Sono temporanee: spariscono con `Esc` o cambiando strumento, e
-  **non** finiscono nel computo.
-- 🧱 **Parete** — trascina da un capo all'altro di una parete: la misura
-  resta sul disegno. Scegli prima il **tipo**: *da demolire* (giallo) o
-  *da costruire* (rosso).
-- ↔️ **Scala** — trascina lungo una **misura nota** (es. un lato quotato
-  4,50 m) e poi scrivi quanto vale: da lì in poi tutto il disegno parla in
-  **metri**. Ogni planimetria ha la sua scala.
-- ＋ / － / ⛶ — zoom avanti, indietro e adatta alla finestra.
-
-💡 Le **etichette** si possono **trascinare** (in Sposta o Modifica) se
-coprono dettagli del disegno; la posizione viene ricordata anche nel
-salvataggio.
-
-🪄 **Rileva stanze (beta)**: sotto al disegno c'è un pulsante che prova a
-riconoscere da solo le stanze chiuse dai muri (ignorando scritte e quote)
-e le propone come aree, da rifinire con ➤ Modifica. Imposta prima la scala
-per risultati migliori; c'è anche l'annulla se la proposta non convince.
-
-📏 **Battiscopa e tinteggiature** (in basso): per ogni locale il programma
-calcola anche il **perimetro**. Spunti i locali da considerare (bagni e
-balconi di solito si escludono dal battiscopa), imposti l'**altezza**, e
-ottieni i metri lineari di battiscopa (da rimuovere e posare) e i m² di
-pareti e soffitti da tinteggiare/rasare, riportabili nel computo con un
-clic.
-
-**Categorie e percentuali**: a ogni categoria corrisponde un **peso
-commerciale** (accanto al nome nel menù, es. *Balcone scoperto — 30%*): un
-balcone al 30% conta 3 m² commerciali ogni 10 m² reali. Il riepilogo
-**Superfici commerciali** somma tutte le zone di tutte le planimetrie
-applicando le percentuali: è la superficie commerciale del fabbricato,
-riportabile nel computo con un clic.
-
-💾 Il **salvataggio del progetto** (.json) include anche le planimetrie con
-zone, pareti e scala: ricaricandolo ritrovi tutto. ⚠️ Con le immagini
-incorporate il file può pesare qualche MB.
-
-⚠️ La precisione dipende dalla qualità del disegno e dalla cura dei click:
-è pensata per stime e computi, non per usi catastali.
-""")
-
     piante = st.session_state.piante
 
     if not piante:
