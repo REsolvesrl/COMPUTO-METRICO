@@ -73,6 +73,41 @@ def perimetro_reale_m(punti, mpp):
     return round(perimetro_poligono_pixel(punti) * mpp, 3)
 
 
+def riepilogo_locali(piante):
+    """Elenco per-locale (zona) delle piante con scala: superficie e perimetro.
+
+    Serve per battiscopa (metri lineari) e tinteggiature (perimetro × altezza
+    per le pareti, superficie calpestabile per i soffitti).
+
+    Ritorna (righe, senza_scala). Ogni riga: {"pianta", "uid", "id", "nome",
+    "categoria", "m2", "perimetro"} — nome = nome della zona o, se assente,
+    la categoria. Le piante senza scala finiscono in senza_scala.
+    """
+    righe = []
+    senza_scala = []
+    for pianta in piante:
+        zone = pianta.get("zone") or []
+        if not zone:
+            continue
+        mpp = pianta.get("mpp")
+        nome_pianta = pianta.get("nome") or "Planimetria"
+        if not mpp:
+            senza_scala.append(nome_pianta)
+            continue
+        for zona in zone:
+            punti = zona.get("punti") or []
+            righe.append({
+                "pianta": nome_pianta,
+                "uid": pianta.get("uid"),
+                "id": zona.get("id"),
+                "nome": zona.get("nome") or zona.get("categoria") or "Zona",
+                "categoria": zona.get("categoria") or "",
+                "m2": area_reale_m2(punti, mpp),
+                "perimetro": perimetro_reale_m(punti, mpp),
+            })
+    return righe, senza_scala
+
+
 def riepilogo_superfici(piante, percentuali):
     """Riepilogo delle superfici di tutte le planimetrie di un progetto.
 

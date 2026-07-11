@@ -248,6 +248,9 @@ def etichetta_zona(zona, mpp, perc_map, impostazioni):
     if impostazioni["m2"] and mpp:
         area = planimetria.area_reale_m2(zona["punti"], mpp)
         righe.append(f"{numero_it(area, 2)} m²")
+    if impostazioni.get("perimetro") and mpp:
+        perim = planimetria.perimetro_reale_m(zona["punti"], mpp)
+        righe.append(f"per. {numero_it(perim, 2)} m")
     if impostazioni["percento"]:
         perc = perc_map.get(zona["categoria"], 100.0)
         righe.append(f"{numero_it(perc, 0)} %")
@@ -353,7 +356,9 @@ def progetto_json_bytes():
         "etichette": {"font": st.session_state.et_font,
                       "nome": st.session_state.et_nome,
                       "m2": st.session_state.et_m2,
-                      "percento": st.session_state.et_pct},
+                      "percento": st.session_state.et_pct,
+                      "perimetro": st.session_state.et_perim},
+        "altezza_locali": st.session_state.alt_locali,
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
     return json.dumps(payload, ensure_ascii=False,
@@ -384,6 +389,8 @@ st.session_state.setdefault("et_font", 14)
 st.session_state.setdefault("et_nome", True)
 st.session_state.setdefault("et_m2", True)
 st.session_state.setdefault("et_pct", True)
+st.session_state.setdefault("et_perim", False)
+st.session_state.setdefault("alt_locali", 2.70)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
 if "da_caricare" in st.session_state:
@@ -410,6 +417,8 @@ if "da_caricare" in st.session_state:
     st.session_state.et_nome = bool(etichette.get("nome", True))
     st.session_state.et_m2 = bool(etichette.get("m2", True))
     st.session_state.et_pct = bool(etichette.get("percento", True))
+    st.session_state.et_perim = bool(etichette.get("perimetro", False))
+    st.session_state.alt_locali = float(dati.get("altezza_locali", 2.70))
     try:
         st.session_state.piante = [pianta_da_json(p)
                                    for p in dati.get("piante") or []]
@@ -689,9 +698,16 @@ coprono dettagli del disegno; la posizione viene ricordata anche nel
 salvataggio.
 
 🪄 **Rileva stanze (beta)**: sotto al disegno c'è un pulsante che prova a
-riconoscere da solo le stanze chiuse dai muri e le propone come aree, da
-rifinire con ➤ Modifica. Imposta prima la scala per risultati migliori;
-c'è anche l'annulla se la proposta non convince.
+riconoscere da solo le stanze chiuse dai muri (ignorando scritte e quote)
+e le propone come aree, da rifinire con ➤ Modifica. Imposta prima la scala
+per risultati migliori; c'è anche l'annulla se la proposta non convince.
+
+📏 **Battiscopa e tinteggiature** (in basso): per ogni locale il programma
+calcola anche il **perimetro**. Spunti i locali da considerare (bagni e
+balconi di solito si escludono dal battiscopa), imposti l'**altezza**, e
+ottieni i metri lineari di battiscopa (da rimuovere e posare) e i m² di
+pareti e soffitti da tinteggiare/rasare, riportabili nel computo con un
+clic.
 
 **Categorie e percentuali**: a ogni categoria corrisponde un **peso
 commerciale** (accanto al nome nel menù, es. *Balcone scoperto — 30%*): un
@@ -805,7 +821,8 @@ incorporate il file può pesare qualche MB.
 
             impostazioni = {"nome": st.session_state.et_nome,
                             "m2": st.session_state.et_m2,
-                            "percento": st.session_state.et_pct}
+                            "percento": st.session_state.et_pct,
+                            "perimetro": st.session_state.et_perim}
             zone_props = [{
                 "id": z["id"], "punti": z["punti"],
                 "colore": col_map.get(z["categoria"], "#9E9E9E"),
@@ -885,6 +902,10 @@ incorporate il file può pesare qualche MB.
                 if pianta["mpp"]:
                     area_sel = planimetria.area_reale_m2(
                         zona_sel["punti"], pianta["mpp"])
+                    perim_sel = planimetria.perimetro_reale_m(
+                        zona_sel["punti"], pianta["mpp"])
+                    st.caption(f"Superficie **{numero_it(area_sel, 2)} m²** · "
+                               f"Perimetro **{numero_it(perim_sel, 2)} m**")
                     if a_add.button("➕ Al computo",
                                     help="Aggiunge questa superficie come "
                                          "voce del computo"):
@@ -991,10 +1012,11 @@ incorporate il file può pesare qualche MB.
 
         with st.expander("🔤 Etichette sulle zone (layout)"):
             st.slider("Dimensione carattere", 10, 24, key="et_font")
-            e1, e2, e3 = st.columns(3)
+            e1, e2, e3, e4 = st.columns(4)
             e1.checkbox("Nome / categoria", key="et_nome")
             e2.checkbox("Superficie (m²)", key="et_m2")
-            e3.checkbox("Percentuale", key="et_pct")
+            e3.checkbox("Perimetro (m)", key="et_perim")
+            e4.checkbox("Percentuale", key="et_pct")
 
         # ------------------------------------------- superfici commerciali
         st.subheader("🧮 Superfici commerciali (tutte le planimetrie)")
@@ -1029,6 +1051,107 @@ incorporate il file può pesare qualche MB.
                     + (st.session_state.prg_nome or "fabbricato"),
                     "m²", round(tot_comm, 2), None)
                 st.toast("Superficie commerciale aggiunta al computo ✔")
+
+        # ------------------------------------- battiscopa e tinteggiature
+        st.subheader("📏 Battiscopa e tinteggiature (perimetri dei locali)")
+        righe_loc, senza_scala_loc = planimetria.riepilogo_locali(piante)
+        if senza_scala_loc:
+            st.warning("Locali esclusi perché la planimetria è **senza "
+                       "scala**: " + ", ".join(senza_scala_loc))
+        if not righe_loc:
+            st.info("Quando ci sono zone disegnate (su piante con scala), "
+                    "qui trovi i perimetri per battiscopa e tinteggiature.")
+        else:
+            st.caption("Spunta i locali da considerare (di solito **bagni e "
+                       "balconi si escludono** dal battiscopa). Pareti = "
+                       "perimetro × altezza; soffitti = superficie "
+                       "calpestabile. Le aperture (porte/finestre) non "
+                       "vengono detratte: affina tu le quantità nel computo "
+                       "se serve.")
+            altezza = st.number_input(
+                "Altezza dei locali (m)", min_value=1.0, max_value=6.0,
+                step=0.05, format="%.2f", key="alt_locali")
+
+            zona_per_rif = {(p["uid"], z["id"]): z
+                            for p in piante for z in p["zone"]}
+            righe_tab = []
+            riferimenti = []
+            for r in righe_loc:
+                zona = zona_per_rif.get((r["uid"], r["id"]))
+                if zona is None:
+                    continue
+                interna = perc_map.get(r["categoria"], 100.0) >= 100.0
+                bagno = any(parola in (r["nome"] + " " + r["categoria"]).lower()
+                            for parola in ("bagno", "wc", "w.c"))
+                batt_def = zona.get("battiscopa")
+                if batt_def is None:
+                    batt_def = interna and not bagno
+                pitt_def = zona.get("pittura")
+                if pitt_def is None:
+                    pitt_def = interna
+                righe_tab.append({
+                    "Pianta": r["pianta"],
+                    "Locale": r["nome"],
+                    "Superficie (m²)": round(r["m2"], 2),
+                    "Perimetro (m)": round(r["perimetro"], 2),
+                    "Battiscopa": bool(batt_def),
+                    "Tinteggiatura": bool(pitt_def),
+                })
+                riferimenti.append((r["uid"], r["id"]))
+
+            chiave_tab = "edloc_" + str(abs(hash(tuple(riferimenti))) % 10 ** 8)
+            df_loc = st.data_editor(
+                pd.DataFrame(righe_tab),
+                hide_index=True, key=chiave_tab,
+                disabled=["Pianta", "Locale", "Superficie (m²)",
+                          "Perimetro (m)"],
+                column_config={
+                    "Battiscopa": st.column_config.CheckboxColumn(
+                        "Battiscopa", help="Conta nel totale del battiscopa"),
+                    "Tinteggiatura": st.column_config.CheckboxColumn(
+                        "Tinteggiatura",
+                        help="Conta in pareti e soffitti da tinteggiare"),
+                })
+
+            batt_m = 0.0
+            pareti_m2 = 0.0
+            soffitti_m2 = 0.0
+            for (uid, zid), (_, riga) in zip(riferimenti, df_loc.iterrows()):
+                zona = zona_per_rif.get((uid, zid))
+                if zona is None:
+                    continue
+                zona["battiscopa"] = bool(riga["Battiscopa"])
+                zona["pittura"] = bool(riga["Tinteggiatura"])
+                if zona["battiscopa"]:
+                    batt_m += float(riga["Perimetro (m)"])
+                if zona["pittura"]:
+                    pareti_m2 += float(riga["Perimetro (m)"]) * altezza
+                    soffitti_m2 += float(riga["Superficie (m²)"])
+
+            t1, t2, t3 = st.columns(3)
+            t1.metric("Battiscopa", f"{numero_it(batt_m, 2)} m")
+            t2.metric(f"Pareti (h {numero_it(altezza, 2)} m)",
+                      f"{numero_it(pareti_m2, 2)} m²")
+            t3.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
+
+            v1, v2 = st.columns(2)
+            if v1.button("➕ Battiscopa nel computo (rimozione + posa)"):
+                aggiungi_voce_computo(
+                    "Battiscopa", "Rimozione battiscopa esistente",
+                    "m", round(batt_m, 2), None)
+                aggiungi_voce_computo(
+                    "Battiscopa", "Fornitura e posa nuovo battiscopa",
+                    "m", round(batt_m, 2), None)
+                st.toast("Battiscopa aggiunto al computo (2 voci) ✔")
+            if v2.button("➕ Tinteggiatura nel computo (pareti + soffitti)"):
+                aggiungi_voce_computo(
+                    "Tinteggiature",
+                    f"Tinteggiatura pareti (h {numero_it(altezza, 2)} m)",
+                    "m²", round(pareti_m2, 2), None)
+                aggiungi_voce_computo(
+                    "Tinteggiature", "Tinteggiatura soffitti",
+                    "m²", round(soffitti_m2, 2), None)
+                st.toast("Tinteggiature aggiunte al computo (2 voci) ✔")
 
         st.divider()
         st.download_button(

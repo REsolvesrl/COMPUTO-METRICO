@@ -63,3 +63,19 @@ def test_stanza_minuscola_scartata():
     dis = ImageDraw.Draw(img)
     dis.rectangle([100, 100, 130, 130], outline="black", width=5)
     assert rileva_stanze(img, MPP) == []
+
+
+def test_le_scritte_dentro_le_stanze_non_disturbano():
+    # come la pianta pulita, ma piena di testi (nomi stanze, quote…)
+    img = pianta_sintetica()
+    dis = ImageDraw.Draw(img)
+    for y in (120, 240, 360, 480):
+        dis.text((150, y), "CUCINA 4,20 x 3,80", fill="black")
+        dis.text((500, y), "CAMERA H=2,80", fill="black")
+    con_testo = rileva_stanze(img, MPP)
+    pulita = rileva_stanze(pianta_sintetica(), MPP)
+    assert len(con_testo) == len(pulita)
+    aree_testo = sorted(area_poligono_pixel(p) for p in con_testo)
+    aree_pulita = sorted(area_poligono_pixel(p) for p in pulita)
+    for a, b in zip(aree_testo, aree_pulita):
+        assert a == pytest.approx(b, rel=0.03)   # il testo non erode le aree

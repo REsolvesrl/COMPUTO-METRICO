@@ -10,6 +10,7 @@ from planimetria import (
     metri_per_pixel,
     perimetro_poligono_pixel,
     perimetro_reale_m,
+    riepilogo_locali,
     riepilogo_superfici,
 )
 
@@ -161,3 +162,30 @@ def test_riepilogo_ignora_le_piante_senza_zone():
     piante = [{"nome": "Vuota", "mpp": 0.02, "zone": []}]
     righe, totale, commerciale, senza = riepilogo_superfici(piante, {})
     assert righe == [] and totale == 0.0 and commerciale == 0.0 and senza == []
+
+
+# ------------------------------------------------- locali (perimetri)
+
+def test_riepilogo_locali_superficie_e_perimetro():
+    piante = [
+        {"nome": "P1", "uid": 7, "mpp": 0.025, "zone": [
+            {"id": 1, "categoria": "Superficie interna", "nome": "Cucina",
+             "punti": QUADRATO_200},
+            {"id": 2, "categoria": "Balcone scoperto", "nome": None,
+             "punti": QUADRATO_200},
+        ]},
+        {"nome": "Senza scala", "mpp": None, "zone": [
+            {"id": 3, "categoria": "Superficie interna",
+             "punti": QUADRATO_200},
+        ]},
+    ]
+    righe, senza = riepilogo_locali(piante)
+    assert senza == ["Senza scala"]
+    assert len(righe) == 2
+    cucina = righe[0]
+    assert cucina["nome"] == "Cucina"
+    assert cucina["m2"] == 25.0            # 5 m × 5 m
+    assert cucina["perimetro"] == 20.0     # 4 × 5 m
+    assert cucina["uid"] == 7 and cucina["id"] == 1
+    balcone = righe[1]
+    assert balcone["nome"] == "Balcone scoperto"   # senza nome → categoria

@@ -2,13 +2,15 @@
 
 Visione classica con OpenCV, niente AI. Il metodo:
 1. si binarizza il disegno (muri e linee = "inchiostro");
-2. si DILATANO i muri di mezzo vano-porta, così i varchi delle porte si
+2. si CANCELLANO le scritte (testi, quote, simboli): componenti d'inchiostro
+   piccole e isolate, che altrimenti disturbano il riconoscimento;
+3. si DILATANO i muri di mezzo vano-porta, così i varchi delle porte si
    sigillano e ogni stanza diventa una regione bianca isolata;
-3. ogni regione che non tocca il bordo (quella è l'esterno) è una stanza
+4. ogni regione che non tocca il bordo (quella è l'esterno) è una stanza
    candidata, ma rimpicciolita dalla dilatazione: la si "ricostruisce"
    facendola ricrescere passo-passo dentro lo spazio libero originale,
    fermandosi contro i muri veri (ricostruzione geodetica);
-4. il contorno ricostruito, semplificato, è il poligono proposto.
+5. il contorno ricostruito, semplificato, è il poligono proposto.
 
 Se la scala è impostata, l'ampiezza del varco-porta da sigillare si calcola
 in metri (≈ 1 m); senza scala si provano più ampiezze e si tiene il
@@ -24,16 +26,35 @@ import numpy as np
 
 
 def _binarizza(immagine):
-    """Immagine PIL → (inchiostro, spazio_libero) come maschere 0/255."""
+    """Immagine PIL → maschera 0/255 dell'"inchiostro" (muri e linee)."""
     rgb = np.asarray(immagine.convert("RGB"))
     grigio = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     alt, larg = grigio.shape
     sfocata = cv2.GaussianBlur(grigio, (3, 3), 0)
     blocco = max(15, (min(larg, alt) // 40) | 1)   # dimensione dispari
-    inchiostro = cv2.adaptiveThreshold(
+    return cv2.adaptiveThreshold(
         sfocata, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
         cv2.THRESH_BINARY_INV, blocco, 12)
-    return inchiostro, cv2.bitwise_not(inchiostro)
+
+
+def _rimuovi_scritte(inchiostro, soglia_px):
+    """Cancella testi, quote e simboletti dall'inchiostro.
+
+    Le scritte sono componenti connesse PICCOLE e isolate (ogni lettera è un
+    blob a sé); i muri appartengono sempre a strutture grandi e collegate.
+    Si rimuove quindi ogni componente il cui ingombro massimo è sotto la
+    soglia (≈ mezzo metro): senza questa pulizia, il testo "ingrassato"
+    dalla dilatazione spezza o erode le stanze.
+    """
+    n_comp, etichette, stats, _ = cv2.connectedComponentsWithStats(
+        inchiostro, 8)
+    pulito = inchiostro.copy()
+    for i in range(1, n_comp):
+        x, y, bw, bh, _area = stats[i]
+        if max(bw, bh) < soglia_px:
+            ritaglio = pulito[y:y + bh, x:x + bw]
+            ritaglio[etichette[y:y + bh, x:x + bw] == i] = 0
+    return pulito
 
 
 def _ricostruisci(maschera, spazio_libero, passi):
@@ -108,17 +129,23 @@ def rileva_stanze(immagine, mpp=None, max_stanze=30):
     scala non è impostata. Restituisce una lista di poligoni [[x, y], ...]
     ordinati per area decrescente, al massimo max_stanze.
     """
-    inchiostro, spazio_libero = _binarizza(immagine)
+    inchiostro = _binarizza(immagine)
     alt, larg = inchiostro.shape
 
     if mpp:
         porte = [int(round(1.0 / mpp))]
         area_min = 2.0 / (mpp * mpp)           # niente stanze sotto i 2 m²
+        soglia_testo = int(round(0.45 / mpp))  # scritte ≈ sotto il mezzo metro
     else:
         porte = [larg // 40, larg // 24, larg // 14]
         area_min = larg * alt * 0.002
+        soglia_testo = larg // 45
     porte = sorted({int(max(5, min(p, larg // 8))) for p in porte})
     area_max = larg * alt * 0.45               # via lo "sfondo" gigante
+
+    soglia_testo = max(6, min(soglia_testo, larg // 10))
+    inchiostro = _rimuovi_scritte(inchiostro, soglia_testo)
+    spazio_libero = cv2.bitwise_not(inchiostro)
 
     migliori = []
     for porta_px in porte:
