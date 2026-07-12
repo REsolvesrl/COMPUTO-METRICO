@@ -237,6 +237,12 @@ def css_schede_computo():
 .st-key-{chiave} summary [data-testid="stMarkdownContainer"] p::after {{
     content: "Totale: {euro(totale)}";
 }}
+.st-key-{chiave} hr {{
+    height: 2px;
+    background-color: {colore}77;
+    border: none;
+    margin: 0.35rem 0 0.6rem;
+}}
 """)
     return "<style>" + "".join(regole) + "</style>"
 
@@ -654,6 +660,7 @@ with tab_computo:
                     h_prezzo.caption("Prezzo €")
                     h_parz.caption("Parziale")
                     for voce in listino.voci_della_categoria(cat):
+                        st.divider()
                         riga_voce_listino(voce)
 
         # tabella libera: personalizzate e voci arrivate dalla planimetria
