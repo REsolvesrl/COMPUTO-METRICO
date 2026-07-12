@@ -1150,10 +1150,14 @@ with tab_computo:
                            "%": None, "m² commerciali": tot_comm}]),
         ], ignore_index=True)
 
+    # generato una sola volta per run e riusato anche nella scheda
+    # planimetria (evita di serializzare due volte l'intero progetto,
+    # immagini incluse, a ogni interazione)
+    st.session_state._json_progetto = progetto_json_bytes()
     col_json, col_xlsx, col_csv = st.columns(3)
     col_json.download_button(
         "💾 Salva progetto (.json)",
-        data=progetto_json_bytes(),
+        data=st.session_state._json_progetto,
         file_name=nome_file("json"),
         mime="application/json",
     )
@@ -1617,7 +1621,10 @@ with tab_plan:
         st.divider()
         st.download_button(
             "💾 Salva progetto (.json) — computo e planimetrie",
-            data=progetto_json_bytes(),
+            # riusa il JSON già generato nella scheda Computo (stesso run),
+            # con ripiego se per qualche motivo non fosse pronto
+            data=(st.session_state.get("_json_progetto")
+                  or progetto_json_bytes()),
             file_name=nome_file("json"),
             mime="application/json",
         )
