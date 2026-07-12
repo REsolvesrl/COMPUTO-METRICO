@@ -374,37 +374,59 @@ def grafico_totali(totali):
     return fig
 
 
-# Estremi FISSI della scala colori delle sensitività: il rosso pieno e il
-# verde pieno corrispondono sempre agli stessi valori, qualunque siano i
-# dati dentro la matrice (multiplo 0,75→1,25; guadagno −50k→+50k €).
-LIMITI_SENSITIVITA = {"multiplo": (0.75, 1.25), "guadagno": (-50000.0, 50000.0)}
+# Scala colori delle sensitività identica alla formattazione condizionale
+# di Excel: minimo → rosso, centro → bianco, massimo → verde, distribuita
+# sui dati della matrice.
+SCALA_EXCEL = [[0.0, "#F8696B"], [0.5, "#FFFFFF"], [1.0, "#63BE7B"]]
 
 
 def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
-                        altezza=330):
-    """Matrice di sensitività come mappa di calore (verde=bene, rosso=male).
+                        base_acquisto=None, base_vendita=None, altezza=330):
+    """Matrice di sensitività come mappa di calore stile Excel.
 
-    Scala colori FISSA (LIMITI_SENSITIVITA): stesso valore → stesso
-    colore, indipendentemente dai dati. Acquisto sulle righe, vendita
-    sulle colonne, caso base al centro — come le Data Table dell'Excel,
-    ma sempre aggiornate.
+    Rosso→bianco→verde sui valori della matrice (come la formattazione
+    condizionale del foglio). Le intestazioni del caso base sono in
+    grassetto e la cella base (intersezione) ha un riquadro nero spesso.
     """
     if metrica == "multiplo":
         testo = [[numero_it(v, 2) + "x" for v in riga] for riga in matrice]
     else:
         testo = [[numero_it(v / 1000, 1) + "k" for v in riga]
                  for riga in matrice]
-    minimo, massimo = LIMITI_SENSITIVITA[metrica]
+    piatti = [v for riga in matrice for v in riga]
+    minimo, massimo = min(piatti), max(piatti)
+    if minimo == massimo:
+        minimo, massimo = minimo - 1, massimo + 1
     etichette_v = [numero_it(p / 1000, 0) + "k" for p in prezzi_vendita]
     etichette_a = [numero_it(p / 1000, 0) + "k" for p in prezzi_acquisto]
+
+    def indice_base(prezzi, base):
+        if base is None or not prezzi:
+            return None
+        return min(range(len(prezzi)), key=lambda i: abs(prezzi[i] - base))
+
+    idx_a = indice_base(prezzi_acquisto, base_acquisto)
+    idx_v = indice_base(prezzi_vendita, base_vendita)
+    if idx_a is not None:
+        etichette_a[idx_a] = f"<b>{etichette_a[idx_a]}</b>"
+    if idx_v is not None:
+        etichette_v[idx_v] = f"<b>{etichette_v[idx_v]}</b>"
+
     fig = go.Figure(go.Heatmap(
         z=matrice, x=etichette_v, y=etichette_a,
         text=testo, texttemplate="%{text}",
-        textfont=dict(size=11),
-        colorscale="RdYlGn", zmin=minimo, zmax=massimo, showscale=False,
+        textfont=dict(size=11, color="#1A2744"),
+        colorscale=SCALA_EXCEL, zmin=minimo, zmax=massimo, showscale=False,
+        xgap=1, ygap=1,
         hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
                        "<extra></extra>"),
     ))
+    # riquadro spesso sulla cella base (punto di riferimento della matrice)
+    if idx_a is not None and idx_v is not None:
+        fig.add_shape(type="rect",
+                      x0=idx_v - 0.5, x1=idx_v + 0.5,
+                      y0=idx_a - 0.5, y1=idx_a + 0.5,
+                      line=dict(color="#111111", width=3))
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -1528,6 +1550,17 @@ with tab_bp:
 .st-key-bp_scroll [data-testid="stHorizontalBlock"] { min-width: 1750px; }
 .st-key-bp_scroll [data-testid="stHorizontalBlock"]
  [data-testid="stHorizontalBlock"] { min-width: 0; }
+/* prezzi base evidenziati come in Excel: acquisto giallino, vendita azzurro */
+.st-key-bp_in_acq input {
+    background-color: #FFF2CC !important;
+    color: #7F6000 !important;
+    font-weight: 700;
+}
+.st-key-bp_in_ven input {
+    background-color: #DDEBF7 !important;
+    color: #1F4E79 !important;
+    font-weight: 700;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1570,9 +1603,10 @@ with tab_bp:
                     'text-align:center;font-weight:700;letter-spacing:.04em;'
                     'margin:8px 0 6px;">ESTIMATED</div>',
                     unsafe_allow_html=True)
-                st.number_input("Prezzo base (acquisto, €)", min_value=0.0,
-                                step=5000.0, format="%.0f",
-                                key="bp_acquisto")
+                with st.container(key="bp_in_acq"):
+                    st.number_input("Prezzo base (acquisto, €)",
+                                    min_value=0.0, step=5000.0,
+                                    format="%.0f", key="bp_acquisto")
                 st.markdown(righe_bp([
                     ("€/mq acquisto",
                      numero_it(esito["eur_mq_acquisto"], 0) + " €"
@@ -1580,10 +1614,12 @@ with tab_bp:
                     ("Buy cost", euro(acq["totale"]), None),
                     ("Prezzo netto — entry", euro(esito["entry"]), "bold"),
                 ]), unsafe_allow_html=True)
-                st.number_input("Estimated sell price (€)", min_value=0.0,
-                                step=5000.0, format="%.0f", key="bp_vendita",
-                                help="Puoi stimarlo con l'MCA (terza "
-                                     "sezione)")
+                with st.container(key="bp_in_ven"):
+                    st.number_input("Estimated sell price (€)",
+                                    min_value=0.0, step=5000.0,
+                                    format="%.0f", key="bp_vendita",
+                                    help="Puoi stimarlo con l'MCA (terza "
+                                         "sezione)")
                 st.markdown(righe_bp([
                     ("€/mq vendita",
                      numero_it(esito["eur_mq_vendita"], 0) + " €"
@@ -1618,13 +1654,19 @@ with tab_bp:
                     pa, pv, mat = fattibilita.matrice_sensitivita(
                         parametri_bp, passo, metrica="multiplo")
                     st.plotly_chart(
-                        grafico_sensitivita(pa, pv, mat, "multiplo"),
+                        grafico_sensitivita(
+                            pa, pv, mat, "multiplo",
+                            base_acquisto=st.session_state.bp_acquisto,
+                            base_vendita=st.session_state.bp_vendita),
                         config={"displayModeBar": False})
                     st.markdown("**Net gain** :gray[(guadagno assoluto, €)]")
                     pa, pv, mat = fattibilita.matrice_sensitivita(
                         parametri_bp, passo, metrica="guadagno")
                     st.plotly_chart(
-                        grafico_sensitivita(pa, pv, mat, "guadagno"),
+                        grafico_sensitivita(
+                            pa, pv, mat, "guadagno",
+                            base_acquisto=st.session_state.bp_acquisto,
+                            base_vendita=st.session_state.bp_vendita),
                         config={"displayModeBar": False})
                 else:
                     st.info("Inserisci **prezzo di acquisto** e **prezzo "
@@ -1665,10 +1707,9 @@ with tab_bp:
                               step=500.0)
                 riga_costo_bp("Agenzia IN (%)", euro(acq["agenzia"]),
                               chiave="bp_ag_in", min_value=0.0,
-                              max_value=10.0, step=0.5)
-                riga_costo_bp("IVA su agenzie (%)", "—",
-                              chiave="bp_iva_ag", min_value=0.0,
-                              max_value=22.0, step=1.0)
+                              max_value=10.0, step=0.5,
+                              help="Commissione % sul prezzo di acquisto, "
+                                   "IVA 22% inclusa nel netto")
                 riga_costo_bp(":orange[**Ristrutturazione stimata**] "
                               "(0 = dal computo)",
                               euro(ristr_eff), chiave="bp_ristr",
@@ -1686,7 +1727,9 @@ with tab_bp:
                             unsafe_allow_html=True)
                 riga_costo_bp("Agenzia OUT (%)", euro(ven["totale"]),
                               chiave="bp_ag_out", min_value=0.0,
-                              max_value=10.0, step=0.5)
+                              max_value=10.0, step=0.5,
+                              help="Commissione % sul prezzo di vendita, "
+                                   "IVA 22% inclusa nel netto")
                 st.markdown(righe_bp([
                     ("TOTALE SPESE (acquisto + vendita)",
                      euro(acq["totale"] + ven["totale"]), "bold"),
