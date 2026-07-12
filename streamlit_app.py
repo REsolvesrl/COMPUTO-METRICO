@@ -431,18 +431,26 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
         hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
                        "<extra></extra>"),
     ))
+    # Margini in pixel (condivisi con update_layout più sotto): servono per
+    # calcolare la fascia ESATTA in cui vive l'etichetta, senza sconfinare
+    # oltre il bordo della figura. Streamlit incornicia il grafico in un
+    # riquadro di altezza fissa che RITAGLIA tutto ciò che esce dai bordi:
+    # un rettangolo disegnato anche solo un po' oltre y=1 spariva del tutto
+    # (bug del giro precedente). Restare dentro [0, 1] lo evita.
+    margine_alto_px, margine_sx_px = 26, 48
+    frazione_alto = margine_alto_px / altezza
     # sfondo azzurro dietro la colonna base: xref="x" segue il dato (giusto
-    # a qualunque larghezza), yref="paper" si estende nel margine superiore
-    # (l'altezza del grafico è fissa, quindi affidabile). layer="below"
-    # tiene il rettangolo sotto le celle della heatmap.
+    # a qualunque larghezza); yref="paper" resta DENTRO il margine
+    # superiore (mai oltre y=1). layer="below" lo tiene sotto le celle.
     if idx_v is not None:
         fig.add_shape(type="rect", xref="x", x0=idx_v - 0.5, x1=idx_v + 0.5,
-                      yref="paper", y0=1.0, y1=1.16,
+                      yref="paper", y0=1.0 - frazione_alto, y1=1.0,
                       fillcolor="#DDEBF7", line=dict(width=0),
                       layer="below")
     # sfondo giallo dietro la riga base: yref="y" segue il dato (sempre
-    # giusto), xref="paper" si estende nel margine sinistro — qui non serve
-    # precisione al pixel, è solo una macchia di colore decorativa.
+    # giusto); xref="paper" si estende nel margine sinistro. A differenza
+    # del margine superiore, questo bordo (x<0) NON risulta ritagliato dal
+    # riquadro di Streamlit: valori confermati visivamente dall'utente.
     if idx_a is not None:
         fig.add_shape(type="rect", yref="y", y0=idx_a - 0.5, y1=idx_a + 0.5,
                       xref="paper", x0=-0.075, x1=0.005,
@@ -458,13 +466,13 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=48, r=0, t=26, b=0),
+        margin=dict(l=margine_sx_px, r=0, t=margine_alto_px, b=0),
         height=altezza,
         font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif',
                   color=CREMA),
-        xaxis=dict(title=None, side="top",
+        xaxis=dict(title=None, side="top", ticks="",
                    tickfont=dict(color=ETICHETTE)),
-        yaxis=dict(title=None, autorange="reversed",
+        yaxis=dict(title=None, autorange="reversed", ticks="",
                    tickfont=dict(color=ETICHETTE)),
     )
     return fig
