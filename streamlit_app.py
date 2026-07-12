@@ -431,12 +431,14 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     ))
     if chip_v is not None:
         fig.add_annotation(
-            x=idx_v, xref="x", y=1.0, yref="paper", yanchor="bottom",
+            x=idx_v, xref="x", xanchor="center",
+            y=1.0, yref="paper", yanchor="bottom", yshift=3,
             text=f"<b>{chip_v}</b>", showarrow=False, borderpad=2,
             bgcolor="#DDEBF7", font=dict(color="#1F4E79", size=12))
     if chip_a is not None:
         fig.add_annotation(
-            x=-0.005, xref="paper", xanchor="right", y=idx_a, yref="y",
+            x=-0.004, xref="paper", xanchor="right",
+            y=idx_a, yref="y", yanchor="middle",
             text=f"<b>{chip_a}</b>", showarrow=False, borderpad=2,
             bgcolor="#FFF2CC", font=dict(color="#7F6000", size=12))
     # riquadro spesso sulla cella base (punto di riferimento della matrice)
@@ -480,19 +482,77 @@ def righe_bp(righe):
     return "".join(pezzi)
 
 
-def riga_costo_bp(etichetta, valore_testo, chiave=None, **kwargs):
-    """Riga del dettaglio costi stile Excel: etichetta | input | netto."""
+def riga_costo_bp(etichetta, centro=None, destra=None):
+    """Riga del dettaglio costi stile Excel: etichetta | %/€ | netto.
+
+    centro e destra possono essere: None (mostra «/»), una stringa (testo
+    di sola lettura) oppure un dizionario {"chiave": …, **kwargs} che
+    diventa un number_input modificabile.
+    """
     c_eti, c_inp, c_val = st.columns([1.9, 1.0, 1.2],
                                      vertical_alignment="center")
     c_eti.markdown(f":gray[{etichetta}]")
-    if chiave:
-        c_inp.number_input(etichetta, key=chiave,
-                           label_visibility="collapsed", **kwargs)
-    else:
-        c_inp.markdown('<div style="text-align:center;color:#5B688A;">/'
-                       '</div>', unsafe_allow_html=True)
-    c_val.markdown(f'<div style="text-align:right;font-weight:600;">'
-                   f'{valore_testo}</div>', unsafe_allow_html=True)
+
+    def cella(colonna, contenuto, a_destra=False):
+        if contenuto is None:
+            colonna.markdown('<div style="text-align:center;'
+                             'color:#5B688A;">/</div>',
+                             unsafe_allow_html=True)
+        elif isinstance(contenuto, str):
+            allinea = "right" if a_destra else "center"
+            colonna.markdown(f'<div style="text-align:{allinea};'
+                             f'font-weight:600;">{contenuto}</div>',
+                             unsafe_allow_html=True)
+        else:
+            impostazioni = dict(contenuto)
+            chiave = impostazioni.pop("chiave")
+            colonna.number_input(f"{etichetta} {chiave}", key=chiave,
+                                 label_visibility="collapsed",
+                                 **impostazioni)
+
+    cella(c_inp, centro)
+    cella(c_val, destra, a_destra=True)
+
+
+def bp_ricalcola_euro():
+    """Aggiorna i campi € derivati dalle percentuali del business plan.
+
+    Da chiamare quando cambiano i prezzi o le percentuali: tiene i campi
+    € (modificabili) allineati alle % — la sincronizzazione inversa la
+    fanno bp_pct_da_euro_*.
+    """
+    prezzo_a = st.session_state.get("bp_acquisto") or 0.0
+    prezzo_v = st.session_state.get("bp_vendita") or 0.0
+    iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
+    st.session_state.bp_imposta_eur = round(
+        prezzo_a * st.session_state.bp_imposta / 100, 2)
+    st.session_state.bp_ag_in_eur = round(
+        prezzo_a * st.session_state.bp_ag_in / 100 * iva, 2)
+    st.session_state.bp_ag_out_eur = round(
+        prezzo_v * st.session_state.bp_ag_out / 100 * iva, 2)
+
+
+def bp_pct_da_euro_imposta():
+    prezzo = st.session_state.get("bp_acquisto") or 0.0
+    if prezzo > 0:
+        st.session_state.bp_imposta = round(
+            st.session_state.bp_imposta_eur / prezzo * 100, 3)
+
+
+def bp_pct_da_euro_ag_in():
+    prezzo = st.session_state.get("bp_acquisto") or 0.0
+    iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
+    if prezzo > 0:
+        st.session_state.bp_ag_in = round(
+            st.session_state.bp_ag_in_eur / (prezzo * iva) * 100, 3)
+
+
+def bp_pct_da_euro_ag_out():
+    prezzo = st.session_state.get("bp_vendita") or 0.0
+    iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
+    if prezzo > 0:
+        st.session_state.bp_ag_out = round(
+            st.session_state.bp_ag_out_eur / (prezzo * iva) * 100, 3)
 
 
 def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
@@ -728,6 +788,12 @@ st.session_state.setdefault("df_mca", df_mca_vuoto())
 st.session_state.setdefault("versione_bp", 0)
 for _chiave, _valore in IMPOSTAZIONI_BP.items():
     st.session_state.setdefault(_chiave, _valore)
+# campi € derivati dalle percentuali (modificabili in due direzioni)
+if "bp_imposta_eur" not in st.session_state:
+    st.session_state.bp_imposta_eur = 0.0
+    st.session_state.bp_ag_in_eur = 0.0
+    st.session_state.bp_ag_out_eur = 0.0
+    bp_ricalcola_euro()
 # planimetria
 st.session_state.setdefault("piante", [])
 st.session_state.setdefault("pianta_idx", 0)
@@ -812,11 +878,13 @@ if "da_caricare" in st.session_state:
         df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
     st.session_state.df_mca = df_mc if len(df_mc) else df_mca_vuoto()
     st.session_state.versione_bp += 1
+    bp_ricalcola_euro()
 
 # Il bottone «usa come prezzo di vendita» (MCA) scrive qui: va applicato
 # PRIMA che il widget bp_vendita venga creato.
 if "bp_vendita_pending" in st.session_state:
     st.session_state.bp_vendita = st.session_state.pop("bp_vendita_pending")
+    bp_ricalcola_euro()
 
 
 # ------------------------------------------------------------------ pagina
@@ -1624,7 +1692,8 @@ with tab_bp:
                 with st.container(key="bp_in_acq"):
                     st.number_input("Prezzo base (acquisto, €)",
                                     min_value=0.0, step=5000.0,
-                                    format="%.0f", key="bp_acquisto")
+                                    format="%.0f", key="bp_acquisto",
+                                    on_change=bp_ricalcola_euro)
                 st.markdown(righe_bp([
                     ("€/mq acquisto",
                      numero_it(esito["eur_mq_acquisto"], 0) + " €"
@@ -1636,6 +1705,7 @@ with tab_bp:
                     st.number_input("Estimated sell price (€)",
                                     min_value=0.0, step=5000.0,
                                     format="%.0f", key="bp_vendita",
+                                    on_change=bp_ricalcola_euro,
                                     help="Puoi stimarlo con l'MCA (terza "
                                          "sezione)")
                 st.markdown(righe_bp([
@@ -1704,37 +1774,51 @@ with tab_bp:
                 e1.caption("Voce")
                 e2.caption("% / €")
                 e3.caption("Netto")
-                prezzo_acq = st.session_state.bp_acquisto
-                riga_costo_bp("Imposte d'acquisto (%)",
-                              euro(prezzo_acq
-                                   * st.session_state.bp_imposta / 100),
-                              chiave="bp_imposta", min_value=0.0,
-                              max_value=30.0, step=0.5)
-                riga_costo_bp("Imposte fisse (€)",
-                              euro(st.session_state.bp_imposte_fisse),
-                              chiave="bp_imposte_fisse", min_value=0.0,
-                              step=50.0)
-                riga_costo_bp("Notaio (€)", euro(acq["notaio"]),
-                              chiave="bp_notaio", min_value=0.0, step=100.0)
-                riga_costo_bp("Spese e interessi mutuo (€)",
-                              euro(acq["spese_mutuo"]),
-                              chiave="bp_mutuo", min_value=0.0, step=100.0)
-                riga_costo_bp("Imprevisti e condominio (€)",
-                              euro(acq["imprevisti"]),
-                              chiave="bp_imprevisti", min_value=0.0,
-                              step=500.0)
-                riga_costo_bp("Agenzia IN (%)", euro(acq["agenzia"]),
-                              chiave="bp_ag_in", min_value=0.0,
-                              max_value=10.0, step=0.5,
-                              help="Commissione % sul prezzo di acquisto, "
-                                   "IVA 22% inclusa nel netto")
-                riga_costo_bp(":orange[**Ristrutturazione stimata**] "
-                              "(0 = dal computo)",
-                              euro(ristr_eff), chiave="bp_ristr",
-                              min_value=0.0, step=1000.0)
-                st.caption("🔗 " + ("inserita a mano"
-                           if st.session_state.bp_ristr
-                           else "presa dal computo, imprevisti inclusi")
+                riga_costo_bp(
+                    "Imposte d'acquisto",
+                    centro={"chiave": "bp_imposta", "min_value": 0.0,
+                            "max_value": 30.0, "step": 0.5,
+                            "on_change": bp_ricalcola_euro},
+                    destra={"chiave": "bp_imposta_eur", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "on_change": bp_pct_da_euro_imposta})
+                riga_costo_bp(
+                    "Imposte fisse",
+                    destra={"chiave": "bp_imposte_fisse", "min_value": 0.0,
+                            "step": 50.0, "format": "%.2f"})
+                riga_costo_bp(
+                    "Notaio",
+                    destra={"chiave": "bp_notaio", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "help": "Compreso IVA, visure, archivio "
+                                    "notarile…"})
+                riga_costo_bp(
+                    "Spese e interessi mutuo",
+                    destra={"chiave": "bp_mutuo", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f"})
+                riga_costo_bp(
+                    "Imprevisti e condominio",
+                    destra={"chiave": "bp_imprevisti", "min_value": 0.0,
+                            "step": 500.0, "format": "%.2f"})
+                riga_costo_bp(
+                    "Agenzia IN",
+                    centro={"chiave": "bp_ag_in", "min_value": 0.0,
+                            "max_value": 10.0, "step": 0.5,
+                            "on_change": bp_ricalcola_euro,
+                            "help": "Commissione % sul prezzo di acquisto; "
+                                    "il € a destra è IVA inclusa"},
+                    destra={"chiave": "bp_ag_in_eur", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "on_change": bp_pct_da_euro_ag_in})
+                riga_costo_bp(
+                    ":orange[**Ristrutturazione stimata**] (0 = dal "
+                    "computo)",
+                    destra={"chiave": "bp_ristr", "min_value": 0.0,
+                            "step": 1000.0, "format": "%.2f"})
+                st.caption("🔗 Ristrutturazione considerata: "
+                           f"**{euro(ristr_eff)}** "
+                           + ("(a mano)" if st.session_state.bp_ristr
+                              else "(dal computo, imprevisti inclusi)")
                            + f" · mq: {numero_it(mq_eff, 0)} "
                            + ("(a mano)" if st.session_state.bp_mq
                               else "(dalla planimetria)"))
@@ -1743,11 +1827,16 @@ with tab_bp:
                 ]), unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>",
                             unsafe_allow_html=True)
-                riga_costo_bp("Agenzia OUT (%)", euro(ven["totale"]),
-                              chiave="bp_ag_out", min_value=0.0,
-                              max_value=10.0, step=0.5,
-                              help="Commissione % sul prezzo di vendita, "
-                                   "IVA 22% inclusa nel netto")
+                riga_costo_bp(
+                    "Agenzia OUT",
+                    centro={"chiave": "bp_ag_out", "min_value": 0.0,
+                            "max_value": 10.0, "step": 0.5,
+                            "on_change": bp_ricalcola_euro,
+                            "help": "Commissione % sul prezzo di vendita; "
+                                    "il € a destra è IVA inclusa"},
+                    destra={"chiave": "bp_ag_out_eur", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "on_change": bp_pct_da_euro_ag_out})
                 st.markdown(righe_bp([
                     ("TOTALE SPESE (acquisto + vendita)",
                      euro(acq["totale"] + ven["totale"]), "bold"),
