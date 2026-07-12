@@ -22,6 +22,7 @@ import streamlit as st
 from PIL import Image
 
 import calcoli
+import fattibilita
 import listino
 import planimetria
 import rilevamento
@@ -51,6 +52,20 @@ COLORI_CATEGORIE = {
     "Aree esterne": ("#B0BEC5", "gray"),
 }
 ALTRE_VOCI = "Voci aggiuntive"
+
+# Business plan: colonne delle tabelle e impostazioni predefinite
+# (chiave di sessione → valore iniziale; il tipo del default comanda).
+COLONNE_SPESE = ["data", "oggetto", "categoria", "importo",
+                 "aliquota_iva", "stato", "note"]
+COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
+IMPOSTAZIONI_BP = {
+    "bp_acquisto": 0.0, "bp_vendita": 0.0, "bp_mq": 0.0,
+    "bp_imposta": 9.0, "bp_imposte_fisse": 0.0, "bp_notaio": 3500.0,
+    "bp_ag_in": 3.0, "bp_ag_out": 2.5, "bp_iva_ag": 22.0,
+    "bp_imprevisti": 15000.0, "bp_mutuo": 0.0, "bp_durata": 12,
+    "bp_ristr": 0.0, "bp_passo": 10000.0,
+    "bp_coeff_sogg": 1.0, "bp_sconto": 13.0,
+}
 
 # Palette del brand Resolve (dark navy + oro), come MORA.
 ORO = "#C9A96A"           # oro champagne — barre del grafico
@@ -129,6 +144,67 @@ def voci_da_df(df):
         if any(v is not None for v in voce.values()):
             voci.append(voce)
     return voci
+
+
+def df_spese_vuoto():
+    colonne = {}
+    for col in COLONNE_SPESE:
+        tipo = "float64" if col in ("importo", "aliquota_iva") else "object"
+        colonne[col] = pd.Series(dtype=tipo)
+    return pd.DataFrame(colonne)
+
+
+def spese_da_df(df):
+    """La tabella delle spese come lista di dizionari (righe con importo)."""
+    righe = []
+    for _, riga in df.iterrows():
+        importo = riga.get("importo")
+        if importo is None or pd.isna(importo):
+            continue
+
+        def testo(campo, predefinito=""):
+            valore = riga.get(campo)
+            return predefinito if valore is None or pd.isna(valore) \
+                else str(valore)
+
+        aliquota = riga.get("aliquota_iva")
+        righe.append({
+            "data": testo("data"),
+            "oggetto": testo("oggetto"),
+            "categoria": testo("categoria", "ALTRO") or "ALTRO",
+            "importo": float(importo),
+            "aliquota_iva": (0.0 if aliquota is None or pd.isna(aliquota)
+                             else float(aliquota)),
+            "stato": testo("stato", "Sostenuta") or "Sostenuta",
+            "note": testo("note"),
+        })
+    return righe
+
+
+def df_mca_vuoto():
+    colonne = {}
+    for col in COLONNE_MCA:
+        tipo = "float64" if col in ("prezzo", "mq", "coeff") else "object"
+        colonne[col] = pd.Series(dtype=tipo)
+    return pd.DataFrame(colonne)
+
+
+def mca_da_df(df):
+    """La tabella dei comparabili come lista di dizionari."""
+    righe = []
+    for _, riga in df.iterrows():
+        valori = {}
+        for col in COLONNE_MCA:
+            valore = riga.get(col)
+            if valore is None or pd.isna(valore):
+                valori[col] = None
+            elif col in ("prezzo", "mq", "coeff"):
+                valori[col] = float(valore)
+            else:
+                valori[col] = str(valore)
+        if any(v is not None for v in valori.values()):
+            righe.append(valori)
+    return righe
 
 
 def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo,
@@ -294,6 +370,45 @@ def grafico_totali(totali):
         xaxis=dict(showgrid=True, gridcolor=GRIGLIA, zeroline=False,
                    tickfont=dict(color=ETICHETTE)),
         yaxis=dict(showgrid=False, tickfont=dict(color=CREMA)),
+    )
+    return fig
+
+
+def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica):
+    """Matrice di sensitività come mappa di calore (verde=bene, rosso=male).
+
+    Scala divergente centrata sul punto di pareggio: multiplo 1 (o
+    guadagno 0). Acquisto sulle righe, vendita sulle colonne, caso base
+    al centro — come le Data Table dell'Excel, ma sempre aggiornata.
+    """
+    if metrica == "multiplo":
+        testo = [[numero_it(v, 2) for v in riga] for riga in matrice]
+        centro = 1.0
+    else:
+        testo = [[numero_it(v / 1000, 0) + "k" for v in riga]
+                 for riga in matrice]
+        centro = 0.0
+    etichette_v = [numero_it(p / 1000, 0) + "k" for p in prezzi_vendita]
+    etichette_a = [numero_it(p / 1000, 0) + "k" for p in prezzi_acquisto]
+    fig = go.Figure(go.Heatmap(
+        z=matrice, x=etichette_v, y=etichette_a,
+        text=testo, texttemplate="%{text}",
+        textfont=dict(size=11),
+        colorscale="RdYlGn", zmid=centro, showscale=False,
+        hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
+                       "<extra></extra>"),
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=380,
+        font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif',
+                  color=CREMA),
+        xaxis=dict(title="Prezzo di vendita", side="top",
+                   tickfont=dict(color=ETICHETTE)),
+        yaxis=dict(title="Prezzo di acquisto", autorange="reversed",
+                   tickfont=dict(color=ETICHETTE)),
     )
     return fig
 
@@ -495,6 +610,10 @@ def progetto_json_bytes():
             or float(st.session_state.get(f"lp_{v['codice']}")
                      or v["prezzo"]) != v["prezzo"]
         },
+        "business_plan": {chiave: st.session_state.get(chiave, valore)
+                          for chiave, valore in IMPOSTAZIONI_BP.items()},
+        "spese": spese_da_df(st.session_state.df_spese),
+        "mca_comparabili": mca_da_df(st.session_state.df_mca),
         "categorie": st.session_state.categorie,
         "etichette": {"font": st.session_state.et_font,
                       "nome": st.session_state.et_nome,
@@ -521,6 +640,12 @@ st.session_state.setdefault("imprevisti", 5.0)
 for _voce in listino.VOCI:
     st.session_state.setdefault(f"lq_{_voce['codice']}", 0.0)
     st.session_state.setdefault(f"lp_{_voce['codice']}", float(_voce["prezzo"]))
+# business plan
+st.session_state.setdefault("df_spese", df_spese_vuoto())
+st.session_state.setdefault("df_mca", df_mca_vuoto())
+st.session_state.setdefault("versione_bp", 0)
+for _chiave, _valore in IMPOSTAZIONI_BP.items():
+    st.session_state.setdefault(_chiave, _valore)
 # planimetria
 st.session_state.setdefault("piante", [])
 st.session_state.setdefault("pianta_idx", 0)
@@ -588,6 +713,28 @@ if "da_caricare" in st.session_state:
     st.session_state.pop("cat_attiva", None)
     st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
+    # business plan
+    bp_salvato = dati.get("business_plan") or {}
+    for _chiave, _valore in IMPOSTAZIONI_BP.items():
+        nuovo = bp_salvato.get(_chiave, _valore)
+        st.session_state[_chiave] = (int(nuovo) if isinstance(_valore, int)
+                                     else float(nuovo))
+    df_sp = pd.DataFrame(dati.get("spese") or []).reindex(
+        columns=COLONNE_SPESE)
+    for col in ("importo", "aliquota_iva"):
+        df_sp[col] = pd.to_numeric(df_sp[col], errors="coerce")
+    st.session_state.df_spese = df_sp if len(df_sp) else df_spese_vuoto()
+    df_mc = pd.DataFrame(dati.get("mca_comparabili") or []).reindex(
+        columns=COLONNE_MCA)
+    for col in ("prezzo", "mq", "coeff"):
+        df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
+    st.session_state.df_mca = df_mc if len(df_mc) else df_mca_vuoto()
+    st.session_state.versione_bp += 1
+
+# Il bottone «usa come prezzo di vendita» (MCA) scrive qui: va applicato
+# PRIMA che il widget bp_vendita venga creato.
+if "bp_vendita_pending" in st.session_state:
+    st.session_state.bp_vendita = st.session_state.pop("bp_vendita_pending")
 
 
 # ------------------------------------------------------------------ pagina
@@ -596,7 +743,8 @@ st.title("🏗️ Computo Metrico Estimativo")
 if st.session_state.prg_nome:
     st.caption(st.session_state.prg_nome)
 
-tab_computo, tab_plan = st.tabs(["📝 Computo metrico", "📐 Misura da planimetria"])
+tab_computo, tab_plan, tab_bp = st.tabs(
+    ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"])
 
 
 # ============================================================ SCHEDA COMPUTO
@@ -1308,3 +1456,293 @@ with tab_plan:
             file_name=nome_file("json"),
             mime="application/json",
         )
+
+
+# ======================================================= SCHEDA BUSINESS PLAN
+
+with tab_bp:
+    sotto_fatt, sotto_spese, sotto_mca = st.tabs(
+        ["🏦 Studio di fattibilità", "🧾 Spese a consuntivo",
+         "🏷️ MCA — prezzo di vendita"])
+
+    # valori automatici condivisi: superficie commerciale dalla planimetria
+    # e costo di ristrutturazione dal computo (imprevisti inclusi)
+    _, _, mq_da_planimetria, _ = planimetria.riepilogo_superfici(
+        st.session_state.piante, mappa_percentuali())
+    voci_bp = voci_dal_listino() + voci_da_df(st.session_state.df_voci)
+    totale_computo_bp = calcoli.totale_generale(
+        calcoli.calcola_computo(voci_bp))
+    _, ristr_da_computo = calcoli.totale_con_imprevisti(
+        totale_computo_bp, st.session_state.imprevisti)
+
+    # ------------------------------------------------ studio di fattibilità
+    with sotto_fatt:
+        st.caption("Il modello di fattibilità dell'operazione: compili i "
+                   "campi in blu del tuo Excel qui sotto; **ristrutturazione "
+                   "e metri quadri arrivano da computo e planimetria** (o li "
+                   "forzi a mano). Le matrici in fondo sono le tue tabelle "
+                   "di sensitività, sempre aggiornate.")
+        f1, f2, f3, f4 = st.columns(4)
+        f1.number_input("Prezzo di acquisto (€)", min_value=0.0,
+                        step=5000.0, format="%.0f", key="bp_acquisto")
+        f2.number_input("Prezzo di vendita (€)", min_value=0.0,
+                        step=5000.0, format="%.0f", key="bp_vendita",
+                        help="Puoi stimarlo con l'MCA (terza sezione)")
+        f3.number_input("Mq commerciali (0 = dalla planimetria)",
+                        min_value=0.0, step=1.0, key="bp_mq")
+        f4.number_input("Durata operazione (mesi)", min_value=1,
+                        max_value=120, step=1, key="bp_durata")
+        g1, g2, g3, g4 = st.columns(4)
+        g1.number_input("Imposte d'acquisto (%)", min_value=0.0,
+                        max_value=30.0, step=0.5, key="bp_imposta",
+                        help="Es. registro 9% da privato; 2% prima casa")
+        g2.number_input("Imposte fisse (€)", min_value=0.0, step=50.0,
+                        key="bp_imposte_fisse")
+        g3.number_input("Notaio (€)", min_value=0.0, step=100.0,
+                        key="bp_notaio",
+                        help="Compreso IVA, visure, archivio notarile…")
+        g4.number_input("Spese e interessi mutuo (€)", min_value=0.0,
+                        step=100.0, key="bp_mutuo")
+        h1, h2, h3, h4 = st.columns(4)
+        h1.number_input("Agenzia acquisto (%)", min_value=0.0,
+                        max_value=10.0, step=0.5, key="bp_ag_in")
+        h2.number_input("Agenzia vendita (%)", min_value=0.0,
+                        max_value=10.0, step=0.5, key="bp_ag_out")
+        h3.number_input("IVA su agenzia (%)", min_value=0.0,
+                        max_value=22.0, step=1.0, key="bp_iva_ag")
+        h4.number_input("Imprevisti e condominio (€)", min_value=0.0,
+                        step=500.0, key="bp_imprevisti")
+        i1, i2 = st.columns(2)
+        i1.number_input("Ristrutturazione (€) — 0 = dal computo",
+                        min_value=0.0, step=1000.0, key="bp_ristr")
+        i2.number_input("Passo della sensitività (€)", min_value=1000.0,
+                        step=1000.0, key="bp_passo")
+
+        mq_eff = st.session_state.bp_mq or mq_da_planimetria
+        ristr_eff = st.session_state.bp_ristr or ristr_da_computo
+        st.caption(f"🔗 Ristrutturazione considerata: "
+                   f"**{euro(ristr_eff)}** "
+                   f"({'inserita a mano' if st.session_state.bp_ristr else 'dal computo, imprevisti inclusi'})"
+                   f" · Mq commerciali: **{numero_it(mq_eff, 0)}** "
+                   f"({'a mano' if st.session_state.bp_mq else 'dalla planimetria'})")
+
+        if st.session_state.bp_acquisto > 0 and st.session_state.bp_vendita > 0:
+            parametri_bp = {
+                "prezzo_acquisto": st.session_state.bp_acquisto,
+                "prezzo_vendita": st.session_state.bp_vendita,
+                "imposta_pct": st.session_state.bp_imposta,
+                "imposte_fisse": st.session_state.bp_imposte_fisse,
+                "notaio": st.session_state.bp_notaio,
+                "agenzia_in_pct": st.session_state.bp_ag_in,
+                "agenzia_out_pct": st.session_state.bp_ag_out,
+                "iva_agenzia_pct": st.session_state.bp_iva_ag,
+                "imprevisti": st.session_state.bp_imprevisti,
+                "spese_mutuo": st.session_state.bp_mutuo,
+                "ristrutturazione": ristr_eff,
+                "mq": mq_eff,
+                "durata_mesi": st.session_state.bp_durata,
+            }
+            esito = fattibilita.studio_fattibilita(parametri_bp)
+
+            st.divider()
+            r1, r2, r3, r4 = st.columns(4)
+            r1.metric("Costi di acquisto",
+                      euro(esito["costi_acquisto"]["totale"]))
+            r2.metric("Prezzo netto — entry", euro(esito["entry"]))
+            r3.metric("Costi di vendita",
+                      euro(esito["costi_vendita"]["totale"]))
+            r4.metric("Prezzo netto — exit", euro(esito["exit"]))
+            s1, s2, s3, s4 = st.columns(4)
+            s1.metric("Guadagno (EBIT)", euro(esito["ebit"]))
+            s2.metric("Money multiple", numero_it(esito["multiplo"], 3))
+            s3.metric("ROE", numero_it(esito["roe"] * 100, 1) + " %")
+            s4.metric(f"Rendimento annuo ({st.session_state.bp_durata} mesi)",
+                      numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %")
+            if esito["eur_mq_acquisto"]:
+                st.caption(f"€/mq acquisto: "
+                           f"**{numero_it(esito['eur_mq_acquisto'], 0)}** · "
+                           f"€/mq vendita: "
+                           f"**{numero_it(esito['eur_mq_vendita'], 0)}**")
+
+            with st.expander("📄 Dettaglio dei costi"):
+                acq = esito["costi_acquisto"]
+                ven = esito["costi_vendita"]
+                st.dataframe(pd.DataFrame({
+                    "Voce": ["Imposte", "Notaio", "Agenzia acquisto",
+                             "Imprevisti e condominio", "Spese mutuo",
+                             "Ristrutturazione", "TOTALE ACQUISTO",
+                             "Agenzia vendita (TOTALE VENDITA)"],
+                    "Importo": [euro(acq["imposte"]), euro(acq["notaio"]),
+                                euro(acq["agenzia"]),
+                                euro(acq["imprevisti"]),
+                                euro(acq["spese_mutuo"]),
+                                euro(acq["ristrutturazione"]),
+                                euro(acq["totale"]), euro(ven["totale"])],
+                }), hide_index=True)
+
+            st.subheader("🎯 Sensitività (acquisto × vendita)")
+            passo = st.session_state.bp_passo
+            colonna_m, colonna_g = st.columns(2)
+            with colonna_m:
+                st.markdown("**Money multiple**")
+                pa, pv, mat = fattibilita.matrice_sensitivita(
+                    parametri_bp, passo, metrica="multiplo")
+                st.plotly_chart(
+                    grafico_sensitivita(pa, pv, mat, "multiplo"),
+                    config={"displayModeBar": False})
+            with colonna_g:
+                st.markdown("**Guadagno assoluto (€)**")
+                pa, pv, mat = fattibilita.matrice_sensitivita(
+                    parametri_bp, passo, metrica="guadagno")
+                st.plotly_chart(
+                    grafico_sensitivita(pa, pv, mat, "guadagno"),
+                    config={"displayModeBar": False})
+        else:
+            st.info("Inserisci **prezzo di acquisto** e **prezzo di "
+                    "vendita** per vedere fattibilità e sensitività "
+                    "(la vendita puoi stimarla con l'MCA).")
+
+    # ------------------------------------------------- spese a consuntivo
+    with sotto_spese:
+        st.caption("Il registro delle spese reali dell'operazione (come il "
+                   "tuo foglio «Spese»): segna ogni uscita con categoria, "
+                   "IVA e stato. Sotto trovi i totali e il **confronto col "
+                   "preventivo del computo**.")
+        df_spese_ed = st.data_editor(
+            st.session_state.df_spese,
+            num_rows="dynamic", hide_index=True,
+            key=f"editor_spese_{st.session_state.versione_bp}",
+            column_config={
+                "data": st.column_config.TextColumn(
+                    "Data", help="Es. 22/10/2025"),
+                "oggetto": st.column_config.TextColumn(
+                    "Oggetto", width="large"),
+                "categoria": st.column_config.SelectboxColumn(
+                    "Categoria", options=fattibilita.CATEGORIE_SPESE),
+                "importo": st.column_config.NumberColumn(
+                    "Importo (€)", format="%.2f"),
+                "aliquota_iva": st.column_config.NumberColumn(
+                    "IVA %", min_value=0.0, max_value=22.0, step=1.0,
+                    help="Aliquota della fattura, per lo scorporo "
+                         "(22, 10 o 0)"),
+                "stato": st.column_config.SelectboxColumn(
+                    "Stato", options=fattibilita.STATI_SPESA),
+                "note": st.column_config.TextColumn("Note"),
+            })
+        st.session_state.df_spese = df_spese_ed
+
+        righe_spese = spese_da_df(df_spese_ed)
+        if not righe_spese:
+            st.info("Aggiungi la prima spesa nella tabella (riga vuota in "
+                    "fondo).")
+        else:
+            sostenute = sum(r["importo"] for r in righe_spese
+                            if r["stato"] == "Sostenuta")
+            da_sostenere = sum(r["importo"] for r in righe_spese
+                               if r["stato"] != "Sostenuta")
+            iva_scorporata = sum(
+                r["importo"] / (1 + r["aliquota_iva"] / 100)
+                * r["aliquota_iva"] / 100
+                for r in righe_spese if r["aliquota_iva"] > 0)
+            t1, t2, t3, t4 = st.columns(4)
+            t1.metric("Sostenute", euro(sostenute))
+            t2.metric("Da sostenere", euro(da_sostenere))
+            t3.metric("Spesa finale prevista",
+                      euro(sostenute + da_sostenere))
+            t4.metric("di cui IVA (scorporata)", euro(iva_scorporata))
+
+            per_categoria = {}
+            for r in righe_spese:
+                voce = per_categoria.setdefault(
+                    r["categoria"], {"Sostenute": 0.0, "Da sostenere": 0.0})
+                chiave = ("Sostenute" if r["stato"] == "Sostenuta"
+                          else "Da sostenere")
+                voce[chiave] += r["importo"]
+            st.dataframe(pd.DataFrame([{
+                "Categoria": cat,
+                "Sostenute": euro(v["Sostenute"]),
+                "Da sostenere": euro(v["Da sostenere"]),
+                "Totale": euro(v["Sostenute"] + v["Da sostenere"]),
+            } for cat, v in per_categoria.items()]), hide_index=True)
+
+            st.subheader("⚖️ Preventivo vs consuntivo (cantiere)")
+            consuntivo_cantiere = sum(
+                r["importo"] for r in righe_spese
+                if r["categoria"] in fattibilita.CATEGORIE_CANTIERE)
+            scostamento = consuntivo_cantiere - ristr_da_computo
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Preventivo (computo + imprevisti)",
+                      euro(ristr_da_computo))
+            c2.metric("Consuntivo cantiere (lavori+materiali+architetto)",
+                      euro(consuntivo_cantiere))
+            c3.metric("Scostamento", euro(scostamento),
+                      delta=euro(scostamento), delta_color="inverse")
+
+    # --------------------------------------------- MCA prezzo di vendita
+    with sotto_mca:
+        st.caption("Stima del prezzo di vendita col **metodo comparativo** "
+                   "(il tuo foglio «MCA sell»): per ogni comparabile "
+                   "inserisci prezzo, mq e il **coefficiente di merito** "
+                   "complessivo (il prodotto dei fattori: vetustà, "
+                   "finiture, piano, luminosità, riscaldamento… "
+                   ">1 = immobile migliore della media, <1 = peggiore). "
+                   "Il €/mq viene normalizzato, mediato e riproporzionato "
+                   "sul tuo immobile.")
+        df_mca_ed = st.data_editor(
+            st.session_state.df_mca,
+            num_rows="dynamic", hide_index=True,
+            key=f"editor_mca_{st.session_state.versione_bp}",
+            column_config={
+                "nome": st.column_config.TextColumn(
+                    "Comparabile", help="Es. C1 — via Roma 10"),
+                "prezzo": st.column_config.NumberColumn(
+                    "Prezzo richiesto (€)", format="%.0f"),
+                "mq": st.column_config.NumberColumn("Mq", format="%.0f"),
+                "coeff": st.column_config.NumberColumn(
+                    "Coeff. di merito", format="%.3f",
+                    help="Prodotto dei coefficienti (vetustà, piano, "
+                         "finiture…): 1 = nella media"),
+                "note": st.column_config.TextColumn(
+                    "Note / link annuncio", width="large"),
+            })
+        st.session_state.df_mca = df_mca_ed
+
+        m1, m2, m3 = st.columns(3)
+        m1.number_input("Coeff. di merito del TUO immobile",
+                        min_value=0.1, max_value=3.0, step=0.01,
+                        format="%.3f", key="bp_coeff_sogg")
+        m2.number_input("Sconto di trattativa (%)", min_value=0.0,
+                        max_value=30.0, step=0.5, key="bp_sconto",
+                        help="Differenza media tra prezzo richiesto e "
+                             "prezzo di vendita reale (~13%)")
+        m3.metric("Mq del soggetto", numero_it(mq_eff, 0) + " m²")
+
+        esito_mca = fattibilita.stima_mca(
+            mca_da_df(df_mca_ed), st.session_state.bp_coeff_sogg,
+            mq_eff, st.session_state.bp_sconto)
+        if esito_mca is None:
+            st.info("Aggiungi almeno un comparabile completo (prezzo, mq e "
+                    "coefficiente maggiori di zero).")
+        else:
+            st.dataframe(pd.DataFrame([{
+                "Comparabile": d["nome"],
+                "€/mq": numero_it(d["eur_mq"], 0),
+                "Coeff.": numero_it(d["coeff"], 3),
+                "€/mq normalizzato": numero_it(d["eur_mq_normalizzato"], 0),
+            } for d in esito_mca["dettaglio"]]), hide_index=True)
+            n1, n2, n3, n4 = st.columns(4)
+            n1.metric("€/mq medio normalizzato",
+                      numero_it(esito_mca["eur_mq_media"], 0))
+            n2.metric("€/mq del soggetto",
+                      numero_it(esito_mca["eur_mq_soggetto"], 0))
+            n3.metric(f"€/mq −{numero_it(st.session_state.bp_sconto, 0)}%",
+                      numero_it(esito_mca["eur_mq_probabile"], 0))
+            n4.metric("Valore stimato",
+                      euro(esito_mca["valore"])
+                      if esito_mca["valore"] else "—")
+            if esito_mca["valore"]:
+                if st.button("📥 Usa come prezzo di vendita nello studio "
+                             "di fattibilità", type="primary"):
+                    st.session_state.bp_vendita_pending = float(
+                        round(esito_mca["valore"], 0))
+                    st.rerun()
