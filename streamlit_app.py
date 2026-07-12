@@ -189,10 +189,14 @@ def voci_dal_listino():
 def css_schede_computo():
     """CSS delle schede colorate del computo (stile «card» per categoria).
 
-    Ogni scheda è avvolta in un st.container(key="card_…"): Streamlit
-    assegna al contenitore la classe .st-key-card_… e da lì coloriamo
-    sfondo e bordo dell'expander. Il titolo diventa una riga flex, così
-    il «Totale» (l'ultimo grassetto del titolo) va allineato a destra.
+    Ogni scheda è avvolta in un st.container(key="card_…"): Streamlit le
+    assegna la classe .st-key-card_… e da lì coloriamo sfondo e bordo.
+
+    IMPORTANTE: il «Totale» a destra è disegnato dal CSS (::after), NON
+    scritto nell'etichetta dell'expander. Se il totale stesse nel titolo,
+    a ogni modifica il titolo cambierebbe e Streamlit tratterebbe la
+    tendina come un widget nuovo, richiudendola: con il CSS il titolo
+    resta identico e la tendina rimane aperta mentre si lavora.
     """
     regole = ["""
 [class*="st-key-card_"] [data-testid="stExpander"] details {
@@ -207,17 +211,20 @@ def css_schede_computo():
     width: 100%;
     font-size: 1.25rem;
 }
-[class*="st-key-card_"] summary p > strong:last-child {
+[class*="st-key-card_"] summary [data-testid="stMarkdownContainer"] p::after {
     margin-left: auto;
     font-weight: 700;
     padding-left: 0.5rem;
     white-space: nowrap;
 }
 """]
-    colori_carte = {f"card_{i}": COLORI_CATEGORIE[cat][0]
-                    for i, cat in enumerate(listino.CATEGORIE, start=1)}
-    colori_carte["card_extra"] = ORO
-    for chiave, colore in colori_carte.items():
+    carte = [(f"card_{i}", COLORI_CATEGORIE[cat][0],
+              totale_categoria_listino(cat))
+             for i, cat in enumerate(listino.CATEGORIE, start=1)]
+    tot_extra = calcoli.totale_generale(
+        calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
+    carte.append(("card_extra", ORO, tot_extra))
+    for chiave, colore, totale in carte:
         regole.append(f"""
 .st-key-{chiave} [data-testid="stExpander"] details {{
     background: {colore}26;
@@ -226,6 +233,9 @@ def css_schede_computo():
 .st-key-{chiave} [data-testid="stExpander"] summary:hover {{
     background: {colore}33;
     border-radius: 12px;
+}}
+.st-key-{chiave} summary [data-testid="stMarkdownContainer"] p::after {{
+    content: "Totale: {euro(totale)}";
 }}
 """)
     return "<style>" + "".join(regole) + "</style>"
@@ -633,10 +643,10 @@ with tab_computo:
     with col_sx:
         for indice, cat in enumerate(listino.CATEGORIE, start=1):
             colore_md = COLORI_CATEGORIE[cat][1]
-            tot_cat = totale_categoria_listino(cat)
+            # niente totale nel titolo: lo disegna il CSS (vedi
+            # css_schede_computo), così la tendina non si richiude
             with st.container(key=f"card_{indice}"):
-                with st.expander(f":{colore_md}[**{indice} · {cat}**] "
-                                 f"**Totale: {euro(tot_cat)}**"):
+                with st.expander(f":{colore_md}[**{indice} · {cat}**]"):
                     h_voce, h_qta, h_prezzo, h_parz = st.columns(
                         [3.4, 1, 1, 1])
                     h_voce.caption("Voce · unità")
@@ -647,12 +657,9 @@ with tab_computo:
                         riga_voce_listino(voce)
 
         # tabella libera: personalizzate e voci arrivate dalla planimetria
-        tot_extra = calcoli.totale_generale(
-            calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
         contenitore_extra = st.container(key="card_extra")
         with contenitore_extra, st.expander(
-                f"**➕ {ALTRE_VOCI}** (personalizzate e dalla planimetria) "
-                f"**Totale: {euro(tot_extra)}**"):
+                f"**➕ {ALTRE_VOCI}** (personalizzate e dalla planimetria)"):
             st.caption("Tabella libera: qui arrivano anche superfici, "
                        "battiscopa e tinteggiature dalla scheda planimetria. "
                        "Doppio clic per scrivere; la riga vuota in fondo "
