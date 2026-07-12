@@ -381,9 +381,14 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     Colori come la formattazione condizionale del foglio: minimo → rosso,
     massimo → verde e il BIANCO sulla MEDIANA dei valori (Excel usa il 50°
     percentile, non la metà aritmetica: è questo che rende uniformi le due
-    matrici). L'intestazione del prezzo base di acquisto è un chip
-    giallino, quella del prezzo di vendita un chip azzurro, e la cella
-    d'intersezione ha un riquadro nero spesso.
+    matrici). Il prezzo base di acquisto/vendita è evidenziato in
+    **grassetto sull'etichetta nativa** dell'asse (non su una copia
+    posizionata a mano): così l'allineamento con le altre etichette è
+    garantito dal disegno stesso del grafico — uno spostamento in pixel
+    stimato a occhio si è rivelato inaffidabile da un browser all'altro.
+    Lo sfondo colorato del chip è un rettangolo agganciato alle coordinate
+    dei DATI (colonna/riga esatta), non a coordinate di pagina che
+    dipendono dalla larghezza della finestra.
     """
     if metrica == "multiplo":
         testo = [[numero_it(v, 2) + "x" for v in riga] for riga in matrice]
@@ -410,15 +415,12 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
 
     idx_a = indice_base(prezzi_acquisto, base_acquisto)
     idx_v = indice_base(prezzi_vendita, base_vendita)
-    # le intestazioni del caso base diventano chip colorati (annotazioni):
-    # il testo normale del tick viene svuotato e sostituito dal chip
-    chip_v = chip_a = None
+    # grassetto sull'etichetta VERA (pseudo-html nativo di Plotly): stessa
+    # posizione delle altre etichette per costruzione, zero rischio.
     if idx_v is not None:
-        chip_v = etichette_v[idx_v]
-        etichette_v[idx_v] = " "
+        etichette_v[idx_v] = f"<b>{etichette_v[idx_v]}</b>"
     if idx_a is not None:
-        chip_a = etichette_a[idx_a]
-        etichette_a[idx_a] = "  "
+        etichette_a[idx_a] = f"<b>{etichette_a[idx_a]}</b>"
 
     fig = go.Figure(go.Heatmap(
         z=matrice, x=etichette_v, y=etichette_a,
@@ -429,23 +431,25 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
         hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
                        "<extra></extra>"),
     ))
-    # i chip sono ancorati al bordo della matrice con spostamenti in PIXEL;
-    # i valori sono stati misurati con getBoundingClientRect() su un
-    # rendering di prova (stesso margine/font), confrontando il centro
-    # dell'annotazione con quello dei tick reali: scarto residuo < 1,5 px.
-    if chip_v is not None:
-        fig.add_annotation(
-            x=idx_v, xref="x", xanchor="center",
-            y=1.0, yref="paper", yanchor="bottom", yshift=-2.6,
-            text=f"<b>{chip_v}</b>", showarrow=False, borderpad=2,
-            bgcolor="#DDEBF7", font=dict(color="#1F4E79", size=12))
-    if chip_a is not None:
-        fig.add_annotation(
-            x=0.0, xref="paper", xanchor="right", xshift=2.0,
-            y=idx_a, yref="y", yanchor="middle", yshift=0.4,
-            text=f"<b>{chip_a}</b>", showarrow=False, borderpad=2,
-            bgcolor="#FFF2CC", font=dict(color="#7F6000", size=12))
-    # riquadro spesso sulla cella base (punto di riferimento della matrice)
+    # sfondo azzurro dietro la colonna base: xref="x" segue il dato (giusto
+    # a qualunque larghezza), yref="paper" si estende nel margine superiore
+    # (l'altezza del grafico è fissa, quindi affidabile). layer="below"
+    # tiene il rettangolo sotto le celle della heatmap.
+    if idx_v is not None:
+        fig.add_shape(type="rect", xref="x", x0=idx_v - 0.5, x1=idx_v + 0.5,
+                      yref="paper", y0=1.0, y1=1.16,
+                      fillcolor="#DDEBF7", line=dict(width=0),
+                      layer="below")
+    # sfondo giallo dietro la riga base: yref="y" segue il dato (sempre
+    # giusto), xref="paper" si estende nel margine sinistro — qui non serve
+    # precisione al pixel, è solo una macchia di colore decorativa.
+    if idx_a is not None:
+        fig.add_shape(type="rect", yref="y", y0=idx_a - 0.5, y1=idx_a + 0.5,
+                      xref="paper", x0=-0.075, x1=0.005,
+                      fillcolor="#FFF2CC", line=dict(width=0),
+                      layer="below")
+    # riquadro spesso sulla cella base (punto di riferimento della matrice):
+    # solo coordinate dati, già robusto.
     if idx_a is not None and idx_v is not None:
         fig.add_shape(type="rect",
                       x0=idx_v - 0.5, x1=idx_v + 0.5,
