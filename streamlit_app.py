@@ -374,29 +374,32 @@ def grafico_totali(totali):
     return fig
 
 
-# Scala colori delle sensitività identica alla formattazione condizionale
-# di Excel: minimo → rosso, centro → bianco, massimo → verde, distribuita
-# sui dati della matrice.
-SCALA_EXCEL = [[0.0, "#F8696B"], [0.5, "#FFFFFF"], [1.0, "#63BE7B"]]
-
-
 def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
                         base_acquisto=None, base_vendita=None, altezza=330):
     """Matrice di sensitività come mappa di calore stile Excel.
 
-    Rosso→bianco→verde sui valori della matrice (come la formattazione
-    condizionale del foglio). Le intestazioni del caso base sono in
-    grassetto e la cella base (intersezione) ha un riquadro nero spesso.
+    Colori come la formattazione condizionale del foglio: minimo → rosso,
+    massimo → verde e il BIANCO sulla MEDIANA dei valori (Excel usa il 50°
+    percentile, non la metà aritmetica: è questo che rende uniformi le due
+    matrici). L'intestazione del prezzo base di acquisto è un chip
+    giallino, quella del prezzo di vendita un chip azzurro, e la cella
+    d'intersezione ha un riquadro nero spesso.
     """
     if metrica == "multiplo":
         testo = [[numero_it(v, 2) + "x" for v in riga] for riga in matrice]
     else:
         testo = [[numero_it(v / 1000, 1) + "k" for v in riga]
                  for riga in matrice]
-    piatti = [v for riga in matrice for v in riga]
-    minimo, massimo = min(piatti), max(piatti)
+    piatti = sorted(v for riga in matrice for v in riga)
+    minimo, massimo = piatti[0], piatti[-1]
     if minimo == massimo:
         minimo, massimo = minimo - 1, massimo + 1
+    mediana = piatti[len(piatti) // 2]
+    frazione_bianco = (mediana - minimo) / (massimo - minimo)
+    frazione_bianco = min(0.95, max(0.05, frazione_bianco))
+    scala = [[0.0, "#F8696B"], [frazione_bianco, "#FFFFFF"],
+             [1.0, "#63BE7B"]]
+
     etichette_v = [numero_it(p / 1000, 0) + "k" for p in prezzi_vendita]
     etichette_a = [numero_it(p / 1000, 0) + "k" for p in prezzi_acquisto]
 
@@ -407,20 +410,35 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
 
     idx_a = indice_base(prezzi_acquisto, base_acquisto)
     idx_v = indice_base(prezzi_vendita, base_vendita)
-    if idx_a is not None:
-        etichette_a[idx_a] = f"<b>{etichette_a[idx_a]}</b>"
+    # le intestazioni del caso base diventano chip colorati (annotazioni):
+    # il testo normale del tick viene svuotato e sostituito dal chip
+    chip_v = chip_a = None
     if idx_v is not None:
-        etichette_v[idx_v] = f"<b>{etichette_v[idx_v]}</b>"
+        chip_v = etichette_v[idx_v]
+        etichette_v[idx_v] = " "
+    if idx_a is not None:
+        chip_a = etichette_a[idx_a]
+        etichette_a[idx_a] = "  "
 
     fig = go.Figure(go.Heatmap(
         z=matrice, x=etichette_v, y=etichette_a,
         text=testo, texttemplate="%{text}",
         textfont=dict(size=11, color="#1A2744"),
-        colorscale=SCALA_EXCEL, zmin=minimo, zmax=massimo, showscale=False,
+        colorscale=scala, zmin=minimo, zmax=massimo, showscale=False,
         xgap=1, ygap=1,
         hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
                        "<extra></extra>"),
     ))
+    if chip_v is not None:
+        fig.add_annotation(
+            x=idx_v, xref="x", y=1.0, yref="paper", yanchor="bottom",
+            text=f"<b>{chip_v}</b>", showarrow=False, borderpad=2,
+            bgcolor="#DDEBF7", font=dict(color="#1F4E79", size=12))
+    if chip_a is not None:
+        fig.add_annotation(
+            x=-0.005, xref="paper", xanchor="right", y=idx_a, yref="y",
+            text=f"<b>{chip_a}</b>", showarrow=False, borderpad=2,
+            bgcolor="#FFF2CC", font=dict(color="#7F6000", size=12))
     # riquadro spesso sulla cella base (punto di riferimento della matrice)
     if idx_a is not None and idx_v is not None:
         fig.add_shape(type="rect",
@@ -430,7 +448,7 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=26, b=0),
+        margin=dict(l=48, r=0, t=26, b=0),
         height=altezza,
         font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif',
                   color=CREMA),
