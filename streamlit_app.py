@@ -429,18 +429,20 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
         hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
                        "<extra></extra>"),
     ))
-    # i chip sono ancorati al bordo della matrice con spostamenti in PIXEL,
-    # così il testo resta sulla stessa linea delle altre intestazioni
+    # i chip sono ancorati al bordo della matrice con spostamenti in PIXEL;
+    # i valori sono stati misurati con getBoundingClientRect() su un
+    # rendering di prova (stesso margine/font), confrontando il centro
+    # dell'annotazione con quello dei tick reali: scarto residuo < 1,5 px.
     if chip_v is not None:
         fig.add_annotation(
             x=idx_v, xref="x", xanchor="center",
-            y=1.0, yref="paper", yanchor="bottom", yshift=1,
+            y=1.0, yref="paper", yanchor="bottom", yshift=-2.6,
             text=f"<b>{chip_v}</b>", showarrow=False, borderpad=2,
             bgcolor="#DDEBF7", font=dict(color="#1F4E79", size=12))
     if chip_a is not None:
         fig.add_annotation(
-            x=0.0, xref="paper", xanchor="right", xshift=-2,
-            y=idx_a, yref="y", yanchor="middle",
+            x=0.0, xref="paper", xanchor="right", xshift=2.0,
+            y=idx_a, yref="y", yanchor="middle", yshift=0.4,
             text=f"<b>{chip_a}</b>", showarrow=False, borderpad=2,
             bgcolor="#FFF2CC", font=dict(color="#7F6000", size=12))
     # riquadro spesso sulla cella base (punto di riferimento della matrice)
