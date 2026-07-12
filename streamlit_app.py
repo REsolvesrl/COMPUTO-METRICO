@@ -374,43 +374,85 @@ def grafico_totali(totali):
     return fig
 
 
-def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica):
+# Estremi FISSI della scala colori delle sensitività: il rosso pieno e il
+# verde pieno corrispondono sempre agli stessi valori, qualunque siano i
+# dati dentro la matrice (multiplo 0,75→1,25; guadagno −50k→+50k €).
+LIMITI_SENSITIVITA = {"multiplo": (0.75, 1.25), "guadagno": (-50000.0, 50000.0)}
+
+
+def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
+                        altezza=330):
     """Matrice di sensitività come mappa di calore (verde=bene, rosso=male).
 
-    Scala divergente centrata sul punto di pareggio: multiplo 1 (o
-    guadagno 0). Acquisto sulle righe, vendita sulle colonne, caso base
-    al centro — come le Data Table dell'Excel, ma sempre aggiornata.
+    Scala colori FISSA (LIMITI_SENSITIVITA): stesso valore → stesso
+    colore, indipendentemente dai dati. Acquisto sulle righe, vendita
+    sulle colonne, caso base al centro — come le Data Table dell'Excel,
+    ma sempre aggiornate.
     """
     if metrica == "multiplo":
-        testo = [[numero_it(v, 2) for v in riga] for riga in matrice]
-        centro = 1.0
+        testo = [[numero_it(v, 2) + "x" for v in riga] for riga in matrice]
     else:
-        testo = [[numero_it(v / 1000, 0) + "k" for v in riga]
+        testo = [[numero_it(v / 1000, 1) + "k" for v in riga]
                  for riga in matrice]
-        centro = 0.0
+    minimo, massimo = LIMITI_SENSITIVITA[metrica]
     etichette_v = [numero_it(p / 1000, 0) + "k" for p in prezzi_vendita]
     etichette_a = [numero_it(p / 1000, 0) + "k" for p in prezzi_acquisto]
     fig = go.Figure(go.Heatmap(
         z=matrice, x=etichette_v, y=etichette_a,
         text=testo, texttemplate="%{text}",
         textfont=dict(size=11),
-        colorscale="RdYlGn", zmid=centro, showscale=False,
+        colorscale="RdYlGn", zmin=minimo, zmax=massimo, showscale=False,
         hovertemplate=("Acquisto %{y} · Vendita %{x}: %{text}"
                        "<extra></extra>"),
     ))
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=30, b=0),
-        height=380,
+        margin=dict(l=0, r=0, t=26, b=0),
+        height=altezza,
         font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif',
                   color=CREMA),
-        xaxis=dict(title="Prezzo di vendita", side="top",
+        xaxis=dict(title=None, side="top",
                    tickfont=dict(color=ETICHETTE)),
-        yaxis=dict(title="Prezzo di acquisto", autorange="reversed",
+        yaxis=dict(title=None, autorange="reversed",
                    tickfont=dict(color=ETICHETTE)),
     )
     return fig
+
+
+def righe_bp(righe):
+    """Blocchetto riepilogo stile Excel: righe etichetta/valore compatte.
+
+    righe: [(etichetta, valore, stile)] con stile None | "bold" |
+    "buono" (verde) | "cattivo" (rosso).
+    """
+    pezzi = []
+    for etichetta, valore, stile in righe:
+        colore = {"buono": "#7DDC7D", "cattivo": "#FF8A8A"}.get(stile, CREMA)
+        peso = "700" if stile else "500"
+        pezzi.append(
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:baseline;padding:3px 2px;font-size:0.93rem;'
+            f'border-bottom:1px solid rgba(255,255,255,0.08);">'
+            f'<span style="color:#A9B4C9;">{etichetta}</span>'
+            f'<span style="font-weight:{peso};color:{colore};'
+            f'white-space:nowrap;">{valore}</span></div>')
+    return "".join(pezzi)
+
+
+def riga_costo_bp(etichetta, valore_testo, chiave=None, **kwargs):
+    """Riga del dettaglio costi stile Excel: etichetta | input | netto."""
+    c_eti, c_inp, c_val = st.columns([1.9, 1.0, 1.2],
+                                     vertical_alignment="center")
+    c_eti.markdown(f":gray[{etichetta}]")
+    if chiave:
+        c_inp.number_input(etichetta, key=chiave,
+                           label_visibility="collapsed", **kwargs)
+    else:
+        c_inp.markdown('<div style="text-align:center;color:#5B688A;">/'
+                       '</div>', unsafe_allow_html=True)
+    c_val.markdown(f'<div style="text-align:right;font-weight:600;">'
+                   f'{valore_testo}</div>', unsafe_allow_html=True)
 
 
 def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
@@ -1477,130 +1519,178 @@ with tab_bp:
 
     # ------------------------------------------------ studio di fattibilità
     with sotto_fatt:
-        st.caption("Il modello di fattibilità dell'operazione: compili i "
-                   "campi in blu del tuo Excel qui sotto; **ristrutturazione "
-                   "e metri quadri arrivano da computo e planimetria** (o li "
-                   "forzi a mano). Le matrici in fondo sono le tue tabelle "
-                   "di sensitività, sempre aggiornate.")
-        f1, f2, f3, f4 = st.columns(4)
-        f1.number_input("Prezzo di acquisto (€)", min_value=0.0,
-                        step=5000.0, format="%.0f", key="bp_acquisto")
-        f2.number_input("Prezzo di vendita (€)", min_value=0.0,
-                        step=5000.0, format="%.0f", key="bp_vendita",
-                        help="Puoi stimarlo con l'MCA (terza sezione)")
-        f3.number_input("Mq commerciali (0 = dalla planimetria)",
-                        min_value=0.0, step=1.0, key="bp_mq")
-        f4.number_input("Durata operazione (mesi)", min_value=1,
-                        max_value=120, step=1, key="bp_durata")
-        g1, g2, g3, g4 = st.columns(4)
-        g1.number_input("Imposte d'acquisto (%)", min_value=0.0,
-                        max_value=30.0, step=0.5, key="bp_imposta",
-                        help="Es. registro 9% da privato; 2% prima casa")
-        g2.number_input("Imposte fisse (€)", min_value=0.0, step=50.0,
-                        key="bp_imposte_fisse")
-        g3.number_input("Notaio (€)", min_value=0.0, step=100.0,
-                        key="bp_notaio",
-                        help="Compreso IVA, visure, archivio notarile…")
-        g4.number_input("Spese e interessi mutuo (€)", min_value=0.0,
-                        step=100.0, key="bp_mutuo")
-        h1, h2, h3, h4 = st.columns(4)
-        h1.number_input("Agenzia acquisto (%)", min_value=0.0,
-                        max_value=10.0, step=0.5, key="bp_ag_in")
-        h2.number_input("Agenzia vendita (%)", min_value=0.0,
-                        max_value=10.0, step=0.5, key="bp_ag_out")
-        h3.number_input("IVA su agenzia (%)", min_value=0.0,
-                        max_value=22.0, step=1.0, key="bp_iva_ag")
-        h4.number_input("Imprevisti e condominio (€)", min_value=0.0,
-                        step=500.0, key="bp_imprevisti")
-        i1, i2 = st.columns(2)
-        i1.number_input("Ristrutturazione (€) — 0 = dal computo",
-                        min_value=0.0, step=1000.0, key="bp_ristr")
-        i2.number_input("Passo della sensitività (€)", min_value=1000.0,
-                        step=1000.0, key="bp_passo")
+        # impaginazione «da Excel»: tre blocchi affiancati (riepilogo,
+        # matrici, dettaglio costi) su una larghezza fissa; se lo schermo
+        # è più stretto compare lo scorrimento orizzontale.
+        st.markdown("""
+<style>
+.st-key-bp_scroll { overflow-x: auto; padding-bottom: 6px; }
+.st-key-bp_scroll [data-testid="stHorizontalBlock"] { min-width: 1750px; }
+.st-key-bp_scroll [data-testid="stHorizontalBlock"]
+ [data-testid="stHorizontalBlock"] { min-width: 0; }
+</style>
+""", unsafe_allow_html=True)
 
         mq_eff = st.session_state.bp_mq or mq_da_planimetria
         ristr_eff = st.session_state.bp_ristr or ristr_da_computo
-        st.caption(f"🔗 Ristrutturazione considerata: "
-                   f"**{euro(ristr_eff)}** "
-                   f"({'inserita a mano' if st.session_state.bp_ristr else 'dal computo, imprevisti inclusi'})"
-                   f" · Mq commerciali: **{numero_it(mq_eff, 0)}** "
-                   f"({'a mano' if st.session_state.bp_mq else 'dalla planimetria'})")
+        parametri_bp = {
+            "prezzo_acquisto": st.session_state.bp_acquisto,
+            "prezzo_vendita": st.session_state.bp_vendita,
+            "imposta_pct": st.session_state.bp_imposta,
+            "imposte_fisse": st.session_state.bp_imposte_fisse,
+            "notaio": st.session_state.bp_notaio,
+            "agenzia_in_pct": st.session_state.bp_ag_in,
+            "agenzia_out_pct": st.session_state.bp_ag_out,
+            "iva_agenzia_pct": st.session_state.bp_iva_ag,
+            "imprevisti": st.session_state.bp_imprevisti,
+            "spese_mutuo": st.session_state.bp_mutuo,
+            "ristrutturazione": ristr_eff,
+            "mq": mq_eff,
+            "durata_mesi": st.session_state.bp_durata,
+        }
+        esito = fattibilita.studio_fattibilita(parametri_bp)
+        acq = esito["costi_acquisto"]
+        ven = esito["costi_vendita"]
 
-        if st.session_state.bp_acquisto > 0 and st.session_state.bp_vendita > 0:
-            parametri_bp = {
-                "prezzo_acquisto": st.session_state.bp_acquisto,
-                "prezzo_vendita": st.session_state.bp_vendita,
-                "imposta_pct": st.session_state.bp_imposta,
-                "imposte_fisse": st.session_state.bp_imposte_fisse,
-                "notaio": st.session_state.bp_notaio,
-                "agenzia_in_pct": st.session_state.bp_ag_in,
-                "agenzia_out_pct": st.session_state.bp_ag_out,
-                "iva_agenzia_pct": st.session_state.bp_iva_ag,
-                "imprevisti": st.session_state.bp_imprevisti,
-                "spese_mutuo": st.session_state.bp_mutuo,
-                "ristrutturazione": ristr_eff,
-                "mq": mq_eff,
-                "durata_mesi": st.session_state.bp_durata,
-            }
-            esito = fattibilita.studio_fattibilita(parametri_bp)
+        with st.container(key="bp_scroll"):
+            col_sum, col_matrici, col_costi = st.columns(
+                [1.05, 2.3, 1.5], gap="large")
 
-            st.divider()
-            r1, r2, r3, r4 = st.columns(4)
-            r1.metric("Costi di acquisto",
-                      euro(esito["costi_acquisto"]["totale"]))
-            r2.metric("Prezzo netto — entry", euro(esito["entry"]))
-            r3.metric("Costi di vendita",
-                      euro(esito["costi_vendita"]["totale"]))
-            r4.metric("Prezzo netto — exit", euro(esito["exit"]))
-            s1, s2, s3, s4 = st.columns(4)
-            s1.metric("Guadagno (EBIT)", euro(esito["ebit"]))
-            s2.metric("Money multiple", numero_it(esito["multiplo"], 3))
-            s3.metric("ROE", numero_it(esito["roe"] * 100, 1) + " %")
-            s4.metric(f"Rendimento annuo ({st.session_state.bp_durata} mesi)",
-                      numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %")
-            if esito["eur_mq_acquisto"]:
-                st.caption(f"€/mq acquisto: "
-                           f"**{numero_it(esito['eur_mq_acquisto'], 0)}** · "
-                           f"€/mq vendita: "
-                           f"**{numero_it(esito['eur_mq_vendita'], 0)}**")
+            # ------------------------------------------ riepilogo (Summary)
+            with col_sum:
+                st.number_input("Mq commerciali (0 = dalla planimetria)",
+                                min_value=0.0, step=1.0, key="bp_mq")
+                st.number_input("Passo sensitività (€)", min_value=1000.0,
+                                step=1000.0, key="bp_passo")
+                st.number_input("Durata operazione (mesi)", min_value=1,
+                                max_value=120, step=1, key="bp_durata")
+                st.markdown(
+                    '<div style="background:#F0A84033;border:1px solid '
+                    '#F0A840;padding:4px 10px;border-radius:6px;'
+                    'text-align:center;font-weight:700;letter-spacing:.04em;'
+                    'margin:8px 0 6px;">ESTIMATED</div>',
+                    unsafe_allow_html=True)
+                st.number_input("Prezzo base (acquisto, €)", min_value=0.0,
+                                step=5000.0, format="%.0f",
+                                key="bp_acquisto")
+                st.markdown(righe_bp([
+                    ("€/mq acquisto",
+                     numero_it(esito["eur_mq_acquisto"], 0) + " €"
+                     if esito["eur_mq_acquisto"] else "—", None),
+                    ("Buy cost", euro(acq["totale"]), None),
+                    ("Prezzo netto — entry", euro(esito["entry"]), "bold"),
+                ]), unsafe_allow_html=True)
+                st.number_input("Estimated sell price (€)", min_value=0.0,
+                                step=5000.0, format="%.0f", key="bp_vendita",
+                                help="Puoi stimarlo con l'MCA (terza "
+                                     "sezione)")
+                st.markdown(righe_bp([
+                    ("€/mq vendita",
+                     numero_it(esito["eur_mq_vendita"], 0) + " €"
+                     if esito["eur_mq_vendita"] else "—", None),
+                    ("Sell cost", euro(ven["totale"]), None),
+                    ("Prezzo netto — exit", euro(esito["exit"]), "bold"),
+                ]), unsafe_allow_html=True)
+                st.markdown("<div style='height:8px'></div>",
+                            unsafe_allow_html=True)
+                st.markdown(righe_bp([
+                    ("Net Return (ROI)",
+                     numero_it(esito["multiplo"], 2) + "x", "bold"),
+                    ("Return of Equity (ROE)",
+                     numero_it(esito["roe"] * 100, 1) + " %", None),
+                    (f"Rendimento annuo ({st.session_state.bp_durata} mesi)",
+                     numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %",
+                     None),
+                    ("Total cost",
+                     euro(acq["totale"] + ven["totale"]), "cattivo"),
+                    ("EBIT", euro(esito["ebit"]),
+                     "buono" if esito["ebit"] >= 0 else "cattivo"),
+                ]), unsafe_allow_html=True)
 
-            with st.expander("📄 Dettaglio dei costi"):
-                acq = esito["costi_acquisto"]
-                ven = esito["costi_vendita"]
-                st.dataframe(pd.DataFrame({
-                    "Voce": ["Imposte", "Notaio", "Agenzia acquisto",
-                             "Imprevisti e condominio", "Spese mutuo",
-                             "Ristrutturazione", "TOTALE ACQUISTO",
-                             "Agenzia vendita (TOTALE VENDITA)"],
-                    "Importo": [euro(acq["imposte"]), euro(acq["notaio"]),
-                                euro(acq["agenzia"]),
-                                euro(acq["imprevisti"]),
-                                euro(acq["spese_mutuo"]),
-                                euro(acq["ristrutturazione"]),
-                                euro(acq["totale"]), euro(ven["totale"])],
-                }), hide_index=True)
+            # --------------------------------------- matrici di sensitività
+            with col_matrici:
+                if (st.session_state.bp_acquisto > 0
+                        and st.session_state.bp_vendita > 0):
+                    passo = st.session_state.bp_passo
+                    st.markdown("**Money multiple** "
+                                ":gray[(net sell / net purchase — acquisto "
+                                "sulle righe, vendita sulle colonne)]")
+                    pa, pv, mat = fattibilita.matrice_sensitivita(
+                        parametri_bp, passo, metrica="multiplo")
+                    st.plotly_chart(
+                        grafico_sensitivita(pa, pv, mat, "multiplo"),
+                        config={"displayModeBar": False})
+                    st.markdown("**Net gain** :gray[(guadagno assoluto, €)]")
+                    pa, pv, mat = fattibilita.matrice_sensitivita(
+                        parametri_bp, passo, metrica="guadagno")
+                    st.plotly_chart(
+                        grafico_sensitivita(pa, pv, mat, "guadagno"),
+                        config={"displayModeBar": False})
+                else:
+                    st.info("Inserisci **prezzo di acquisto** e **prezzo "
+                            "di vendita** per vedere le matrici di "
+                            "sensitività (la vendita puoi stimarla "
+                            "con l'MCA).")
 
-            st.subheader("🎯 Sensitività (acquisto × vendita)")
-            passo = st.session_state.bp_passo
-            colonna_m, colonna_g = st.columns(2)
-            with colonna_m:
-                st.markdown("**Money multiple**")
-                pa, pv, mat = fattibilita.matrice_sensitivita(
-                    parametri_bp, passo, metrica="multiplo")
-                st.plotly_chart(
-                    grafico_sensitivita(pa, pv, mat, "multiplo"),
-                    config={"displayModeBar": False})
-            with colonna_g:
-                st.markdown("**Guadagno assoluto (€)**")
-                pa, pv, mat = fattibilita.matrice_sensitivita(
-                    parametri_bp, passo, metrica="guadagno")
-                st.plotly_chart(
-                    grafico_sensitivita(pa, pv, mat, "guadagno"),
-                    config={"displayModeBar": False})
-        else:
-            st.info("Inserisci **prezzo di acquisto** e **prezzo di "
-                    "vendita** per vedere fattibilità e sensitività "
-                    "(la vendita puoi stimarla con l'MCA).")
+            # ------------------------------------------- dettaglio costi
+            with col_costi:
+                st.markdown(
+                    '<div style="background:#24345988;border:1px solid '
+                    '#3C4C6E;padding:4px 10px;border-radius:6px;'
+                    'text-align:center;font-weight:700;margin-bottom:6px;">'
+                    'SPESE ACQUISTO — dettaglio</div>',
+                    unsafe_allow_html=True)
+                e1, e2, e3 = st.columns([1.9, 1.0, 1.2])
+                e1.caption("Voce")
+                e2.caption("% / €")
+                e3.caption("Netto")
+                prezzo_acq = st.session_state.bp_acquisto
+                riga_costo_bp("Imposte d'acquisto (%)",
+                              euro(prezzo_acq
+                                   * st.session_state.bp_imposta / 100),
+                              chiave="bp_imposta", min_value=0.0,
+                              max_value=30.0, step=0.5)
+                riga_costo_bp("Imposte fisse (€)",
+                              euro(st.session_state.bp_imposte_fisse),
+                              chiave="bp_imposte_fisse", min_value=0.0,
+                              step=50.0)
+                riga_costo_bp("Notaio (€)", euro(acq["notaio"]),
+                              chiave="bp_notaio", min_value=0.0, step=100.0)
+                riga_costo_bp("Spese e interessi mutuo (€)",
+                              euro(acq["spese_mutuo"]),
+                              chiave="bp_mutuo", min_value=0.0, step=100.0)
+                riga_costo_bp("Imprevisti e condominio (€)",
+                              euro(acq["imprevisti"]),
+                              chiave="bp_imprevisti", min_value=0.0,
+                              step=500.0)
+                riga_costo_bp("Agenzia IN (%)", euro(acq["agenzia"]),
+                              chiave="bp_ag_in", min_value=0.0,
+                              max_value=10.0, step=0.5)
+                riga_costo_bp("IVA su agenzie (%)", "—",
+                              chiave="bp_iva_ag", min_value=0.0,
+                              max_value=22.0, step=1.0)
+                riga_costo_bp(":orange[**Ristrutturazione stimata**] "
+                              "(0 = dal computo)",
+                              euro(ristr_eff), chiave="bp_ristr",
+                              min_value=0.0, step=1000.0)
+                st.caption("🔗 " + ("inserita a mano"
+                           if st.session_state.bp_ristr
+                           else "presa dal computo, imprevisti inclusi")
+                           + f" · mq: {numero_it(mq_eff, 0)} "
+                           + ("(a mano)" if st.session_state.bp_mq
+                              else "(dalla planimetria)"))
+                st.markdown(righe_bp([
+                    ("TOTALE SPESE ACQUISTO", euro(acq["totale"]), "bold"),
+                ]), unsafe_allow_html=True)
+                st.markdown("<div style='height:10px'></div>",
+                            unsafe_allow_html=True)
+                riga_costo_bp("Agenzia OUT (%)", euro(ven["totale"]),
+                              chiave="bp_ag_out", min_value=0.0,
+                              max_value=10.0, step=0.5)
+                st.markdown(righe_bp([
+                    ("TOTALE SPESE (acquisto + vendita)",
+                     euro(acq["totale"] + ven["totale"]), "bold"),
+                ]), unsafe_allow_html=True)
 
     # ------------------------------------------------- spese a consuntivo
     with sotto_spese:
