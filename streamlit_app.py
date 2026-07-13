@@ -573,6 +573,45 @@ def grafico_torta_spese(riepilogo):
     return fig
 
 
+def tabella_riepilogo_spese_html(riepilogo, totale, iva_totale):
+    """Riepilogo per categoria come tabella HTML.
+
+    Ogni categoria è evidenziata col suo colore della torta (bordo + sfondo
+    tenue); la riga TOTALE ha sfondo diverso, bordo oro e grassetto per
+    risaltare rispetto al resto.
+    """
+    righe = []
+    for cat, v in riepilogo.items():
+        colore = COLORE_CATEGORIA_SPESA.get(cat, ORO)
+        righe.append(
+            '<tr>'
+            f'<td style="padding:5px 8px;border-left:4px solid {colore};'
+            f'background:{colore}26;color:#ECE7DA;font-weight:600;'
+            f'white-space:nowrap;">{cat}</td>'
+            '<td style="padding:5px 8px;text-align:right;color:#ECE7DA;'
+            f'white-space:nowrap;">{euro(v["importo"])}</td>'
+            '<td style="padding:5px 8px;text-align:right;color:#A9B4C9;'
+            f'white-space:nowrap;">{euro(v["iva"])}</td></tr>')
+    righe.append(
+        '<tr style="background:#2C3E63;font-weight:700;">'
+        '<td style="padding:8px;color:#C9A96A;letter-spacing:.03em;'
+        'border-top:2px solid #C9A96A;white-space:nowrap;">TOTALE</td>'
+        '<td style="padding:8px;text-align:right;color:#ECE7DA;'
+        f'border-top:2px solid #C9A96A;white-space:nowrap;">{euro(totale)}</td>'
+        '<td style="padding:8px;text-align:right;color:#ECE7DA;'
+        f'border-top:2px solid #C9A96A;white-space:nowrap;">'
+        f'{euro(iva_totale)}</td></tr>')
+    return (
+        '<table style="width:100%;border-collapse:collapse;'
+        'font-size:0.9rem;margin-bottom:10px;">'
+        '<thead><tr style="color:#A9B4C9;font-size:0.78rem;'
+        'text-align:left;">'
+        '<th style="padding:4px 8px;">Categoria</th>'
+        '<th style="padding:4px 8px;text-align:right;">€</th>'
+        '<th style="padding:4px 8px;text-align:right;">IVA</th>'
+        '</tr></thead><tbody>' + "".join(righe) + '</tbody></table>')
+
+
 def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
                         base_acquisto=None, base_vendita=None, altezza=330):
     """Matrice di sensitività come mappa di calore stile Excel.
@@ -2151,80 +2190,90 @@ with tab_bp:
                         st.session_state.versione_bp += 1
                         st.rerun()
 
-        col_tab, col_centro, col_torta = st.columns(
-            [2.2, 1.6, 1.3], gap="medium")
+        # le tre zone NON si comprimono: su schermi stretti la pagina scorre
+        # in orizzontale (come nel foglio Excel), invece di impilare tutto
+        st.markdown("""
+<style>
+.st-key-spese_scroll { overflow-x: auto; padding-bottom: 6px; }
+.st-key-spese_scroll [data-testid="stHorizontalBlock"] { min-width: 1400px; }
+.st-key-spese_scroll [data-testid="stHorizontalBlock"]
+ [data-testid="stHorizontalBlock"] { min-width: 0; }
+</style>
+""", unsafe_allow_html=True)
 
-        with col_tab:
-            st.markdown("##### 🧾 Spese sostenute")
-            df_spese_ed = st.data_editor(
-                st.session_state.df_spese,
-                num_rows="dynamic", hide_index=True,
-                key=f"editor_spese_{st.session_state.versione_bp}",
-                column_config=config_colonne_spese())
-            st.session_state.df_spese = df_spese_ed
+        with st.container(key="spese_scroll"):
+            col_tab, col_centro, col_torta = st.columns(
+                [2.2, 1.6, 1.3], gap="medium")
 
-        righe_spese = spese_da_df(df_spese_ed)
-        riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
-        tot_sostenute = fattibilita.totale_spese(righe_spese)
-        iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
+            with col_tab:
+                st.markdown("##### 🧾 Spese sostenute")
+                df_spese_ed = st.data_editor(
+                    st.session_state.df_spese,
+                    num_rows="dynamic", hide_index=True,
+                    key=f"editor_spese_{st.session_state.versione_bp}",
+                    column_config=config_colonne_spese())
+                st.session_state.df_spese = df_spese_ed
+                righe_spese = spese_da_df(df_spese_ed)
+                tot_sostenute = fattibilita.totale_spese(righe_spese)
+                st.metric("Totale spese sostenute", euro(tot_sostenute))
 
-        with col_centro:
-            st.markdown("##### 📊 Riepilogo per categoria")
-            if riepilogo:
-                righe_riep = [{"Categoria": c, "€": euro(v["importo"]),
-                               "IVA": euro(v["iva"])}
-                              for c, v in riepilogo.items()]
-                righe_riep.append({"Categoria": "TOTALE",
-                                   "€": euro(tot_sostenute),
-                                   "IVA": euro(iva_totale)})
-                st.dataframe(pd.DataFrame(righe_riep), hide_index=True,
-                             use_container_width=True)
-            else:
-                st.caption("Nessuna spesa sostenuta ancora.")
+            riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
+            iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
 
-            st.markdown("##### 🔮 Spese da sostenere")
-            df_prev_ed = st.data_editor(
-                st.session_state.df_spese_prev,
-                num_rows="dynamic", hide_index=True,
-                key=f"editor_spese_prev_{st.session_state.versione_bp}",
-                column_config={
-                    "oggetto": st.column_config.TextColumn(
-                        "Oggetto", width="medium"),
-                    "importo": st.column_config.NumberColumn(
-                        "€", format="%.2f"),
-                    "aliquota_iva": st.column_config.NumberColumn(
-                        "IVA %", min_value=0.0, max_value=22.0, step=1.0),
-                    "categoria": st.column_config.SelectboxColumn(
-                        "Categoria", options=fattibilita.CATEGORIE_SPESE),
-                    "note": st.column_config.TextColumn("Note"),
-                })
-            st.session_state.df_spese_prev = df_prev_ed
-            righe_prev = spese_da_df(df_prev_ed)
-            tot_prev = fattibilita.totale_spese(righe_prev)
-            st.metric("Totale da sostenere", euro(tot_prev))
+            with col_centro:
+                st.markdown("##### 📊 Riepilogo per categoria")
+                if riepilogo:
+                    st.markdown(
+                        tabella_riepilogo_spese_html(
+                            riepilogo, tot_sostenute, iva_totale),
+                        unsafe_allow_html=True)
+                else:
+                    st.caption("Nessuna spesa sostenuta ancora.")
 
-            costi_totali = round(tot_sostenute + tot_prev, 2)
-            st.session_state.spese_costi_totali = costi_totali
-            st.markdown(
-                '<div style="background:linear-gradient(135deg,#243459,'
-                '#1A2744);border:1px solid #C9A96A;border-radius:12px;'
-                'padding:12px 14px;margin:6px 0 10px;">'
-                '<div style="font-size:0.72rem;color:#C9A96A;'
-                'letter-spacing:.05em;">💠 COSTI TOTALI (→ business plan)</div>'
-                '<div style="font-size:1.45rem;font-weight:700;color:#ECE7DA;">'
-                f'{euro(costi_totali)}</div>'
-                '<div style="font-size:0.72rem;color:#A9B4C9;">'
-                f'sostenute {euro(tot_sostenute)} + da sostenere '
-                f'{euro(tot_prev)}</div></div>',
-                unsafe_allow_html=True)
+                st.markdown("##### 🔮 Spese da sostenere")
+                df_prev_ed = st.data_editor(
+                    st.session_state.df_spese_prev,
+                    num_rows="dynamic", hide_index=True,
+                    key=f"editor_spese_prev_{st.session_state.versione_bp}",
+                    column_config={
+                        "oggetto": st.column_config.TextColumn(
+                            "Oggetto", width="medium"),
+                        "importo": st.column_config.NumberColumn(
+                            "€", format="%.2f"),
+                        "aliquota_iva": st.column_config.NumberColumn(
+                            "IVA %", min_value=0.0, max_value=22.0, step=1.0),
+                        "categoria": st.column_config.SelectboxColumn(
+                            "Categoria", options=fattibilita.CATEGORIE_SPESE),
+                        "note": st.column_config.TextColumn("Note"),
+                    })
+                st.session_state.df_spese_prev = df_prev_ed
+                righe_prev = spese_da_df(df_prev_ed)
+                tot_prev = fattibilita.totale_spese(righe_prev)
+                st.metric("Totale da sostenere", euro(tot_prev))
 
-        with col_torta:
-            st.markdown("##### 🥧 Spese per categoria")
-            if riepilogo:
-                st.plotly_chart(grafico_torta_spese(riepilogo),
-                                config={"displayModeBar": False})
-            else:
-                st.caption("La torta comparirà con le prime spese.")
+                costi_totali = round(tot_sostenute + tot_prev, 2)
+                st.session_state.spese_costi_totali = costi_totali
+                st.markdown(
+                    '<div style="background:linear-gradient(135deg,#243459,'
+                    '#1A2744);border:1px solid #C9A96A;border-radius:12px;'
+                    'padding:12px 14px;margin:6px 0 10px;">'
+                    '<div style="font-size:0.72rem;color:#C9A96A;'
+                    'letter-spacing:.05em;">💠 COSTI TOTALI (→ business plan)'
+                    '</div>'
+                    '<div style="font-size:1.45rem;font-weight:700;'
+                    f'color:#ECE7DA;">{euro(costi_totali)}</div>'
+                    '<div style="font-size:0.72rem;color:#A9B4C9;">'
+                    f'sostenute {euro(tot_sostenute)} + da sostenere '
+                    f'{euro(tot_prev)}</div></div>',
+                    unsafe_allow_html=True)
+
+            with col_torta:
+                st.markdown("##### 🥧 Spese per categoria")
+                if riepilogo:
+                    st.plotly_chart(grafico_torta_spese(riepilogo),
+                                    config={"displayModeBar": False})
+                else:
+                    st.caption("La torta comparirà con le prime spese.")
 
         # confronto col preventivo del computo (su sostenute + da sostenere)
         righe_cantiere = righe_spese + righe_prev
