@@ -75,13 +75,13 @@ COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
 # Toni chiari (reggono un testo scuro sopra) e nessun blu (si confondeva col
 # fondo navy).
 COLORE_CATEGORIA_SPESA = {
-    "ACQUISTO": "#EA6659",         # 🔴 rosso
+    "ACQUISTO": "#FF8A70",         # 🔴 corallo
     "LAVORI": "#F4C143",           # 🟡 giallo
     "MATERIALE": "#78C46E",        # 🟢 verde
     "ARCHITETTO": "#F0982E",       # 🟠 arancio
     "COSTI INDIRETTI": "#D9DCE0",  # ⚪ grigio chiaro
     "AGENZIA": "#B49BE0",          # 🟣 viola
-    "ALTRO": "#CC8A66",            # 🟤 marrone
+    "ALTRO": "#C0392B",            # 🟤 rosso scuro
 }
 # Pallino colorato mostrato davanti alla categoria nella tabella modificabile
 # (il data_editor non colora lo sfondo delle celle: l'emoji è il ripiego).
@@ -145,6 +145,15 @@ def euro(valore):
         return ""
     testo = f"{valore:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"{testo} €"
+
+
+def testo_su(colore_hex):
+    """Colore di testo leggibile su uno sfondo dato: navy scuro sui colori
+    chiari, crema su quelli scuri (in base alla luminosità percepita)."""
+    h = colore_hex.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminanza = 0.299 * r + 0.587 * g + 0.114 * b
+    return "#1A2744" if luminanza > 140 else "#ECE7DA"
 
 
 def numero_it(valore, decimali=3):
@@ -588,7 +597,8 @@ def grafico_torta_spese(riepilogo):
         values=valori,
         marker=dict(colors=colori, line=dict(color="#1A2744", width=1)),
         textinfo="percent",
-        textfont=dict(color="#1A2744", size=11),
+        # testo della % leggibile su ogni fetta (scuro sui chiari, crema sugli scuri)
+        textfont=dict(color=[testo_su(c) for c in colori], size=11),
         hovertemplate="%{label}: %{value:.2f} € (%{percent})<extra></extra>",
         sort=False,
     ))
@@ -616,10 +626,12 @@ def tabella_riepilogo_spese_html(riepilogo, totale, iva_totale):
     righe = []
     for cat, v in riepilogo.items():
         colore = COLORE_CATEGORIA_SPESA.get(cat, ORO)
-        # sfondo pieno del colore (uguale alla fetta di torta) + testo scuro
+        # sfondo pieno del colore (uguale alla fetta di torta) + testo che
+        # si adatta alla luminosità (scuro sui chiari, crema sugli scuri)
         righe.append(
             '<tr>'
-            f'<td style="padding:5px 8px;background:{colore};color:#1A2744;'
+            f'<td style="padding:5px 8px;background:{colore};'
+            f'color:{testo_su(colore)};'
             f'font-weight:700;white-space:nowrap;">{cat}</td>'
             '<td style="padding:5px 8px;text-align:right;color:#ECE7DA;'
             f'white-space:nowrap;">{euro(v["importo"])}</td>'
@@ -2223,37 +2235,38 @@ with tab_bp:
                         st.session_state.versione_bp += 1
                         st.rerun()
 
-        # le tre zone NON si comprimono: su schermi stretti la pagina scorre
-        # in orizzontale (come nel foglio Excel), invece di impilare tutto
+        # Spese sostenute: tabella a PIENA LARGHEZZA della pagina, così tutte
+        # le colonne si vedono senza dover scorrere dentro la tabella.
+        st.markdown("##### 🧾 Spese sostenute")
+        df_spese_ed = st.data_editor(
+            st.session_state.df_spese,
+            num_rows="dynamic", hide_index=True, use_container_width=True,
+            key=f"editor_spese_{st.session_state.versione_bp}",
+            column_config=config_colonne_spese())
+        st.session_state.df_spese = df_spese_ed
+        righe_spese = spese_da_df(df_spese_ed)
+        tot_sostenute = fattibilita.totale_spese(righe_spese)
+        st.metric("Totale spese sostenute", euro(tot_sostenute))
+
+        riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
+        iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
+
+        # sotto, affiancati: riepilogo · spese da sostenere · torta. Non si
+        # comprimono: su schermi stretti scorre la pagina (non le tabelle).
         st.markdown("""
 <style>
 .st-key-spese_scroll { overflow-x: auto; padding-bottom: 6px; }
-.st-key-spese_scroll [data-testid="stHorizontalBlock"] { min-width: 1400px; }
+.st-key-spese_scroll [data-testid="stHorizontalBlock"] { min-width: 1150px; }
 .st-key-spese_scroll [data-testid="stHorizontalBlock"]
  [data-testid="stHorizontalBlock"] { min-width: 0; }
 </style>
 """, unsafe_allow_html=True)
 
         with st.container(key="spese_scroll"):
-            col_tab, col_centro, col_torta = st.columns(
-                [2.2, 1.6, 1.3], gap="medium")
+            col_riep, col_prev, col_torta = st.columns(
+                [1.3, 1.5, 1.2], gap="medium")
 
-            with col_tab:
-                st.markdown("##### 🧾 Spese sostenute")
-                df_spese_ed = st.data_editor(
-                    st.session_state.df_spese,
-                    num_rows="dynamic", hide_index=True,
-                    key=f"editor_spese_{st.session_state.versione_bp}",
-                    column_config=config_colonne_spese())
-                st.session_state.df_spese = df_spese_ed
-                righe_spese = spese_da_df(df_spese_ed)
-                tot_sostenute = fattibilita.totale_spese(righe_spese)
-                st.metric("Totale spese sostenute", euro(tot_sostenute))
-
-            riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
-            iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
-
-            with col_centro:
+            with col_riep:
                 st.markdown("##### 📊 Riepilogo per categoria")
                 if riepilogo:
                     st.markdown(
@@ -2263,10 +2276,12 @@ with tab_bp:
                 else:
                     st.caption("Nessuna spesa sostenuta ancora.")
 
+            with col_prev:
                 st.markdown("##### 🔮 Spese da sostenere")
                 df_prev_ed = st.data_editor(
                     st.session_state.df_spese_prev,
                     num_rows="dynamic", hide_index=True,
+                    use_container_width=True,
                     key=f"editor_spese_prev_{st.session_state.versione_bp}",
                     column_config={
                         "oggetto": st.column_config.TextColumn(
