@@ -25,6 +25,43 @@ STATI_SPESA = ["Sostenuta", "Da sostenere"]
 CATEGORIE_CANTIERE = ["LAVORI", "MATERIALE", "ARCHITETTO"]
 
 
+def iva_scorporata(importo, aliquota_pct):
+    """IVA contenuta in un importo lordo (scorporo dalla fattura).
+
+    Es. 122 € al 22% contengono 22 € di IVA. Con aliquota 0 (o mancante)
+    ritorna 0.
+    """
+    aliquota = float(aliquota_pct or 0.0)
+    if aliquota <= 0:
+        return 0.0
+    lordo = float(importo or 0.0)
+    return round(lordo - lordo / (1 + aliquota / 100), 2)
+
+
+def totale_spese(righe):
+    """Somma degli importi (lordi) di un elenco di spese."""
+    return round(sum(float(r.get("importo") or 0.0) for r in righe), 2)
+
+
+def riepilogo_per_categoria(righe):
+    """Aggrega le spese per categoria: {categoria: {'importo', 'iva'}}.
+
+    L'importo è il totale lordo della categoria, l'IVA è la somma scorporata
+    riga per riga. L'ordine segue CATEGORIE_SPESE (le categorie fuori elenco
+    vengono in coda, in ordine di comparsa).
+    """
+    agg = {}
+    for r in righe:
+        categoria = (r.get("categoria") or "ALTRO").strip() or "ALTRO"
+        voce = agg.setdefault(categoria, {"importo": 0.0, "iva": 0.0})
+        voce["importo"] += float(r.get("importo") or 0.0)
+        voce["iva"] += iva_scorporata(r.get("importo"), r.get("aliquota_iva"))
+    ordine = {c: i for i, c in enumerate(CATEGORIE_SPESE)}
+    chiavi = sorted(agg, key=lambda c: ordine.get(c, len(ordine)))
+    return {c: {"importo": round(agg[c]["importo"], 2),
+                "iva": round(agg[c]["iva"], 2)} for c in chiavi}
+
+
 def costi_acquisto(prezzo, imposta_pct=9.0, imposte_fisse=0.0,
                    notaio=3500.0, agenzia_pct=3.0, iva_agenzia_pct=22.0,
                    imprevisti=0.0, spese_mutuo=0.0, ristrutturazione=0.0):

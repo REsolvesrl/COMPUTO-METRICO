@@ -3,9 +3,12 @@ import pytest
 from fattibilita import (
     costi_acquisto,
     costi_vendita,
+    iva_scorporata,
     matrice_sensitivita,
+    riepilogo_per_categoria,
     stima_mca,
     studio_fattibilita,
+    totale_spese,
 )
 
 # Parametri dell'operazione REALE nel file Excel dell'utente
@@ -116,3 +119,46 @@ def test_stima_mca_ignora_comparabili_non_validi():
 
 def test_stima_mca_senza_comparabili():
     assert stima_mca([], 1.0, 100) is None
+
+
+# ------------------------------------------------ spese a consuntivo
+
+def test_iva_scorporata():
+    # 122 € al 22% contengono 22 € di IVA
+    assert iva_scorporata(122.0, 22.0) == 22.0
+    # 110 € al 10% contengono 10 €
+    assert iva_scorporata(110.0, 10.0) == 10.0
+
+
+def test_iva_scorporata_aliquota_zero():
+    assert iva_scorporata(1000.0, 0.0) == 0.0
+    assert iva_scorporata(1000.0, None) == 0.0
+
+
+def test_totale_spese():
+    righe = [{"importo": 100.0}, {"importo": 250.5}, {"importo": 0.0}]
+    assert totale_spese(righe) == 350.5
+
+
+def test_riepilogo_per_categoria_aggrega_e_scorpora():
+    righe = [
+        {"categoria": "MATERIALE", "importo": 122.0, "aliquota_iva": 22.0},
+        {"categoria": "MATERIALE", "importo": 110.0, "aliquota_iva": 10.0},
+        {"categoria": "LAVORI", "importo": 1000.0, "aliquota_iva": 0.0},
+    ]
+    riep = riepilogo_per_categoria(righe)
+    assert riep["MATERIALE"] == {"importo": 232.0, "iva": 32.0}
+    assert riep["LAVORI"] == {"importo": 1000.0, "iva": 0.0}
+
+
+def test_riepilogo_per_categoria_ordine_e_default():
+    # categorie fuori elenco in coda; categoria vuota -> ALTRO
+    righe = [
+        {"categoria": "LAVORI", "importo": 10.0, "aliquota_iva": 0.0},
+        {"categoria": "ACQUISTO", "importo": 20.0, "aliquota_iva": 0.0},
+        {"categoria": "", "importo": 5.0, "aliquota_iva": 0.0},
+    ]
+    chiavi = list(riepilogo_per_categoria(righe))
+    # ACQUISTO viene prima di LAVORI (ordine di CATEGORIE_SPESE)
+    assert chiavi.index("ACQUISTO") < chiavi.index("LAVORI")
+    assert "ALTRO" in chiavi

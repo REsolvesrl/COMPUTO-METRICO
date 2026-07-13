@@ -60,9 +60,25 @@ ALTRE_VOCI = "Voci aggiuntive"
 
 # Business plan: colonne delle tabelle e impostazioni predefinite
 # (chiave di sessione → valore iniziale; il tipo del default comanda).
-COLONNE_SPESE = ["data", "oggetto", "categoria", "importo",
-                 "aliquota_iva", "stato", "note"]
+# Spese a consuntivo: due registri distinti (come il foglio «Spese» Excel).
+# Sostenute = fatture reali (con data e numero); da sostenere = previsioni.
+COLONNE_SPESE = ["importo", "aliquota_iva", "data", "nr_fattura",
+                 "oggetto", "categoria", "note"]
+COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
+                      "note"]
+COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
 COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
+
+# Colori delle categorie di spesa per la torta (vicini al foglio Excel).
+COLORE_CATEGORIA_SPESA = {
+    "ACQUISTO": "#4E79A7",         # blu
+    "LAVORI": "#E8C33D",           # oro/giallo
+    "MATERIALE": "#5B9BD5",        # azzurro
+    "ARCHITETTO": "#F0A840",       # arancio
+    "COSTI INDIRETTI": "#B0BEC5",  # grigio
+    "AGENZIA": "#9575CD",          # viola
+    "ALTRO": "#E15759",            # rosso
+}
 IMPOSTAZIONI_BP = {
     "bp_acquisto": 0.0, "bp_vendita": 0.0, "bp_mq": 0.0,
     "bp_imposta": 9.0, "bp_imposte_fisse": 0.0, "bp_notaio": 3500.0,
@@ -187,16 +203,43 @@ def misure_da_df(df):
     return righe
 
 
-def df_spese_vuoto():
-    colonne = {}
-    for col in COLONNE_SPESE:
-        tipo = "float64" if col in ("importo", "aliquota_iva") else "object"
-        colonne[col] = pd.Series(dtype=tipo)
-    return pd.DataFrame(colonne)
+def df_spese_vuoto(colonne=None):
+    """Tabella spese vuota (sostenute per default, o l'elenco colonne dato)."""
+    colonne = colonne or COLONNE_SPESE
+    dati = {}
+    for col in colonne:
+        tipo = "float64" if col in COLONNE_SPESE_NUM else "object"
+        dati[col] = pd.Series(dtype=tipo)
+    return pd.DataFrame(dati)
+
+
+def df_spese_da_righe(righe, colonne):
+    """Tabella spese tipizzata da una lista di dizionari.
+
+    Le colonne mancanti nei dati (es. una spesa da sostenere senza numero
+    fattura) vengono create vuote ma col tipo GIUSTO: testo → stringa
+    (mai una colonna float di soli NaN, che l'editor rifiuterebbe come
+    colonna di testo), numeri → float.
+    """
+    dati = {}
+    for col in colonne:
+        valori = [r.get(col) for r in righe]
+        if col in COLONNE_SPESE_NUM:
+            dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
+                                      errors="coerce")
+        else:
+            dati[col] = pd.Series(
+                ["" if v is None or (isinstance(v, float) and pd.isna(v))
+                 else str(v) for v in valori], dtype="object")
+    return pd.DataFrame(dati)
 
 
 def spese_da_df(df):
-    """La tabella delle spese come lista di dizionari (righe con importo)."""
+    """Le spese come lista di dizionari (solo le righe con un importo).
+
+    Vale per entrambi i registri: i campi assenti in una tabella (una non ha
+    data né numero fattura) diventano stringa vuota.
+    """
     righe = []
     for _, riga in df.iterrows():
         importo = riga.get("importo")
@@ -210,13 +253,13 @@ def spese_da_df(df):
 
         aliquota = riga.get("aliquota_iva")
         righe.append({
-            "data": testo("data"),
-            "oggetto": testo("oggetto"),
-            "categoria": testo("categoria", "ALTRO") or "ALTRO",
             "importo": float(importo),
             "aliquota_iva": (0.0 if aliquota is None or pd.isna(aliquota)
                              else float(aliquota)),
-            "stato": testo("stato", "Sostenuta") or "Sostenuta",
+            "data": testo("data"),
+            "nr_fattura": testo("nr_fattura"),
+            "oggetto": testo("oggetto"),
+            "categoria": testo("categoria", "ALTRO") or "ALTRO",
             "note": testo("note"),
         })
     return righe
@@ -460,6 +503,34 @@ def grafico_totali(totali):
         xaxis=dict(showgrid=True, gridcolor=GRIGLIA, zeroline=False,
                    tickfont=dict(color=ETICHETTE)),
         yaxis=dict(showgrid=False, tickfont=dict(color=CREMA)),
+    )
+    return fig
+
+
+def grafico_torta_spese(riepilogo):
+    """Torta delle spese sostenute per categoria (importi lordi)."""
+    categorie = list(riepilogo)
+    valori = [riepilogo[c]["importo"] for c in categorie]
+    colori = [COLORE_CATEGORIA_SPESA.get(c, ORO) for c in categorie]
+    fig = go.Figure(go.Pie(
+        labels=categorie,
+        values=valori,
+        marker=dict(colors=colori, line=dict(color="#1A2744", width=1)),
+        textinfo="percent",
+        textfont=dict(color="#1A2744", size=11),
+        hovertemplate="%{label}: %{value:.2f} € (%{percent})<extra></extra>",
+        sort=False,
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=10, b=10),
+        height=320,
+        showlegend=True,
+        legend=dict(font=dict(color=CREMA, size=10), orientation="v",
+                    yanchor="middle", y=0.5, xanchor="left", x=1.0),
+        font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif',
+                  color=CREMA),
     )
     return fig
 
@@ -866,6 +937,7 @@ def progetto_json_bytes():
         "business_plan": {chiave: st.session_state.get(chiave, valore)
                           for chiave, valore in IMPOSTAZIONI_BP.items()},
         "spese": spese_da_df(st.session_state.df_spese),
+        "spese_prev": spese_da_df(st.session_state.df_spese_prev),
         "mca_comparabili": mca_da_df(st.session_state.df_mca),
         "categorie": st.session_state.categorie,
         "etichette": {"font": st.session_state.et_font,
@@ -900,6 +972,8 @@ st.session_state.setdefault("misure_base", {})       # {codice: DataFrame}
 st.session_state.setdefault("misure_correnti", {})   # {codice: [righe]}
 # business plan
 st.session_state.setdefault("df_spese", df_spese_vuoto())
+st.session_state.setdefault("df_spese_prev",
+                            df_spese_vuoto(COLONNE_SPESE_PREV))
 st.session_state.setdefault("df_mca", df_mca_vuoto())
 st.session_state.setdefault("versione_bp", 0)
 for _chiave, _valore in IMPOSTAZIONI_BP.items():
@@ -994,11 +1068,20 @@ if "da_caricare" in st.session_state:
         nuovo = bp_salvato.get(_chiave, _valore)
         st.session_state[_chiave] = (int(nuovo) if isinstance(_valore, int)
                                      else float(nuovo))
-    df_sp = pd.DataFrame(dati.get("spese") or []).reindex(
-        columns=COLONNE_SPESE)
-    for col in ("importo", "aliquota_iva"):
-        df_sp[col] = pd.to_numeric(df_sp[col], errors="coerce")
+    spese_caricate = dati.get("spese") or []
+    spese_prev_caricate = dati.get("spese_prev")
+    if spese_prev_caricate is None:
+        # vecchio formato: un unico registro con campo "stato" → si separa
+        # in sostenute e da sostenere in base allo stato salvato
+        spese_prev_caricate = [s for s in spese_caricate
+                               if s.get("stato") == "Da sostenere"]
+        spese_caricate = [s for s in spese_caricate
+                          if s.get("stato", "Sostenuta") != "Da sostenere"]
+    df_sp = df_spese_da_righe(spese_caricate, COLONNE_SPESE)
     st.session_state.df_spese = df_sp if len(df_sp) else df_spese_vuoto()
+    df_prev = df_spese_da_righe(spese_prev_caricate, COLONNE_SPESE_PREV)
+    st.session_state.df_spese_prev = (
+        df_prev if len(df_prev) else df_spese_vuoto(COLONNE_SPESE_PREV))
     df_mc = pd.DataFrame(dati.get("mca_comparabili") or []).reindex(
         columns=COLONNE_MCA)
     for col in ("prezzo", "mq", "coeff"):
@@ -1978,70 +2061,111 @@ with tab_bp:
 
     # ------------------------------------------------- spese a consuntivo
     with sotto_spese:
-        st.caption("Il registro delle spese reali dell'operazione (come il "
-                   "tuo foglio «Spese»): segna ogni uscita con categoria, "
-                   "IVA e stato. Sotto trovi i totali e il **confronto col "
-                   "preventivo del computo**.")
-        df_spese_ed = st.data_editor(
-            st.session_state.df_spese,
-            num_rows="dynamic", hide_index=True,
-            key=f"editor_spese_{st.session_state.versione_bp}",
-            column_config={
-                "data": st.column_config.TextColumn(
-                    "Data", help="Es. 22/10/2025"),
-                "oggetto": st.column_config.TextColumn(
-                    "Oggetto", width="large"),
-                "categoria": st.column_config.SelectboxColumn(
-                    "Categoria", options=fattibilita.CATEGORIE_SPESE),
-                "importo": st.column_config.NumberColumn(
-                    "Importo (€)", format="%.2f"),
-                "aliquota_iva": st.column_config.NumberColumn(
-                    "IVA %", min_value=0.0, max_value=22.0, step=1.0,
-                    help="Aliquota della fattura, per lo scorporo "
-                         "(22, 10 o 0)"),
-                "stato": st.column_config.SelectboxColumn(
-                    "Stato", options=fattibilita.STATI_SPESA),
-                "note": st.column_config.TextColumn("Note"),
-            })
-        st.session_state.df_spese = df_spese_ed
+        st.caption("Il registro delle spese reali dell'operazione, come il "
+                   "tuo foglio «Spese». A sinistra le spese già **sostenute** "
+                   "(le fatture), al centro il **riepilogo per categoria** e "
+                   "le spese ancora **da sostenere**, a destra la torta. La "
+                   "somma sostenute + da sostenere è il **costo totale** che "
+                   "confluirà nel business plan.")
+
+        col_tab, col_centro, col_torta = st.columns(
+            [2.2, 1.6, 1.3], gap="medium")
+
+        with col_tab:
+            st.markdown("##### 🧾 Spese sostenute")
+            df_spese_ed = st.data_editor(
+                st.session_state.df_spese,
+                num_rows="dynamic", hide_index=True,
+                key=f"editor_spese_{st.session_state.versione_bp}",
+                column_config={
+                    "importo": st.column_config.NumberColumn(
+                        "Importo (€)", format="%.2f"),
+                    "aliquota_iva": st.column_config.NumberColumn(
+                        "IVA %", min_value=0.0, max_value=22.0, step=1.0,
+                        help="Aliquota della fattura, per lo scorporo "
+                             "(22, 10 o 0)"),
+                    "data": st.column_config.TextColumn(
+                        "Data", help="Es. 22/10/2025"),
+                    "nr_fattura": st.column_config.TextColumn(
+                        "Nr. fattura", help="Numero/riferimento della fattura"),
+                    "oggetto": st.column_config.TextColumn(
+                        "Oggetto", width="large"),
+                    "categoria": st.column_config.SelectboxColumn(
+                        "Categoria", options=fattibilita.CATEGORIE_SPESE),
+                    "note": st.column_config.TextColumn("Note"),
+                })
+            st.session_state.df_spese = df_spese_ed
 
         righe_spese = spese_da_df(df_spese_ed)
-        if not righe_spese:
-            st.info("Aggiungi la prima spesa nella tabella (riga vuota in "
-                    "fondo).")
-        else:
-            sostenute = sum(r["importo"] for r in righe_spese
-                            if r["stato"] == "Sostenuta")
-            da_sostenere = sum(r["importo"] for r in righe_spese
-                               if r["stato"] != "Sostenuta")
-            iva_scorporata = sum(
-                r["importo"] / (1 + r["aliquota_iva"] / 100)
-                * r["aliquota_iva"] / 100
-                for r in righe_spese if r["aliquota_iva"] > 0)
-            t1, t2, t3, t4 = st.columns(4)
-            t1.metric("Sostenute", euro(sostenute))
-            t2.metric("Da sostenere", euro(da_sostenere))
-            t3.metric("Spesa finale prevista",
-                      euro(sostenute + da_sostenere))
-            t4.metric("di cui IVA (scorporata)", euro(iva_scorporata))
+        riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
+        tot_sostenute = fattibilita.totale_spese(righe_spese)
+        iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
 
-            per_categoria = {}
-            for r in righe_spese:
-                voce = per_categoria.setdefault(
-                    r["categoria"], {"Sostenute": 0.0, "Da sostenere": 0.0})
-                chiave = ("Sostenute" if r["stato"] == "Sostenuta"
-                          else "Da sostenere")
-                voce[chiave] += r["importo"]
-            st.dataframe(pd.DataFrame([{
-                "Categoria": cat,
-                "Sostenute": euro(v["Sostenute"]),
-                "Da sostenere": euro(v["Da sostenere"]),
-                "Totale": euro(v["Sostenute"] + v["Da sostenere"]),
-            } for cat, v in per_categoria.items()]), hide_index=True)
+        with col_centro:
+            st.markdown("##### 📊 Riepilogo per categoria")
+            if riepilogo:
+                righe_riep = [{"Categoria": c, "€": euro(v["importo"]),
+                               "IVA": euro(v["iva"])}
+                              for c, v in riepilogo.items()]
+                righe_riep.append({"Categoria": "TOTALE",
+                                   "€": euro(tot_sostenute),
+                                   "IVA": euro(iva_totale)})
+                st.dataframe(pd.DataFrame(righe_riep), hide_index=True,
+                             use_container_width=True)
+            else:
+                st.caption("Nessuna spesa sostenuta ancora.")
 
+            st.markdown("##### 🔮 Spese da sostenere")
+            df_prev_ed = st.data_editor(
+                st.session_state.df_spese_prev,
+                num_rows="dynamic", hide_index=True,
+                key=f"editor_spese_prev_{st.session_state.versione_bp}",
+                column_config={
+                    "oggetto": st.column_config.TextColumn(
+                        "Oggetto", width="medium"),
+                    "importo": st.column_config.NumberColumn(
+                        "€", format="%.2f"),
+                    "aliquota_iva": st.column_config.NumberColumn(
+                        "IVA %", min_value=0.0, max_value=22.0, step=1.0),
+                    "categoria": st.column_config.SelectboxColumn(
+                        "Categoria", options=fattibilita.CATEGORIE_SPESE),
+                    "note": st.column_config.TextColumn("Note"),
+                })
+            st.session_state.df_spese_prev = df_prev_ed
+            righe_prev = spese_da_df(df_prev_ed)
+            tot_prev = fattibilita.totale_spese(righe_prev)
+            st.metric("Totale da sostenere", euro(tot_prev))
+
+            costi_totali = round(tot_sostenute + tot_prev, 2)
+            st.session_state.spese_costi_totali = costi_totali
+            st.markdown(
+                '<div style="background:linear-gradient(135deg,#243459,'
+                '#1A2744);border:1px solid #C9A96A;border-radius:12px;'
+                'padding:12px 14px;margin:6px 0 10px;">'
+                '<div style="font-size:0.72rem;color:#C9A96A;'
+                'letter-spacing:.05em;">💠 COSTI TOTALI (→ business plan)</div>'
+                '<div style="font-size:1.45rem;font-weight:700;color:#ECE7DA;">'
+                f'{euro(costi_totali)}</div>'
+                '<div style="font-size:0.72rem;color:#A9B4C9;">'
+                f'sostenute {euro(tot_sostenute)} + da sostenere '
+                f'{euro(tot_prev)}</div></div>',
+                unsafe_allow_html=True)
+
+        with col_torta:
+            st.markdown("##### 🥧 Spese per categoria")
+            if riepilogo:
+                st.plotly_chart(grafico_torta_spese(riepilogo),
+                                config={"displayModeBar": False})
+            else:
+                st.caption("La torta comparirà con le prime spese.")
+
+        # confronto col preventivo del computo (su sostenute + da sostenere)
+        righe_cantiere = righe_spese + righe_prev
+        if righe_cantiere:
+            st.divider()
             st.subheader("⚖️ Preventivo vs consuntivo (cantiere)")
             consuntivo_cantiere = sum(
-                r["importo"] for r in righe_spese
+                r["importo"] for r in righe_cantiere
                 if r["categoria"] in fattibilita.CATEGORIE_CANTIERE)
             scostamento = consuntivo_cantiere - ristr_da_computo
             c1, c2, c3 = st.columns(3)
