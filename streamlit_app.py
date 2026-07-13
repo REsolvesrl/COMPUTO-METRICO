@@ -70,18 +70,28 @@ COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
 COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
 COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
 
-# Colori categorie di spesa (torta + sfondo celle del riepilogo: identici, così
-# combaciano). Vivaci e CHIARI per risaltare sul fondo navy e reggere un testo
-# scuro sopra; niente blu/azzurri, che si confondevano con lo sfondo.
+# Colori categorie di spesa: allineati ai pallini-emoji della colonna
+# Categoria, così pallino + fetta di torta + cella del riepilogo combaciano.
+# Toni chiari (reggono un testo scuro sopra) e nessun blu (si confondeva col
+# fondo navy).
 COLORE_CATEGORIA_SPESA = {
-    "ACQUISTO": "#E679A6",         # rosa magenta
-    "LAVORI": "#F4B942",           # oro
-    "MATERIALE": "#6FCF97",        # verde menta
-    "ARCHITETTO": "#EB8A5B",       # arancio
-    "COSTI INDIRETTI": "#C0CAD4",  # grigio chiaro
-    "AGENZIA": "#BB9AF7",          # lavanda
-    "ALTRO": "#F07178",            # corallo
+    "ACQUISTO": "#EA6659",         # 🔴 rosso
+    "LAVORI": "#F4C143",           # 🟡 giallo
+    "MATERIALE": "#78C46E",        # 🟢 verde
+    "ARCHITETTO": "#F0982E",       # 🟠 arancio
+    "COSTI INDIRETTI": "#D9DCE0",  # ⚪ grigio chiaro
+    "AGENZIA": "#B49BE0",          # 🟣 viola
+    "ALTRO": "#CC8A66",            # 🟤 marrone
 }
+# Pallino colorato mostrato davanti alla categoria nella tabella modificabile
+# (il data_editor non colora lo sfondo delle celle: l'emoji è il ripiego).
+EMOJI_CATEGORIA = {
+    "ACQUISTO": "🔴", "LAVORI": "🟡", "MATERIALE": "🟢",
+    "ARCHITETTO": "🟠", "COSTI INDIRETTI": "⚪",
+    "AGENZIA": "🟣", "ALTRO": "🟤",
+}
+CATEGORIE_SPESE_EMOJI = [f"{EMOJI_CATEGORIA.get(c, '')} {c}".strip()
+                         for c in fattibilita.CATEGORIE_SPESE]
 IMPOSTAZIONI_BP = {
     "bp_acquisto": 0.0, "bp_vendita": 0.0, "bp_mq": 0.0,
     "bp_imposta": 9.0, "bp_imposte_fisse": 0.0, "bp_notaio": 3500.0,
@@ -230,6 +240,11 @@ def df_spese_da_righe(righe, colonne):
         if col in COLONNE_SPESE_NUM:
             dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
                                       errors="coerce")
+        elif col == "categoria":
+            # nella tabella modificabile la categoria porta il pallino emoji
+            dati[col] = pd.Series(
+                ["" if v is None or (isinstance(v, float) and pd.isna(v))
+                 else cat_display(v) for v in valori], dtype="object")
         else:
             dati[col] = pd.Series(
                 ["" if v is None or (isinstance(v, float) and pd.isna(v))
@@ -262,10 +277,26 @@ def spese_da_df(df):
             "data": testo("data"),
             "nr_fattura": testo("nr_fattura"),
             "oggetto": testo("oggetto"),
-            "categoria": testo("categoria", "ALTRO") or "ALTRO",
+            "categoria": cat_pulita(testo("categoria")) or "ALTRO",
             "note": testo("note"),
         })
     return righe
+
+
+def cat_pulita(valore):
+    """Categoria senza l'eventuale pallino emoji iniziale (per calcoli/JSON)."""
+    testo = (str(valore) if valore is not None else "").strip()
+    for emoji in EMOJI_CATEGORIA.values():
+        if testo.startswith(emoji):
+            return testo[len(emoji):].strip()
+    return testo
+
+
+def cat_display(valore):
+    """Categoria col pallino emoji davanti (per la tabella modificabile)."""
+    base = cat_pulita(valore)
+    emoji = EMOJI_CATEGORIA.get(base)
+    return f"{emoji} {base}" if emoji else base
 
 
 def config_colonne_spese():
@@ -281,7 +312,7 @@ def config_colonne_spese():
             "Nr. fattura", help="Numero/riferimento della fattura"),
         "oggetto": st.column_config.TextColumn("Oggetto", width="large"),
         "categoria": st.column_config.SelectboxColumn(
-            "Categoria", options=fattibilita.CATEGORIE_SPESE),
+            "Categoria", options=CATEGORIE_SPESE_EMOJI),
         "note": st.column_config.TextColumn("Note"),
     }
 
@@ -2245,7 +2276,7 @@ with tab_bp:
                         "aliquota_iva": st.column_config.NumberColumn(
                             "IVA %", min_value=0.0, max_value=22.0, step=1.0),
                         "categoria": st.column_config.SelectboxColumn(
-                            "Categoria", options=fattibilita.CATEGORIE_SPESE),
+                            "Categoria", options=CATEGORIE_SPESE_EMOJI),
                         "note": st.column_config.TextColumn("Note"),
                     })
                 st.session_state.df_spese_prev = df_prev_ed
