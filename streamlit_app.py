@@ -70,15 +70,17 @@ COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
 COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
 COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
 
-# Colori delle categorie di spesa per la torta (vicini al foglio Excel).
+# Colori categorie di spesa (torta + sfondo celle del riepilogo: identici, così
+# combaciano). Vivaci e CHIARI per risaltare sul fondo navy e reggere un testo
+# scuro sopra; niente blu/azzurri, che si confondevano con lo sfondo.
 COLORE_CATEGORIA_SPESA = {
-    "ACQUISTO": "#4E79A7",         # blu
-    "LAVORI": "#E8C33D",           # oro/giallo
-    "MATERIALE": "#5B9BD5",        # azzurro
-    "ARCHITETTO": "#F0A840",       # arancio
-    "COSTI INDIRETTI": "#B0BEC5",  # grigio
-    "AGENZIA": "#9575CD",          # viola
-    "ALTRO": "#E15759",            # rosso
+    "ACQUISTO": "#E679A6",         # rosa magenta
+    "LAVORI": "#F4B942",           # oro
+    "MATERIALE": "#6FCF97",        # verde menta
+    "ARCHITETTO": "#EB8A5B",       # arancio
+    "COSTI INDIRETTI": "#C0CAD4",  # grigio chiaro
+    "AGENZIA": "#BB9AF7",          # lavanda
+    "ALTRO": "#F07178",            # corallo
 }
 IMPOSTAZIONI_BP = {
     "bp_acquisto": 0.0, "bp_vendita": 0.0, "bp_mq": 0.0,
@@ -583,11 +585,11 @@ def tabella_riepilogo_spese_html(riepilogo, totale, iva_totale):
     righe = []
     for cat, v in riepilogo.items():
         colore = COLORE_CATEGORIA_SPESA.get(cat, ORO)
+        # sfondo pieno del colore (uguale alla fetta di torta) + testo scuro
         righe.append(
             '<tr>'
-            f'<td style="padding:5px 8px;border-left:4px solid {colore};'
-            f'background:{colore}26;color:#ECE7DA;font-weight:600;'
-            f'white-space:nowrap;">{cat}</td>'
+            f'<td style="padding:5px 8px;background:{colore};color:#1A2744;'
+            f'font-weight:700;white-space:nowrap;">{cat}</td>'
             '<td style="padding:5px 8px;text-align:right;color:#ECE7DA;'
             f'white-space:nowrap;">{euro(v["importo"])}</td>'
             '<td style="padding:5px 8px;text-align:right;color:#A9B4C9;'
