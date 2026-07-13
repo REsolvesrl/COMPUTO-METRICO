@@ -39,6 +39,11 @@ COLONNE_NUMERI = ["parti", "lunghezza", "larghezza", "altezza",
                   "quantita_manuale", "prezzo"]
 COLONNE = COLONNE_TESTO + COLONNE_NUMERI
 
+# Colonne del "libretto delle misure": ogni voce del listino può essere
+# scomposta in più righe (una per stanza/parete) che si sommano nella quantità.
+COLONNE_MISURE = ["descrizione", "parti", "lunghezza", "larghezza", "altezza"]
+COLONNE_MISURE_NUM = ["parti", "lunghezza", "larghezza", "altezza"]
+
 UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo",
               "punto", "utenza"]
 
@@ -144,6 +149,42 @@ def voci_da_df(df):
         if any(v is not None for v in voce.values()):
             voci.append(voce)
     return voci
+
+
+def df_misure_vuoto():
+    """Tabella vuota per il libretto delle misure di una voce."""
+    colonne = {"descrizione": pd.Series(dtype="object")}
+    for col in COLONNE_MISURE_NUM:
+        colonne[col] = pd.Series(dtype="float64")
+    return pd.DataFrame(colonne)
+
+
+def df_misure(righe):
+    """Costruisce la tabella del libretto misure da un elenco di dizionari."""
+    if not righe:
+        return df_misure_vuoto()
+    df = pd.DataFrame(righe).reindex(columns=COLONNE_MISURE)
+    for col in COLONNE_MISURE_NUM:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def misure_da_df(df):
+    """La tabella del libretto misure come elenco di dizionari (righe piene)."""
+    righe = []
+    for _, riga in df.iterrows():
+        misura = {}
+        for col in COLONNE_MISURE:
+            valore = riga.get(col)
+            if valore is None or pd.isna(valore) or valore == "":
+                misura[col] = None
+            elif col in COLONNE_MISURE_NUM:
+                misura[col] = float(valore)
+            else:
+                misura[col] = str(valore)
+        if any(v is not None for v in misura.values()):
+            righe.append(misura)
+    return righe
 
 
 def df_spese_vuoto():
@@ -324,20 +365,69 @@ def css_schede_computo():
 
 
 def riga_voce_listino(voce):
-    """Una riga della checklist: descrizione, quantità, prezzo, parziale."""
+    """Una riga della checklist: descrizione, quantità, prezzo, parziale.
+
+    La quantità si inserisce a mano oppure, spuntando "📐 Libretto misure",
+    scomponendola in più righe (parti × lung × larg × alt) che si sommano —
+    con le detrazioni scritte come parti negative. Quando il libretto è
+    attivo la quantità è la somma delle misure (non digitabile a mano) e
+    viene comunque scritta in lq_<codice>, così riepilogo, export e
+    salvataggio la leggono senza modifiche.
+    """
+    codice = voce["codice"]
     c_voce, c_qta, c_prezzo, c_parz = st.columns(
         [3.4, 1, 1, 1], vertical_alignment="center")
     aiuto = voce.get("nota")
     if voce.get("analisi"):
         aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
-    c_voce.markdown(f"**{voce['codice']}** {voce['descrizione']} · "
+    c_voce.markdown(f"**{codice}** {voce['descrizione']} · "
                     f":gray[{voce['um']}]", help=aiuto)
-    quantita = c_qta.number_input(
-        "Quantità", min_value=0.0, step=1.0, format="%.2f",
-        key=f"lq_{voce['codice']}", label_visibility="collapsed")
+    usa_misure = c_voce.checkbox(
+        "📐 Libretto misure", key=f"usamis_{codice}",
+        help="Scomponi la quantità in più misure (parti × lung × larg × alt) "
+             "che si sommano. Le detrazioni si scrivono con parti negative.")
+
     prezzo = c_prezzo.number_input(
         "Prezzo €", min_value=0.0, step=1.0, format="%.2f",
-        key=f"lp_{voce['codice']}", label_visibility="collapsed")
+        key=f"lp_{codice}", label_visibility="collapsed")
+
+    if usa_misure:
+        # Tabella "di partenza" costante tra i run (finché non si carica/azzera
+        # un progetto): il data_editor ci scrive sopra gli edit dell'utente e
+        # noi leggiamo il ritorno. Ripassare il ritorno come dato di partenza
+        # rischierebbe il doppio conteggio delle righe aggiunte.
+        base = st.session_state.misure_base.get(codice)
+        if base is None:
+            base = df_misure(st.session_state.misure_correnti.get(codice, []))
+            st.session_state.misure_base[codice] = base
+        editato = st.data_editor(
+            base, num_rows="dynamic", hide_index=True,
+            key=f"med_{codice}_{st.session_state.versione_misure}",
+            column_config={
+                "descrizione": st.column_config.TextColumn(
+                    "Descrizione", width="large",
+                    help="Es. Soggiorno, Camera 1, vano porta…"),
+                "parti": st.column_config.NumberColumn(
+                    "Parti", help="Numero di parti uguali. "
+                                  "Negativo = detrazione (es. -1)."),
+                "lunghezza": st.column_config.NumberColumn("Lungh. (m)"),
+                "larghezza": st.column_config.NumberColumn("Largh. (m)"),
+                "altezza": st.column_config.NumberColumn("Alt. (m)"),
+            })
+        righe = misure_da_df(editato)
+        st.session_state.misure_correnti[codice] = righe
+        quantita = calcoli.quantita_da_misure(righe)
+        # NON creo il number_input lq_ in questo ramo: scrivo la key come
+        # semplice valore di sessione (letto da riepilogo, export e JSON).
+        st.session_state[f"lq_{codice}"] = quantita
+        c_qta.markdown(f"**{numero_it(quantita, 2)}** :gray[{voce['um']}]")
+    else:
+        st.session_state.misure_base.pop(codice, None)
+        st.session_state.misure_correnti.pop(codice, None)
+        quantita = c_qta.number_input(
+            "Quantità", min_value=0.0, step=1.0, format="%.2f",
+            key=f"lq_{codice}", label_visibility="collapsed")
+
     if quantita > 0:
         c_parz.markdown(f"**{euro(quantita * prezzo)}**")
     else:
@@ -767,6 +857,12 @@ def progetto_json_bytes():
             or float(st.session_state.get(f"lp_{v['codice']}")
                      or v["prezzo"]) != v["prezzo"]
         },
+        "misure_listino": {
+            v["codice"]: st.session_state.misure_correnti[v["codice"]]
+            for v in listino.VOCI
+            if st.session_state.get(f"usamis_{v['codice']}")
+            and st.session_state.misure_correnti.get(v["codice"])
+        },
         "business_plan": {chiave: st.session_state.get(chiave, valore)
                           for chiave, valore in IMPOSTAZIONI_BP.items()},
         "spese": spese_da_df(st.session_state.df_spese),
@@ -797,6 +893,11 @@ st.session_state.setdefault("imprevisti", 5.0)
 for _voce in listino.VOCI:
     st.session_state.setdefault(f"lq_{_voce['codice']}", 0.0)
     st.session_state.setdefault(f"lp_{_voce['codice']}", float(_voce["prezzo"]))
+    st.session_state.setdefault(f"usamis_{_voce['codice']}", False)
+# libretto delle misure: tabella di partenza per voce e ultimo risultato letto
+st.session_state.setdefault("versione_misure", 0)
+st.session_state.setdefault("misure_base", {})       # {codice: DataFrame}
+st.session_state.setdefault("misure_correnti", {})   # {codice: [righe]}
 # business plan
 st.session_state.setdefault("df_spese", df_spese_vuoto())
 st.session_state.setdefault("df_mca", df_mca_vuoto())
@@ -837,12 +938,23 @@ if "da_caricare" in st.session_state:
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
     st.session_state.imprevisti = float(progetto.get("imprevisti", 5.0))
     stato_listino = dati.get("listino_stato") or {}
+    misure_salvate = dati.get("misure_listino") or {}
+    st.session_state.misure_base = {}
+    st.session_state.misure_correnti = {}
     for _voce in listino.VOCI:
-        elemento = stato_listino.get(_voce["codice"]) or {}
-        st.session_state[f"lq_{_voce['codice']}"] = float(
-            elemento.get("q", 0.0))
-        st.session_state[f"lp_{_voce['codice']}"] = float(
+        _cod = _voce["codice"]
+        elemento = stato_listino.get(_cod) or {}
+        st.session_state[f"lq_{_cod}"] = float(elemento.get("q", 0.0))
+        st.session_state[f"lp_{_cod}"] = float(
             elemento.get("p", _voce["prezzo"]))
+        righe_mis = misure_salvate.get(_cod) or []
+        st.session_state[f"usamis_{_cod}"] = bool(righe_mis)
+        if righe_mis:
+            st.session_state.misure_correnti[_cod] = righe_mis
+            st.session_state.misure_base[_cod] = df_misure(righe_mis)
+    # la key dei data_editor include versione_misure: cambiandola si azzera
+    # lo stato interno dei vecchi editor e si riparte dalle tabelle caricate
+    st.session_state.versione_misure += 1
     try:
         st.session_state.prg_data = date.fromisoformat(progetto.get("data", ""))
     except (TypeError, ValueError):
