@@ -23,6 +23,7 @@ from PIL import Image
 
 import calcoli
 import fattibilita
+import fattura
 import listino
 import planimetria
 import rilevamento
@@ -263,6 +264,43 @@ def spese_da_df(df):
             "note": testo("note"),
         })
     return righe
+
+
+def config_colonne_spese():
+    """Configurazione colonne condivisa tra editor spese e anteprima fatture."""
+    return {
+        "importo": st.column_config.NumberColumn(
+            "Importo (€)", format="%.2f"),
+        "aliquota_iva": st.column_config.NumberColumn(
+            "IVA %", min_value=0.0, max_value=22.0, step=1.0,
+            help="Aliquota della fattura, per lo scorporo (22, 10 o 0)"),
+        "data": st.column_config.TextColumn("Data", help="Es. 22/10/2025"),
+        "nr_fattura": st.column_config.TextColumn(
+            "Nr. fattura", help="Numero/riferimento della fattura"),
+        "oggetto": st.column_config.TextColumn("Oggetto", width="large"),
+        "categoria": st.column_config.SelectboxColumn(
+            "Categoria", options=fattibilita.CATEGORIE_SPESE),
+        "note": st.column_config.TextColumn("Note"),
+    }
+
+
+def dati_fattura_da_file(file):
+    """Estrae i dati di una spesa da un file fattura (PDF o XML). None se KO."""
+    nome = (file.name or "").lower()
+    contenuto = file.getvalue()
+    if nome.endswith((".xml", ".p7m")):
+        dati = fattura.dati_da_xml(contenuto)
+        if dati:
+            return dati
+    if nome.endswith(".pdf") or contenuto[:4] == b"%PDF":
+        try:
+            with fitz.open(stream=contenuto, filetype="pdf") as doc:
+                testo = "\n".join(doc[i].get_text()
+                                  for i in range(doc.page_count))
+        except Exception:
+            return None
+        return fattura.dati_da_pdf_testo(testo)
+    return None
 
 
 def df_mca_vuoto():
@@ -976,6 +1014,7 @@ st.session_state.setdefault("df_spese_prev",
                             df_spese_vuoto(COLONNE_SPESE_PREV))
 st.session_state.setdefault("df_mca", df_mca_vuoto())
 st.session_state.setdefault("versione_bp", 0)
+st.session_state.setdefault("fatt_count", 0)  # svuota l'uploader fatture
 for _chiave, _valore in IMPOSTAZIONI_BP.items():
     st.session_state.setdefault(_chiave, _valore)
 # campi € derivati dalle percentuali (modificabili in due direzioni)
@@ -2068,6 +2107,50 @@ with tab_bp:
                    "somma sostenute + da sostenere è il **costo totale** che "
                    "confluirà nel business plan.")
 
+        # ---- caricamento fatture con auto-compilazione ----
+        with st.expander("📎 Carica fatture (PDF o XML) e auto-compila"):
+            st.caption("Trascina una o più fatture: leggo importo, IVA, data, "
+                       "numero e fornitore. Controlla i dati, scegli la "
+                       "**categoria** e aggiungile alle spese sostenute. "
+                       "I file restano sul server, nessun dato esce. Funziona "
+                       "meglio con i PDF «di cortesia» della fattura "
+                       "elettronica e con gli XML; su PDF con layout insoliti "
+                       "alcuni campi potrebbero restare da completare a mano.")
+            file_fatture = st.file_uploader(
+                "Fatture", type=["pdf", "xml"], accept_multiple_files=True,
+                key=f"upl_fatture_{st.session_state.fatt_count}",
+                label_visibility="collapsed")
+            if file_fatture:
+                righe_estratte, non_letti = [], []
+                for f in file_fatture:
+                    dati = dati_fattura_da_file(f)
+                    if dati and (dati.get("importo") is not None
+                                 or dati.get("nr_fattura")):
+                        righe_estratte.append(
+                            {col: dati.get(col) for col in COLONNE_SPESE})
+                    else:
+                        non_letti.append(f.name)
+                if non_letti:
+                    st.warning("Non sono riuscito a leggere: "
+                               + ", ".join(non_letti)
+                               + ". Aggiungile a mano nella tabella sotto.")
+                if righe_estratte:
+                    st.markdown(f"**{len(righe_estratte)} fattura/e lette.** "
+                                "Correggi se serve e scegli la categoria:")
+                    df_ant = df_spese_da_righe(righe_estratte, COLONNE_SPESE)
+                    df_ant_ed = st.data_editor(
+                        df_ant, hide_index=True, num_rows="fixed",
+                        key=f"anteprima_fatt_{st.session_state.fatt_count}",
+                        column_config=config_colonne_spese())
+                    if st.button("➕ Aggiungi alle spese sostenute",
+                                 type="primary", key="aggiungi_fatture"):
+                        st.session_state.df_spese = pd.concat(
+                            [st.session_state.df_spese, df_ant_ed],
+                            ignore_index=True)
+                        st.session_state.fatt_count += 1
+                        st.session_state.versione_bp += 1
+                        st.rerun()
+
         col_tab, col_centro, col_torta = st.columns(
             [2.2, 1.6, 1.3], gap="medium")
 
@@ -2077,23 +2160,7 @@ with tab_bp:
                 st.session_state.df_spese,
                 num_rows="dynamic", hide_index=True,
                 key=f"editor_spese_{st.session_state.versione_bp}",
-                column_config={
-                    "importo": st.column_config.NumberColumn(
-                        "Importo (€)", format="%.2f"),
-                    "aliquota_iva": st.column_config.NumberColumn(
-                        "IVA %", min_value=0.0, max_value=22.0, step=1.0,
-                        help="Aliquota della fattura, per lo scorporo "
-                             "(22, 10 o 0)"),
-                    "data": st.column_config.TextColumn(
-                        "Data", help="Es. 22/10/2025"),
-                    "nr_fattura": st.column_config.TextColumn(
-                        "Nr. fattura", help="Numero/riferimento della fattura"),
-                    "oggetto": st.column_config.TextColumn(
-                        "Oggetto", width="large"),
-                    "categoria": st.column_config.SelectboxColumn(
-                        "Categoria", options=fattibilita.CATEGORIE_SPESE),
-                    "note": st.column_config.TextColumn("Note"),
-                })
+                column_config=config_colonne_spese())
             st.session_state.df_spese = df_spese_ed
 
         righe_spese = spese_da_df(df_spese_ed)
