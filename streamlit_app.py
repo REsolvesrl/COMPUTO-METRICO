@@ -250,10 +250,14 @@ def df_spese_da_righe(righe, colonne):
             dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
                                       errors="coerce")
         elif col == "categoria":
-            # nella tabella modificabile la categoria porta il pallino emoji
-            dati[col] = pd.Series(
-                ["" if v is None or (isinstance(v, float) and pd.isna(v))
-                 else cat_display(v) for v in valori], dtype="object")
+            # nella tabella modificabile la categoria porta il pallino emoji;
+            # vuota = None (NON stringa vuota: "" non è tra le opzioni del menu
+            # a tendina e fa crashare il data_editor nel browser)
+            def _cat(v):
+                if v is None or (isinstance(v, float) and pd.isna(v)):
+                    return None
+                return cat_display(v) or None
+            dati[col] = pd.Series([_cat(v) for v in valori], dtype="object")
         else:
             dati[col] = pd.Series(
                 ["" if v is None or (isinstance(v, float) and pd.isna(v))

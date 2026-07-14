@@ -136,3 +136,21 @@ def test_dati_da_pdf_nota_credito():
 def test_dati_da_pdf_non_riconosciuto():
     assert dati_da_pdf_testo("testo qualunque senza campi") is None
     assert dati_da_pdf_testo("") is None
+
+
+def test_dati_da_pdf_bonifico_non_e_fattura():
+    # un bonifico ha "del" ma NESSUN importo totale riconoscibile: niente dati
+    # (prima si estraeva spazzatura tipo nr_fattura="eficiario")
+    testo = ("Disposizione di bonifico\n"
+             "Beneficiario del pagamento: Deal srls\n"
+             "IBAN IT60X...\nImporto 18.040,00 EUR\n")
+    assert dati_da_pdf_testo(testo) is None
+
+
+def test_dati_da_pdf_numero_deve_iniziare_con_cifra():
+    # "beneficiario del" non deve diventare un numero fattura
+    testo = ("FATTURA\nProforma numero del cliente\n"
+             "Totale documento\n100,00 €\n")
+    d = dati_da_pdf_testo(testo)
+    assert d is not None            # c'è il totale
+    assert d["nr_fattura"] == ""    # ma nessun numero-spazzatura

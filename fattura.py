@@ -175,14 +175,20 @@ def _cerca(testo, pattern, flags=re.IGNORECASE):
 def dati_da_pdf_testo(testo):
     """Estrae i dati dal testo di un PDF di cortesia (best-effort).
 
-    Restituisce None solo se non riconosce proprio nulla (né numero, né
-    totale): in quel caso la UI lascia la riga da compilare a mano.
+    Conservativo: estrae SOLO se il PDF ha l'impronta di una fattura
+    (un importo totale riconoscibile «Totale documento/imponibile/Netto a
+    pagare»). Un bonifico, una bolletta o un attestato senza quei marcatori
+    danno None e restano da compilare a mano, così non si inseriscono righe
+    con dati casuali.
     """
     if not testo:
         return None
-    # numero e data: "nr. 412616027839 del 08/07/2026"
-    numero = _cerca(testo, r"n[r°\.]{0,2}\.?\s*([0-9A-Za-z/_.\-]+)\s+del\s")
-    data = _cerca(testo, r"del\s+(\d{1,2}/\d{1,2}/\d{4})")
+    # numero e data: "nr. 412616027839 del 08/07/2026". Il numero deve
+    # iniziare con una cifra ed essere introdotto da n/nr (word boundary): così
+    # non si cattura la coda di parole come "beneficiario del ...".
+    numero = _cerca(
+        testo, r"\bn[r°.]{0,2}\.?\s*([0-9][0-9A-Za-z/_.\-]*)\s+del\s")
+    data = _cerca(testo, r"\bdel\s+(\d{1,2}/\d{1,2}/\d{4})")
 
     # totale documento (lordo) — vari sinonimi del foglio di stile SdI
     lordo_txt = (_cerca(testo, r"Totale\s+documento\s*\n?\s*" + _IMPORTO)
@@ -215,7 +221,8 @@ def dati_da_pdf_testo(testo):
     descrizione = (_cerca(testo, r"Descrizione\s+causale\s+(.+)")
                    or "")
 
-    if numero is None and lordo is None:
+    # serve un importo totale riconoscibile: senza, non è una fattura leggibile
+    if lordo is None:
         return None
 
     return {
