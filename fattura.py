@@ -96,7 +96,18 @@ TIPI_NOTA_CREDITO = {"TD04", "TD08"}
 
 
 def dati_da_xml(contenuto):
-    """Estrae i dati dalla fattura elettronica XML (bytes o str). None se KO."""
+    """Estrae i dati dalla fattura elettronica XML (bytes o str). None se KO.
+
+    Robusta: qualunque problema di parsing (XML firmato .p7m, codifica
+    inattesa, struttura non prevista) restituisce None invece di sollevare.
+    """
+    try:
+        return _dati_da_xml(contenuto)
+    except Exception:
+        return None
+
+
+def _dati_da_xml(contenuto):
     try:
         root = ET.fromstring(contenuto)
     except ET.ParseError:

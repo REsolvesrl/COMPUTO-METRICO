@@ -327,21 +327,26 @@ def config_colonne_spese():
 
 
 def dati_fattura_da_file(file):
-    """Estrae i dati di una spesa da un file fattura (PDF o XML). None se KO."""
-    nome = (file.name or "").lower()
-    contenuto = file.getvalue()
-    if nome.endswith((".xml", ".p7m")):
-        dati = fattura.dati_da_xml(contenuto)
-        if dati:
-            return dati
-    if nome.endswith(".pdf") or contenuto[:4] == b"%PDF":
-        try:
+    """Estrae i dati di una spesa da un file fattura (PDF o XML).
+
+    Non solleva MAI: qualunque file illeggibile (XML firmato .p7m, codifica
+    inattesa, PDF protetto, ecc.) restituisce None e finisce tra i «non
+    letti», senza far cadere l'app.
+    """
+    try:
+        nome = (file.name or "").lower()
+        contenuto = file.getvalue()
+        if nome.endswith((".xml", ".p7m")):
+            dati = fattura.dati_da_xml(contenuto)
+            if dati:
+                return dati
+        if nome.endswith(".pdf") or contenuto[:4] == b"%PDF":
             with fitz.open(stream=contenuto, filetype="pdf") as doc:
                 testo = "\n".join(doc[i].get_text()
                                   for i in range(doc.page_count))
-        except Exception:
-            return None
-        return fattura.dati_da_pdf_testo(testo)
+            return fattura.dati_da_pdf_testo(testo)
+    except Exception:
+        return None
     return None
 
 
