@@ -1058,8 +1058,10 @@ def progetto_json_bytes():
         },
         "business_plan": {chiave: st.session_state.get(chiave, valore)
                           for chiave, valore in IMPOSTAZIONI_BP.items()},
-        "spese": spese_da_df(st.session_state.df_spese),
-        "spese_prev": spese_da_df(st.session_state.df_spese_prev),
+        "spese": spese_da_df(st.session_state.get(
+            "df_spese_live", st.session_state.df_spese)),
+        "spese_prev": spese_da_df(st.session_state.get(
+            "df_spese_prev_live", st.session_state.df_spese_prev)),
         "mca_comparabili": mca_da_df(st.session_state.df_mca),
         "categorie": st.session_state.categorie,
         "etichette": {"font": st.session_state.et_font,
@@ -1205,6 +1207,10 @@ if "da_caricare" in st.session_state:
     df_prev = df_spese_da_righe(spese_prev_caricate, COLONNE_SPESE_PREV)
     st.session_state.df_spese_prev = (
         df_prev if len(df_prev) else df_spese_vuoto(COLONNE_SPESE_PREV))
+    # i "live" verranno rigenerati dal ritorno degli editor (con versione_bp
+    # incrementato, gli editor ripartono dai dati appena caricati)
+    st.session_state.pop("df_spese_live", None)
+    st.session_state.pop("df_spese_prev_live", None)
     df_mc = pd.DataFrame(dati.get("mca_comparabili") or []).reindex(
         columns=COLONNE_MCA)
     for col in ("prezzo", "mq", "coeff"):
@@ -2228,9 +2234,13 @@ with tab_bp:
                         column_config=config_colonne_spese())
                     if st.button("➕ Aggiungi alle spese sostenute",
                                  type="primary", key="aggiungi_fatture"):
+                        # parto dalle spese correnti (col ritorno live, che
+                        # include gli edit manuali) e ci aggiungo le fatture
+                        corrente = st.session_state.get(
+                            "df_spese_live", st.session_state.df_spese)
                         st.session_state.df_spese = pd.concat(
-                            [st.session_state.df_spese, df_ant_ed],
-                            ignore_index=True)
+                            [corrente, df_ant_ed], ignore_index=True)
+                        st.session_state.pop("df_spese_live", None)
                         st.session_state.fatt_count += 1
                         st.session_state.versione_bp += 1
                         st.rerun()
@@ -2243,7 +2253,11 @@ with tab_bp:
             num_rows="dynamic", hide_index=True, use_container_width=True,
             key=f"editor_spese_{st.session_state.versione_bp}",
             column_config=config_colonne_spese())
-        st.session_state.df_spese = df_spese_ed
+        # il ritorno NON viene rimesso in df_spese: ripassare al data_editor un
+        # DataFrame che cambia a ogni run gli faceva "perdere" la prima
+        # selezione di categoria (da rifare due volte). df_spese resta l'input
+        # stabile; il ritorno vive a parte per calcoli e salvataggio.
+        st.session_state.df_spese_live = df_spese_ed
         righe_spese = spese_da_df(df_spese_ed)
         tot_sostenute = fattibilita.totale_spese(righe_spese)
         st.metric("Totale spese sostenute", euro(tot_sostenute))
@@ -2294,7 +2308,7 @@ with tab_bp:
                             "Categoria", options=CATEGORIE_SPESE_EMOJI),
                         "note": st.column_config.TextColumn("Note"),
                     })
-                st.session_state.df_spese_prev = df_prev_ed
+                st.session_state.df_spese_prev_live = df_prev_ed
                 righe_prev = spese_da_df(df_prev_ed)
                 tot_prev = fattibilita.totale_spese(righe_prev)
                 st.metric("Totale da sostenere", euro(tot_prev))
