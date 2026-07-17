@@ -21,6 +21,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from PIL import Image
 
+import archivio
 import calcoli
 import fattibilita
 import fattura
@@ -1286,6 +1287,66 @@ with tab_computo:
             if st.button("🗑️ Nuovo progetto (svuota tutto)"):
                 st.session_state.da_caricare = {}
                 st.rerun()
+
+        # -------------------------------------------- archivio online
+        st.divider()
+        st.markdown("**☁️ Progetti online**")
+        if not archivio.configurato():
+            st.info("Per salvare e riaprire i progetti online devi collegare "
+                    "Supabase (te lo spiego passo-passo). Finché non è "
+                    "collegato, usa il salvataggio in file qui sopra.")
+        else:
+            try:
+                progetti_online = archivio.elenco_progetti()
+            except Exception as errore:
+                progetti_online = []
+                st.error(f"Non riesco a leggere l'archivio online: {errore}")
+
+            o_sel, o_apri, o_del = st.columns([3, 1, 1],
+                                              vertical_alignment="bottom")
+            if progetti_online:
+                scelto = o_sel.selectbox("Apri un progetto salvato online",
+                                         progetti_online, key="prog_online_sel")
+                if o_apri.button("📂 Apri", key="apri_online",
+                                 use_container_width=True):
+                    try:
+                        st.session_state.da_caricare = \
+                            archivio.carica_progetto(scelto)
+                        st.rerun()
+                    except Exception as errore:
+                        st.error(f"Errore nell'apertura: {errore}")
+                conferma_del = o_del.checkbox("elimina", key="conf_del_online",
+                                              help="Spunta e premi Elimina per "
+                                                   "rimuovere definitivamente "
+                                                   "il progetto selezionato")
+                if conferma_del and o_del.button("🗑️", key="del_online",
+                                                 use_container_width=True):
+                    try:
+                        archivio.elimina_progetto(scelto)
+                        st.session_state.conf_del_online = False
+                        st.rerun()
+                    except Exception as errore:
+                        st.error(f"Errore nell'eliminazione: {errore}")
+            else:
+                o_sel.caption("Nessun progetto online ancora salvato.")
+
+            s_nome, s_btn = st.columns([3, 1], vertical_alignment="bottom")
+            nome_online = s_nome.text_input(
+                "Nome con cui salvare online",
+                value=st.session_state.prg_nome or "",
+                key="nome_salva_online",
+                placeholder="Es. Ristrutturazione Via Roma 1")
+            if s_btn.button("☁️ Salva online", key="salva_online",
+                            use_container_width=True):
+                if not (nome_online or "").strip():
+                    st.warning("Dai un nome al progetto prima di salvarlo.")
+                else:
+                    try:
+                        archivio.salva_progetto(nome_online,
+                                                progetto_json_bytes())
+                        st.success(f"Progetto «{nome_online}» salvato online.")
+                    except Exception as errore:
+                        st.error(f"Errore nel salvataggio: {errore}")
 
     # ------------------------------------------------------ listino guida
     # -------------------------------------- categorie (sx) e riepilogo (dx)
