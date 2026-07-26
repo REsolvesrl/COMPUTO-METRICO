@@ -3,7 +3,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from planimetria import area_poligono_pixel
-from rilevamento import rileva_stanze
+from rilevamento import pulisci_planimetria, rileva_stanze
 
 
 def maschera_poligono(poligono, dimensioni=(800, 600)):
@@ -124,3 +124,54 @@ def test_rispetta_le_zone_esistenti():
     # l'unica proposta è la stanza destra (baricentro a destra del tramezzo)
     xs = [x for x, _ in poligoni[0]]
     assert min(xs) >= 395 - 30
+
+
+# --------------------------------------------- pulizia visibile della pianta
+
+def scritte_su(img, testo="CAMERA MATRIMONIALE"):
+    """Aggiunge scritte dentro le due stanze e torna l'immagine."""
+    dis = ImageDraw.Draw(img)
+    for y in (150, 300, 450):
+        dis.text((120, y), testo, fill="black")
+        dis.text((470, y), "h=2,70", fill="black")
+    return img
+
+
+def inchiostro_totale(img):
+    """Quanti pixel scuri ci sono (misura grossolana di «quanto disegno c'è»)."""
+    return int((np.asarray(img.convert("L")) < 128).sum())
+
+
+def test_pulizia_toglie_le_scritte_e_lascia_i_muri():
+    pulita_attesa = pianta_sintetica()
+    sporca = scritte_su(pianta_sintetica())
+    assert inchiostro_totale(sporca) > inchiostro_totale(pulita_attesa)
+
+    ripulita, rimossi = pulisci_planimetria(sporca, MPP)
+    assert rimossi > 0
+    # torna vicina alla pianta senza scritte: i muri restano, il testo no
+    assert inchiostro_totale(ripulita) == pytest.approx(
+        inchiostro_totale(pulita_attesa), rel=0.10)
+    assert ripulita.size == sporca.size      # scala e zone restano valide
+
+
+def test_pulizia_non_cambia_il_rilevamento_di_una_pianta_gia_pulita():
+    ripulita, _ = pulisci_planimetria(pianta_sintetica(), MPP)
+    poligoni = rileva_stanze(ripulita, MPP)
+    assert len(poligoni) >= 2
+    aree = sorted((area_poligono_pixel(p) for p in poligoni), reverse=True)
+    assert aree[0] == pytest.approx(335 * 480, rel=0.15)
+
+
+def test_pulizia_senza_niente_da_togliere_restituisce_l_originale():
+    vuota = Image.new("RGB", (400, 300), "white")
+    identica, rimossi = pulisci_planimetria(vuota, MPP)
+    assert rimossi == 0
+    assert identica is vuota
+
+
+def test_la_forza_regola_quanto_si_toglie():
+    sporca = scritte_su(pianta_sintetica())
+    _, pochi = pulisci_planimetria(sporca, MPP, forza=0.5)
+    _, molti = pulisci_planimetria(sporca, MPP, forza=2.0)
+    assert molti > pochi

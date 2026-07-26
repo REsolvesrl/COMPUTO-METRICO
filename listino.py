@@ -250,3 +250,11 @@ VOCI = [
 def voci_della_categoria(categoria):
     """Le voci del listino di una categoria, nell'ordine del listino."""
     return [v for v in VOCI if v["categoria"] == categoria]
+
+
+def voce_per_codice(codice):
+    """La voce con quel codice, o None se non esiste."""
+    for voce in VOCI:
+        if voce["codice"] == codice:
+            return voce
+    return None

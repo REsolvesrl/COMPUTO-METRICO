@@ -25,6 +25,7 @@ Funzioni pure e testabili: immagine PIL in ingresso, poligoni in uscita
 
 import cv2
 import numpy as np
+from PIL import Image
 
 
 def _binarizza(immagine):
@@ -39,23 +40,82 @@ def _binarizza(immagine):
         cv2.THRESH_BINARY_INV, blocco, 12)
 
 
-def _rimuovi_scritte(inchiostro, soglia_dim, soglia_area):
-    """Cancella testi, quote e simboli dall'inchiostro.
+def _soglie_scritte(larg, mpp, forza=1.0):
+    """Soglie (ingombro, area del riquadro) sotto cui è "scritta" e non muro.
 
-    Via ogni componente connessa con ingombro massimo sotto soglia_dim
+    Con la scala nota si ragiona in metri: una lettera sta sotto ~0,9 m.
+    Senza scala si va a frazioni della larghezza del disegno.
+
+    `forza` scala entrambe le soglie: sotto 1 si toglie solo il minuto, sopra
+    si aggredisce anche le parole grandi. Oltre ~2,5 comincia a mangiarsi i
+    muri corti, ed è il motivo per cui l'interfaccia ferma lì il cursore.
+    """
+    if mpp:
+        soglia_dim = int(round(0.9 / mpp))
+        soglia_area = 0.8 / (mpp * mpp)
+    else:
+        soglia_dim = larg // 35
+        soglia_area = 2.0 * soglia_dim * soglia_dim
+    soglia_dim = max(6, min(int(soglia_dim * forza), larg // 8))
+    return soglia_dim, soglia_area * forza * forza
+
+
+def _maschera_scritte(inchiostro, soglia_dim, soglia_area):
+    """Maschera 0/255 di testi, quote e simboli dentro l'inchiostro.
+
+    Prende ogni componente connessa con ingombro massimo sotto soglia_dim
     (lettere, simboli) O con riquadro sotto soglia_area (parole intere,
-    strette e lunghe). I muri sopravvivono perché formano strutture grandi
-    e collegate fra loro.
+    strette e lunghe). I muri non ci finiscono perché formano strutture
+    grandi e collegate fra loro.
     """
     n_comp, etichette, stats, _ = cv2.connectedComponentsWithStats(
         inchiostro, 8)
-    pulito = inchiostro.copy()
+    maschera = np.zeros_like(inchiostro)
     for i in range(1, n_comp):
         x, y, bw, bh, _area = stats[i]
         if max(bw, bh) < soglia_dim or bw * bh < soglia_area:
-            ritaglio = pulito[y:y + bh, x:x + bw]
-            ritaglio[etichette[y:y + bh, x:x + bw] == i] = 0
-    return pulito
+            finestra = etichette[y:y + bh, x:x + bw] == i
+            maschera[y:y + bh, x:x + bw][finestra] = 255
+    return maschera
+
+
+def _rimuovi_scritte(inchiostro, soglia_dim, soglia_area):
+    """L'inchiostro senza le scritte (restano muri e linee lunghe)."""
+    maschera = _maschera_scritte(inchiostro, soglia_dim, soglia_area)
+    return cv2.bitwise_and(inchiostro, cv2.bitwise_not(maschera))
+
+
+def pulisci_planimetria(immagine, mpp=None, forza=1.0):
+    """La planimetria senza le scritte: nomi dei locali, quote, simboli.
+
+    È lo stesso criterio che il rilevamento applica già al suo interno, ma
+    qui il risultato è un'immagine VERA e non una maschera: le aree occupate
+    dalle scritte vengono ridipinte con il disegno che le circonda
+    (inpainting), così dove c'era «CAMERA MATRIMONIALE» resta il bianco del
+    foglio e i muri non vengono toccati.
+
+    Serve a due cose: il rilevamento delle stanze lavora su un disegno in cui
+    nessuna lettera può essere scambiata per un muro, e la planimetria a
+    schermo smette di avere il nome della stanza sotto l'etichetta dell'area.
+
+    Restituisce (immagine_pulita, quanti_pixel_rimossi). Se non c'è niente da
+    togliere torna indietro l'immagine di partenza, senza copiarla.
+    """
+    rgb = np.asarray(immagine.convert("RGB"))
+    larg = rgb.shape[1]
+    inchiostro = _binarizza(immagine)
+    soglia_dim, soglia_area = _soglie_scritte(larg, mpp, forza)
+    maschera = _maschera_scritte(inchiostro, soglia_dim, soglia_area)
+    rimossi = int(cv2.countNonZero(maschera))
+    if not rimossi:
+        return immagine, 0
+    # la maschera si allarga di poco: attorno alle lettere l'antialiasing
+    # lascia un alone grigio che, se resta, il rilevamento riconta come
+    # inchiostro e il chiaroscuro si vede anche a occhio
+    kern = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    maschera = cv2.dilate(maschera, kern)
+    pulita = cv2.inpaint(rgb, maschera, 3, cv2.INPAINT_TELEA)
+    return Image.fromarray(pulita), rimossi
 
 
 def _stanze_con_porta(inchiostro, spazio_libero, porta_px,
@@ -138,16 +198,12 @@ def rileva_stanze(immagine, mpp=None, max_stanze=30, zone_esistenti=None):
     if mpp:
         porte = [int(round(0.8 / mpp)), int(round(1.15 / mpp))]
         area_min = 1.0 / (mpp * mpp)            # niente stanze sotto 1 m²
-        soglia_dim = int(round(0.9 / mpp))      # lettere e simboli
-        soglia_area = 0.8 / (mpp * mpp)         # parole (riquadri minuti)
     else:
         porte = [larg // 40, larg // 24, larg // 14]
         area_min = larg * alt * 0.002
-        soglia_dim = larg // 35
-        soglia_area = 2.0 * soglia_dim * soglia_dim
     porte = sorted({int(max(5, min(p, larg // 8))) for p in porte})
     area_max = larg * alt * 0.55                # via lo "sfondo" gigante
-    soglia_dim = max(6, min(soglia_dim, larg // 8))
+    soglia_dim, soglia_area = _soglie_scritte(larg, mpp)
 
     inchiostro = _rimuovi_scritte(inchiostro, soglia_dim, soglia_area)
     spazio_libero = cv2.bitwise_not(inchiostro)

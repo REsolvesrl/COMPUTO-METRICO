@@ -11,9 +11,13 @@ il visualizzatore interattivo in cme_viewer/.
 """
 
 import base64
+import hashlib
 import io
 import json
-from datetime import date
+import tempfile
+import time
+from datetime import date, datetime
+from pathlib import Path
 
 import fitz  # PyMuPDF, per leggere i PDF
 import pandas as pd
@@ -35,6 +39,21 @@ st.set_page_config(
     page_icon="🏗️",
     layout="wide",
 )
+
+# Ritocchi al tema di Streamlit che il file .streamlit/config.toml non copre.
+st.markdown("""
+<style>
+/* Il testo dei riquadri «info» usciva a 2,7:1 sul fondo navy: sotto qualsiasi
+   soglia, proprio dove l'app spiega cosa fare. */
+[data-testid="stAlertContentInfo"], [data-testid="stAlertContentInfo"] p {
+    color: #D7DEEA;
+}
+/* Le didascalie occupavano tutta la larghezza della pagina: righe da 200
+   caratteri, ben oltre la misura in cui l'occhio ritrova l'inizio della riga
+   dopo. Il limite non allarga nulla, taglia solo le righe troppo lunghe. */
+[data-testid="stCaptionContainer"] { max-width: 82ch; }
+</style>
+""", unsafe_allow_html=True)
 
 COLONNE_TESTO = ["categoria", "codice", "descrizione", "um"]
 COLONNE_NUMERI = ["parti", "lunghezza", "larghezza", "altezza",
@@ -59,6 +78,20 @@ COLORI_CATEGORIE = {
     "Aree esterne": ("#B0BEC5", "gray"),
 }
 ALTRE_VOCI = "Voci aggiuntive"
+
+# Voci del listino ricavabili dalle superfici misurate sulla planimetria:
+# (codice, grandezza da cui prendere la quantità, accesa di default).
+# Accese solo quelle che valgono in ogni ristrutturazione; demolizioni e
+# rasatura dipendono da cosa si trova in cantiere, quindi si spuntano a mano.
+VOCI_DA_SUPERFICI = [
+    ("1.01", "pavimento", False),         # demolizione pavimenti
+    ("1.10", "battiscopa", False),        # rimozione zoccolini
+    ("2.03", "pavimento", False),         # rifacimento massetto
+    ("2.10", "pavimento_sfrido", True),   # posa gres (+5% di sfrido)
+    ("2.14", "battiscopa", True),         # posa battiscopa
+    ("2.17", "tinteggiatura", False),     # rasatura muri e soffitti
+    ("2.18", "tinteggiatura", True),      # tinteggiatura muri e soffitti
+]
 
 # Business plan: colonne delle tabelle e impostazioni predefinite
 # (chiave di sessione → valore iniziale; il tipo del default comanda).
@@ -671,10 +704,14 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
                         base_acquisto=None, base_vendita=None, altezza=330):
     """Matrice di sensitività come mappa di calore stile Excel.
 
-    Colori come la formattazione condizionale del foglio: minimo → rosso,
-    massimo → verde e il BIANCO sulla MEDIANA dei valori (Excel usa il 50°
-    percentile, non la metà aritmetica: è questo che rende uniformi le due
-    matrici). Il prezzo base di acquisto/vendita è evidenziato in
+    Colori come la formattazione condizionale del foglio — minimo → rosso,
+    massimo → verde — ma con il BIANCO sul PAREGGIO, non sulla mediana.
+    L'Excel ancora il bianco al 50° percentile: è un rango relativo, e su
+    una matrice tutta in utile finisce per dipingere di rosso salmone uno
+    scenario da +25.900 € solo perché è il peggiore dei buoni. Su una
+    schermata compra/non-compra il colore dev'essere un verdetto: sotto il
+    pareggio si perde, sopra si guadagna. Il prezzo base di
+    acquisto/vendita è evidenziato in
     **grassetto sull'etichetta nativa** dell'asse (non su una copia
     posizionata a mano): così l'allineamento con le altre etichette è
     garantito dal disegno stesso del grafico — uno spostamento in pixel
@@ -692,11 +729,18 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     minimo, massimo = piatti[0], piatti[-1]
     if minimo == massimo:
         minimo, massimo = minimo - 1, massimo + 1
-    mediana = piatti[len(piatti) // 2]
-    frazione_bianco = (mediana - minimo) / (massimo - minimo)
-    frazione_bianco = min(0.95, max(0.05, frazione_bianco))
-    scala = [[0.0, "#F8696B"], [frazione_bianco, "#FFFFFF"],
-             [1.0, "#63BE7B"]]
+    # il pareggio: un money multiple di 1,00x, o un guadagno di 0 €
+    pareggio = 1.0 if metrica == "multiplo" else 0.0
+    if pareggio <= minimo:
+        # ogni scenario della matrice è in utile: dal pareggio in su
+        scala = [[0.0, "#FFFFFF"], [1.0, "#63BE7B"]]
+    elif pareggio >= massimo:
+        # ogni scenario è in perdita: nessun verde da mostrare
+        scala = [[0.0, "#F8696B"], [1.0, "#FFFFFF"]]
+    else:
+        frazione_bianco = (pareggio - minimo) / (massimo - minimo)
+        scala = [[0.0, "#F8696B"], [frazione_bianco, "#FFFFFF"],
+                 [1.0, "#63BE7B"]]
 
     etichette_v = [numero_it(p / 1000, 0) + "k" for p in prezzi_vendita]
     etichette_a = [numero_it(p / 1000, 0) + "k" for p in prezzi_acquisto]
@@ -770,6 +814,24 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     return fig
 
 
+def legenda_heatmap(metrica):
+    """Dichiara cosa significano i colori della matrice.
+
+    Senza legenda il rosso si legge «perdita» anche quando è solo «meno
+    buono degli altri»: dirlo evita di dover ricordare com'è tarata la scala.
+    """
+    pareggio = "1,00x" if metrica == "multiplo" else "0 €"
+    chip = ("display:inline-block;width:11px;height:11px;border-radius:2px;"
+            "margin-right:5px;vertical-align:-1px;border:1px solid #3C4C6E;")
+    return (
+        '<div style="font-size:0.72rem;color:#A9B4C9;margin:-6px 0 10px;">'
+        f'<span style="{chip}background:#F8696B;"></span>in perdita'
+        '&nbsp;&nbsp;·&nbsp;&nbsp;'
+        f'<span style="{chip}background:#FFFFFF;"></span>pareggio '
+        f'({pareggio})&nbsp;&nbsp;·&nbsp;&nbsp;'
+        f'<span style="{chip}background:#63BE7B;"></span>in utile</div>')
+
+
 def righe_bp(righe):
     """Blocchetto riepilogo stile Excel: righe etichetta/valore compatte.
 
@@ -790,6 +852,85 @@ def righe_bp(righe):
     return "".join(pezzi)
 
 
+def nota_base_calcolo(acquisto, vendita):
+    """Ripete i due prezzi su cui i risultati sono DAVVERO calcolati.
+
+    Streamlit applica un number_input solo alla conferma: fino a quel
+    momento il campo mostra la cifra digitata mentre tutto il blocco qui
+    sotto resta calcolato sulla precedente. Il server non può accorgersene
+    (il valore non confermato non gli arriva), quindi la difesa è ripetere
+    qui i valori effettivamente usati: se non coincidono con quelli nei
+    campi, il prezzo non è stato applicato.
+    """
+    def cifra(valore):
+        return (euro(valore) if valore
+                else '<span style="color:#F0A840;">non inserito</span>')
+
+    return (
+        '<div style="font-size:0.72rem;color:#A9B4C9;margin:10px 0 2px;'
+        'padding:5px 8px;border-left:2px solid #3C4C6E;line-height:1.5;">'
+        'Risultati calcolati su<br>acquisto <b style="color:#ECE7DA;">'
+        f'{cifra(acquisto)}</b> · vendita <b style="color:#ECE7DA;">'
+        f'{cifra(vendita)}</b></div>')
+
+
+def guardia_prezzi_bp(acquisto, vendita):
+    """Segnala i prezzi digitati ma non ancora applicati.
+
+    Streamlit applica un number_input solo alla conferma, e in questa
+    versione non mostra alcun avviso: si digita 295.000, il campo lo fa
+    vedere, e sotto resta un ROE calcolato sullo zero. Qui i due valori che
+    il server sta davvero usando finiscono in un marcatore, e uno script nel
+    documento padre confronta con ciò che c'è nel campo: se differiscono,
+    compare un badge sotto la cella. Nessun aggancio agli interni di
+    Streamlit, a parte le classi `.st-key-…` dei contenitori (che sono
+    l'API pubblica di `st.container(key=…)`).
+    """
+    st.markdown(
+        f'<div id="cme-prezzi-applicati" style="display:none"'
+        f' data-acq="{float(acquisto or 0):.2f}"'
+        f' data-ven="{float(vendita or 0):.2f}"></div>',
+        unsafe_allow_html=True)
+    st.iframe("""<!doctype html><html><body><script>
+(function () {
+  var doc;
+  try { doc = window.parent.document; } catch (errore) { return; }
+  if (doc.__cmeGuardiaPrezzi) return;
+  doc.__cmeGuardiaPrezzi = true;
+  var CAMPI = [["bp_in_acq", "acq"], ["bp_in_ven", "ven"]];
+  function controlla() {
+    var marcatore = doc.getElementById("cme-prezzi-applicati");
+    if (!marcatore) return;
+    CAMPI.forEach(function (campo) {
+      var cella = doc.querySelector(".st-key-" + campo[0]);
+      if (!cella) return;
+      var input = cella.querySelector("input");
+      if (!input) return;
+      var applicato = parseFloat(marcatore.dataset[campo[1]] || "0");
+      var digitato = parseFloat(input.value);
+      var diverso = input.value !== "" && !isNaN(digitato)
+                    && Math.abs(digitato - applicato) > 0.005;
+      var badge = cella.querySelector(".cme-nonapplicato");
+      if (diverso && !badge) {
+        badge = doc.createElement("span");
+        badge.className = "cme-nonapplicato";
+        badge.textContent = "\\u21B5 premi Invio: i numeri sotto usano ancora "
+                          + "il valore precedente";
+        cella.appendChild(badge);
+      } else if (!diverso && badge) {
+        badge.remove();
+      }
+    });
+  }
+  doc.addEventListener("input", controlla, true);
+  // il rerun di Streamlit ricostruisce il DOM: un controllo periodico si
+  // riaggancia da solo senza dover osservare l'intero albero
+  setInterval(controlla, 400);
+  controlla();
+})();
+</script></body></html>""", height=1)
+
+
 def riga_costo_bp(etichetta, centro=None, destra=None):
     """Riga del dettaglio costi stile Excel: etichetta | %/€ | netto.
 
@@ -797,14 +938,16 @@ def riga_costo_bp(etichetta, centro=None, destra=None):
     di sola lettura) oppure un dizionario {"chiave": …, **kwargs} che
     diventa un number_input modificabile.
     """
-    c_eti, c_inp, c_val = st.columns([1.9, 1.0, 1.2],
+    # la colonna «Netto» ospita cifre a 7 numeri con i loro stepper: stretta
+    # com'era, i valori uscivano troncati a metà ("16200,0(")
+    c_eti, c_inp, c_val = st.columns([1.7, 0.95, 1.35],
                                      vertical_alignment="center")
     c_eti.markdown(f":gray[{etichetta}]")
 
     def cella(colonna, contenuto, a_destra=False):
         if contenuto is None:
             colonna.markdown('<div style="text-align:center;'
-                             'color:#5B688A;">/</div>',
+                             'color:#8FA0BE;">/</div>',
                              unsafe_allow_html=True)
         elif isinstance(contenuto, str):
             allinea = "right" if a_destra else "center"
@@ -908,6 +1051,19 @@ def nuova_pianta(img, nome):
     return {"uid": st.session_state.uid_piante, "nome": nome, "img": img,
             "thumb": thumb, "src": pil_a_src(img), "mpp": None,
             "zone": [], "pareti": [], "prossimo_id": 1}
+
+
+def sostituisci_immagine_pianta(pianta, nuova_img):
+    """Cambia l'immagine di una pianta tenendo allineate miniatura e sorgente.
+
+    Le dimensioni in pixel restano quelle di prima, quindi scala, zone e
+    pareti — che vivono in coordinate immagine — continuano a valere.
+    """
+    thumb = nuova_img.copy()
+    thumb.thumbnail((240, 240))
+    pianta["img"] = nuova_img
+    pianta["thumb"] = thumb
+    pianta["src"] = pil_a_src(nuova_img)
 
 
 def aggiungi_planimetrie(file):
@@ -1066,8 +1222,12 @@ def progetto_json_bytes():
             if st.session_state.get(f"usamis_{v['codice']}")
             and st.session_state.misure_correnti.get(v["codice"])
         },
-        "business_plan": {chiave: st.session_state.get(chiave, valore)
-                          for chiave, valore in IMPOSTAZIONI_BP.items()},
+        "business_plan": {
+            **{chiave: st.session_state.get(chiave, valore)
+               for chiave, valore in IMPOSTAZIONI_BP.items()},
+            "bp_usa_consuntivo": bool(
+                st.session_state.get("bp_usa_consuntivo", False)),
+        },
         "spese": spese_da_df(st.session_state.get(
             "df_spese_live", st.session_state.df_spese)),
         "spese_prev": spese_da_df(st.session_state.get(
@@ -1084,6 +1244,92 @@ def progetto_json_bytes():
     }
     return json.dumps(payload, ensure_ascii=False,
                       separators=(",", ":")).encode("utf-8")
+
+
+# ------------------------------------------------------ rete di sicurezza
+# Streamlit tiene il lavoro nella memoria della sessione: un F5, un tab
+# chiuso per sbaglio o il server che si riavvia azzeravano ore di computo e
+# planimetrie calibrate, senza preavviso. Il progetto finisce quindi anche in
+# un file di appoggio, riscritto al massimo ogni AUTOSALVA_SECONDI, che alla
+# partenza viene offerto come ripristino. Un solo slot: l'app ha un utente
+# solo, e due slot sarebbero solo una scelta in più da fare nel momento
+# peggiore.
+AUTOSALVA_FILE = Path(tempfile.gettempdir()) / "cme_ripristino.json"
+AUTOSALVA_SECONDI = 15
+
+
+def impronta(dati):
+    """Firma breve del progetto, per capire se è cambiato dall'ultimo salvataggio."""
+    return hashlib.md5(dati or b"").hexdigest()
+
+
+def autosalva(dati):
+    """Aggiorna il file di ripristino, non più spesso del necessario.
+
+    La scrittura passa da un file temporaneo e poi rinomina: un'interruzione
+    a metà lascia intatto il ripristino precedente invece di troncarlo.
+    """
+    # Una sessione ancora vuota non ha niente da proteggere, e sovrascrivere
+    # il file la cancellerebbe proprio sotto il naso di chi ha appena perso il
+    # lavoro e non ha ancora risposto alla proposta di ripristino.
+    if progetto_e_vuoto():
+        return
+    adesso = time.time()
+    if adesso - st.session_state.get("_autosalva_ora", 0.0) < AUTOSALVA_SECONDI:
+        return
+    firma = impronta(dati)
+    if firma == st.session_state.get("_autosalva_firma"):
+        return
+    try:
+        provvisorio = AUTOSALVA_FILE.with_suffix(".tmp")
+        provvisorio.write_bytes(dati)
+        provvisorio.replace(AUTOSALVA_FILE)
+    except OSError:
+        return          # disco pieno o cartella in sola lettura: si prosegue
+    st.session_state._autosalva_ora = adesso
+    st.session_state._autosalva_firma = firma
+
+
+def progetto_e_vuoto():
+    """True se in sessione non c'è ancora nulla da perdere.
+
+    Serve a proporre il ripristino solo all'apertura di una sessione pulita:
+    chiederlo mentre si lavora sarebbe un invito a sovrascriversi da soli.
+    """
+    if st.session_state.piante:
+        return False
+    if len(voci_da_df(st.session_state.df_voci)):
+        return False
+    if any((st.session_state.get(f"lq_{v['codice']}") or 0.0) > 0
+           for v in listino.VOCI):
+        return False
+    if st.session_state.get("bp_acquisto") or st.session_state.get("bp_vendita"):
+        return False
+    if len(spese_da_df(st.session_state.df_spese)):
+        return False
+    return True
+
+
+def segna_salvato():
+    """Registra che il progetto attuale è stato messo al sicuro."""
+    st.session_state.ultimo_salvataggio = datetime.now()
+    st.session_state.firma_salvata = impronta(
+        st.session_state.get("_json_progetto"))
+
+
+def stato_salvataggio(dati):
+    """Riga di stato: quando si è salvato e se ci sono modifiche successive."""
+    ultimo = st.session_state.get("ultimo_salvataggio")
+    modificato = impronta(dati) != st.session_state.get("firma_salvata")
+    if ultimo is None:
+        return (":orange[**Mai salvato in questa sessione.**] Il file .json "
+                "è l'unico salvataggio completo: senza, un aggiornamento "
+                "della pagina perde tutto.")
+    quando = ultimo.strftime("%H:%M")
+    if modificato:
+        return (f":orange[**Modifiche non salvate.**] Ultimo salvataggio "
+                f"alle {quando}.")
+    return f":green[**Salvato**] alle {quando}: sei in pari."
 
 
 # ------------------------------------------------- stato iniziale e caricamento
@@ -1110,6 +1356,9 @@ st.session_state.setdefault("df_spese_prev",
                             df_spese_vuoto(COLONNE_SPESE_PREV))
 st.session_state.setdefault("df_mca", df_mca_vuoto())
 st.session_state.setdefault("versione_bp", 0)
+# tenuto fuori da IMPOSTAZIONI_BP: lì i valori sono numerici e il
+# caricamento li converte in int/float, che per una checkbox non va bene
+st.session_state.setdefault("bp_usa_consuntivo", False)
 st.session_state.setdefault("fatt_count", 0)  # svuota l'uploader fatture
 for _chiave, _valore in IMPOSTAZIONI_BP.items():
     st.session_state.setdefault(_chiave, _valore)
@@ -1203,6 +1452,8 @@ if "da_caricare" in st.session_state:
         nuovo = bp_salvato.get(_chiave, _valore)
         st.session_state[_chiave] = (int(nuovo) if isinstance(_valore, int)
                                      else float(nuovo))
+    st.session_state.bp_usa_consuntivo = bool(
+        bp_salvato.get("bp_usa_consuntivo", False))
     spese_caricate = dati.get("spese") or []
     spese_prev_caricate = dati.get("spese_prev")
     if spese_prev_caricate is None:
@@ -1235,6 +1486,14 @@ if "bp_vendita_pending" in st.session_state:
     st.session_state.bp_vendita = st.session_state.pop("bp_vendita_pending")
     bp_ricalcola_euro()
 
+# Le quantità che la planimetria porta nel listino passano di qui. Quando si
+# preme il bottone, la scheda Computo è già stata disegnata e i widget lq_…
+# esistono: Streamlit vieta di riscriverli a quel punto. Come sopra, si
+# applicano al giro successivo, prima che i widget nascano.
+if "listino_pending" in st.session_state:
+    for _cod, _quantita in st.session_state.pop("listino_pending").items():
+        st.session_state[f"lq_{_cod}"] = _quantita
+
 
 # ------------------------------------------------------------------ pagina
 
@@ -1249,6 +1508,36 @@ tab_computo, tab_plan, tab_bp = st.tabs(
 # ============================================================ SCHEDA COMPUTO
 
 with tab_computo:
+    # Offerta di ripristino: solo a sessione pulita e solo finché non si è
+    # risposto, così non si trasforma in un banner che chiede sempre la stessa
+    # cosa mentre si lavora.
+    if (not st.session_state.get("_ripristino_valutato")
+            and progetto_e_vuoto() and AUTOSALVA_FILE.exists()):
+        try:
+            salvato_il = datetime.fromtimestamp(AUTOSALVA_FILE.stat().st_mtime)
+        except OSError:
+            salvato_il = None
+        if salvato_il is not None:
+            st.warning(
+                "C'è del lavoro della sessione precedente, salvato "
+                f"automaticamente il **{salvato_il.strftime('%d/%m')}** alle "
+                f"**{salvato_il.strftime('%H:%M')}**. Lo riprendo?")
+            r_si, r_no, _ = st.columns([1, 1, 3])
+            if r_si.button("↩️ Riprendi il lavoro", type="primary",
+                           use_container_width=True):
+                try:
+                    st.session_state.da_caricare = json.loads(
+                        AUTOSALVA_FILE.read_bytes())
+                    st.session_state._ripristino_valutato = True
+                    st.rerun()
+                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                    st.session_state._ripristino_valutato = True
+                    st.error("Il ripristino automatico non è leggibile: "
+                             "riparto da un progetto vuoto.")
+            if r_no.button("Ricomincia da capo", use_container_width=True):
+                st.session_state._ripristino_valutato = True
+                st.rerun()
+
     # Dati del progetto e archivio (una volta erano nella barra laterale;
     # tolta per dare tutta la larghezza alla planimetria).
     with st.expander("📋 Dati del progetto · Apri / Nuovo"):
@@ -1270,31 +1559,29 @@ with tab_computo:
                              "applicato prima dell'IVA.")
 
         st.divider()
-        a_apri, a_nuovo = st.columns([3, 1])
-        with a_apri:
-            file_json = st.file_uploader(
-                "📂 Apri un progetto salvato (.json)", type=["json"])
-            if file_json is not None and st.button("Carica nel programma"):
-                try:
-                    st.session_state.da_caricare = json.load(file_json)
-                    st.rerun()
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    st.error("Il file non sembra un progetto salvato da "
-                             "questa app.")
-        with a_nuovo:
-            st.write("")
-            st.write("")
-            if st.button("🗑️ Nuovo progetto (svuota tutto)"):
-                st.session_state.da_caricare = {}
+        if not progetto_e_vuoto():
+            st.caption("⚠️ Aprire un progetto **sostituisce** il lavoro in "
+                       "corso: se ti serve ancora, salvalo prima.")
+        file_json = st.file_uploader(
+            "📂 Apri un progetto salvato (.json)", type=["json"])
+        if file_json is not None and st.button("Carica nel programma"):
+            try:
+                st.session_state.da_caricare = json.load(file_json)
                 st.rerun()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                st.error("Il file non sembra un progetto salvato da "
+                         "questa app.")
 
         # -------------------------------------------- archivio online
         st.divider()
         st.markdown("**☁️ Progetti online**")
         if not archivio.configurato():
-            st.info("Per salvare e riaprire i progetti online devi collegare "
-                    "Supabase (te lo spiego passo-passo). Finché non è "
-                    "collegato, usa il salvataggio in file qui sopra.")
+            st.info("L'archivio online non è collegato: per ora usa il "
+                    "salvataggio in file qui sopra. Per attivarlo servono "
+                    "un progetto su supabase.com, un bucket **privato** per "
+                    "i file e le sue credenziali nei «secrets» di Streamlit "
+                    "sotto la voce `[supabase]` (url, key, bucket) — le "
+                    "istruzioni per esteso sono in `archivio.py`.")
         else:
             try:
                 progetti_online = archivio.elenco_progetti()
@@ -1336,17 +1623,51 @@ with tab_computo:
                 value=st.session_state.prg_nome or "",
                 key="nome_salva_online",
                 placeholder="Es. Ristrutturazione Via Roma 1")
+            nome_pulito = (nome_online or "").strip()
+            # salvare su un nome già in archivio sostituiva la versione online
+            # senza dire niente (l'upload è in upsert): ora lo si conferma
+            esiste_gia = nome_pulito in progetti_online
+            if esiste_gia:
+                conferma_sovra = st.checkbox(
+                    f"Sovrascrivi «{nome_pulito}», già presente in archivio",
+                    key="conf_sovrascrivi_online",
+                    help="Senza la spunta il salvataggio non parte: la "
+                         "versione online resta quella di prima.")
+            else:
+                conferma_sovra = True
             if s_btn.button("☁️ Salva online", key="salva_online",
                             use_container_width=True):
-                if not (nome_online or "").strip():
+                if not nome_pulito:
                     st.warning("Dai un nome al progetto prima di salvarlo.")
+                elif not conferma_sovra:
+                    st.warning(f"«{nome_pulito}» esiste già online: spunta la "
+                               "conferma qui sopra, oppure cambia nome.")
                 else:
                     try:
-                        archivio.salva_progetto(nome_online,
+                        archivio.salva_progetto(nome_pulito,
                                                 progetto_json_bytes())
-                        st.success(f"Progetto «{nome_online}» salvato online.")
+                        segna_salvato()
+                        st.success(f"Progetto «{nome_pulito}» salvato online.")
                     except Exception as errore:
                         st.error(f"Errore nel salvataggio: {errore}")
+
+        # ------------------------------------------------- zona pericolosa
+        # Stava accanto al riquadro «apri un progetto», a un solo click e
+        # senza conferma: cancellava computo, planimetrie calibrate, business
+        # plan e spese, cioè molto più di quanto cancelli l'eliminazione di un
+        # singolo file in archivio — che invece la conferma ce l'aveva.
+        st.divider()
+        st.markdown("**🗑️ Nuovo progetto**")
+        n_conf, n_btn = st.columns([3, 1], vertical_alignment="bottom")
+        conferma_nuovo = n_conf.checkbox(
+            "Ho capito: svuota computo, planimetrie, business plan e spese",
+            key="conf_nuovo_progetto")
+        if n_btn.button("🗑️ Svuota tutto", key="nuovo_progetto",
+                        use_container_width=True,
+                        disabled=not conferma_nuovo):
+            st.session_state.da_caricare = {}
+            st.session_state.conf_nuovo_progetto = False
+            st.rerun()
 
     # ------------------------------------------------------ listino guida
     # -------------------------------------- categorie (sx) e riepilogo (dx)
@@ -1448,18 +1769,22 @@ with tab_computo:
         st.metric(
             f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
             euro(imp_importo))
+        st.metric("Totale lavori (IVA esclusa)", euro(totale_imprevisti))
+        st.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
+                  euro(iva_importo))
+        # La card d'oro incoronava il totale PRIMA dell'IVA, mentre l'export
+        # Excel chiama «Totale finale (IVA inclusa)» quello DOPO: lo stesso
+        # nome su due cifre diverse, sullo strumento in cui il numero giusto
+        # è tutto. Il finale è uno solo, ed è quello che si paga.
         st.markdown(
             '<div style="background:linear-gradient(135deg,#243459,#1A2744);'
             'border:1px solid #C9A96A;border-radius:12px;'
             'padding:12px 14px;margin:6px 0 10px;">'
             '<div style="font-size:0.72rem;color:#C9A96A;'
-            'letter-spacing:.05em;">💎 TOTALE FINALE</div>'
+            'letter-spacing:.05em;">💎 TOTALE FINALE (IVA INCLUSA)</div>'
             '<div style="font-size:1.45rem;font-weight:700;color:#ECE7DA;">'
-            f'{euro(totale_imprevisti)}</div></div>',
+            f'{euro(totale_ivato)}</div></div>',
             unsafe_allow_html=True)
-        st.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
-                  euro(iva_importo))
-        st.metric("Totale IVA inclusa", euro(totale_ivato))
 
         totali = calcoli.totali_per_categoria(voci_calcolate)
         if len(totali) >= 2:
@@ -1548,12 +1873,18 @@ with tab_computo:
     # planimetria (evita di serializzare due volte l'intero progetto,
     # immagini incluse, a ogni interazione)
     st.session_state._json_progetto = progetto_json_bytes()
+    autosalva(st.session_state._json_progetto)
+    # Tre bottoni grigi identici non dicevano che solo il primo mette al
+    # sicuro il lavoro: quello resta in evidenza, con accanto il suo stato.
+    st.markdown(stato_salvataggio(st.session_state._json_progetto))
     col_json, col_xlsx, col_csv = st.columns(3)
     col_json.download_button(
         "💾 Salva progetto (.json)",
         data=st.session_state._json_progetto,
         file_name=nome_file("json"),
         mime="application/json",
+        type="primary",
+        on_click=segna_salvato,
     )
     col_xlsx.download_button(
         "📊 Esporta Excel (.xlsx)",
@@ -1809,6 +2140,79 @@ with tab_plan:
                     st.session_state.sel_parete = None
                     st.rerun()
 
+            # ------------------------------------- pulizia dalle scritte
+            with st.expander("🧹 Pulisci la planimetria (togli le scritte)"):
+                st.caption(
+                    "Cancella nomi dei locali, quote e simboli ridipingendoli "
+                    "con il fondo del foglio: i muri restano intatti. Serve "
+                    "al **rilevamento delle stanze**, che così non può "
+                    "scambiare una lettera per un muro, e libera il disegno "
+                    "dalle scritte che finiscono sotto le etichette delle "
+                    "aree. Le dimensioni non cambiano: **scala, zone e "
+                    "pareti già impostate restano valide**.")
+                forza = st.slider(
+                    "Quanto insistere", 0.5, 2.5, 1.0, 0.25,
+                    key=f"pul_forza_{pianta['uid']}",
+                    help="Sotto 1 toglie solo il minuto (quote, simboli). "
+                         "Sopra 1 prende anche le parole grandi: esagerando "
+                         "iniziano a sparire i muri più corti, e lì il "
+                         "rilevamento peggiora invece di migliorare.")
+                p_prova, p_rip = st.columns(2)
+                if p_prova.button("🧹 Prova la pulizia", type="primary",
+                                  key=f"pul_prova_{pianta['uid']}",
+                                  use_container_width=True):
+                    with st.spinner("Ripulisco il disegno…"):
+                        ripulita, rimossi = rilevamento.pulisci_planimetria(
+                            pianta["img"], pianta["mpp"], forza)
+                    st.session_state.anteprima_pulizia = {
+                        "uid": pianta["uid"], "img": ripulita,
+                        "rimossi": rimossi, "forza": forza}
+                    st.rerun()
+                if pianta.get("img_originale") is not None:
+                    if p_rip.button("↩️ Ripristina l'originale",
+                                    key=f"pul_rip_{pianta['uid']}",
+                                    use_container_width=True):
+                        sostituisci_immagine_pianta(
+                            pianta, pianta.pop("img_originale"))
+                        st.session_state.pop("anteprima_pulizia", None)
+                        st.rerun()
+
+                anteprima = st.session_state.get("anteprima_pulizia")
+                if anteprima and anteprima["uid"] == pianta["uid"]:
+                    if not anteprima["rimossi"]:
+                        st.info("Non ho trovato scritte da togliere. Se ne "
+                                "restano, alza il cursore e riprova.")
+                    else:
+                        a_pri, a_dop = st.columns(2)
+                        a_pri.caption("Adesso")
+                        a_pri.image(pianta["img"], use_container_width=True)
+                        a_dop.caption(
+                            f"Dopo la pulizia (forza {numero_it(anteprima['forza'], 2)})")
+                        a_dop.image(anteprima["img"],
+                                    use_container_width=True)
+                        st.caption(
+                            "Controlla che i **muri** siano tutti al loro "
+                            "posto: se ne mancano, abbassa il cursore.")
+                        u_si, u_no = st.columns(2)
+                        if u_si.button("✅ Usa la versione pulita",
+                                       type="primary",
+                                       key=f"pul_ok_{pianta['uid']}",
+                                       use_container_width=True):
+                            # l'originale si conserva solo la prima volta,
+                            # così pulizie successive non lo perdono
+                            if pianta.get("img_originale") is None:
+                                pianta["img_originale"] = pianta["img"]
+                            sostituisci_immagine_pianta(pianta,
+                                                        anteprima["img"])
+                            st.session_state.pop("anteprima_pulizia", None)
+                            st.toast("Planimetria pulita ✔")
+                            st.rerun()
+                        if u_no.button("Scarta l'anteprima",
+                                       key=f"pul_no_{pianta['uid']}",
+                                       use_container_width=True):
+                            st.session_state.pop("anteprima_pulizia", None)
+                            st.rerun()
+
             # ---------------------------------- rilevamento automatico (beta)
             with st.expander("🪄 Rileva stanze automaticamente (beta)"):
                 st.caption(
@@ -1911,8 +2315,8 @@ with tab_plan:
                     "m²", round(tot_comm, 2), None)
                 st.toast("Superficie commerciale aggiunta al computo ✔")
 
-        # ------------------------------------- battiscopa e tinteggiature
-        st.subheader("📏 Battiscopa e tinteggiature (perimetri dei locali)")
+        # ------------------------- dalle superfici alle voci del computo
+        st.subheader("📏 Dalle superfici al computo (locale per locale)")
         righe_loc, senza_scala_loc = planimetria.riepilogo_locali(piante)
         if senza_scala_loc:
             st.warning("Locali esclusi perché la planimetria è **senza "
@@ -1921,15 +2325,28 @@ with tab_plan:
             st.info("Quando ci sono zone disegnate (su piante con scala), "
                     "qui trovi i perimetri per battiscopa e tinteggiature.")
         else:
-            st.caption("Spunta i locali da considerare (di solito **bagni e "
-                       "balconi si escludono** dal battiscopa). Pareti = "
-                       "perimetro × altezza; soffitti = superficie "
+            st.caption("Spunta, locale per locale, che cosa si rifà (di "
+                       "solito **bagni e balconi si escludono** dal "
+                       "battiscopa). Pavimento = superficie calpestabile; "
+                       "pareti = perimetro × altezza; soffitti = superficie "
                        "calpestabile. Le aperture (porte/finestre) non "
                        "vengono detratte: affina tu le quantità nel computo "
                        "se serve.")
+            # Questa casella esiste solo quando ci sono zone disegnate, e
+            # Streamlit scarta lo stato dei widget che in un giro non ha
+            # disegnato: al primo giro utile ripartiva dal minimo (1,00 m),
+            # in silenzio. Le pareti risultavano «perimetro × 1» — un numero
+            # plausibile e sbagliato, che finiva dritto nel computo. Il
+            # valore buono vive quindi in una chiave normale (alt_locali, che
+            # è anche quella salvata nel progetto) e la casella la ricarica
+            # ogni volta che rinasce.
+            st.session_state.setdefault("alt_locali", 2.70)
             altezza = st.number_input(
                 "Altezza dei locali (m)", min_value=1.0, max_value=6.0,
-                step=0.05, format="%.2f", key="alt_locali")
+                step=0.05, format="%.2f",
+                value=float(st.session_state.alt_locali),
+                key="alt_locali_widget")
+            st.session_state.alt_locali = altezza
 
             zona_per_rif = {(p["uid"], z["id"]): z
                             for p in piante for z in p["zone"]}
@@ -1948,11 +2365,15 @@ with tab_plan:
                 pitt_def = zona.get("pittura")
                 if pitt_def is None:
                     pitt_def = interna
+                pav_def = zona.get("pavimento")
+                if pav_def is None:
+                    pav_def = interna
                 righe_tab.append({
                     "Pianta": r["pianta"],
                     "Locale": r["nome"],
                     "Superficie (m²)": round(r["m2"], 2),
                     "Perimetro (m)": round(r["perimetro"], 2),
+                    "Pavimento": bool(pav_def),
                     "Battiscopa": bool(batt_def),
                     "Tinteggiatura": bool(pitt_def),
                 })
@@ -1965,6 +2386,9 @@ with tab_plan:
                 disabled=["Pianta", "Locale", "Superficie (m²)",
                           "Perimetro (m)"],
                 column_config={
+                    "Pavimento": st.column_config.CheckboxColumn(
+                        "Pavimento",
+                        help="Conta nella superficie da pavimentare"),
                     "Battiscopa": st.column_config.CheckboxColumn(
                         "Battiscopa", help="Conta nel totale del battiscopa"),
                     "Tinteggiatura": st.column_config.CheckboxColumn(
@@ -1972,6 +2396,7 @@ with tab_plan:
                         help="Conta in pareti e soffitti da tinteggiare"),
                 })
 
+            pav_m2 = 0.0
             batt_m = 0.0
             pareti_m2 = 0.0
             soffitti_m2 = 0.0
@@ -1979,38 +2404,60 @@ with tab_plan:
                 zona = zona_per_rif.get((uid, zid))
                 if zona is None:
                     continue
+                zona["pavimento"] = bool(riga["Pavimento"])
                 zona["battiscopa"] = bool(riga["Battiscopa"])
                 zona["pittura"] = bool(riga["Tinteggiatura"])
+                if zona["pavimento"]:
+                    pav_m2 += float(riga["Superficie (m²)"])
                 if zona["battiscopa"]:
                     batt_m += float(riga["Perimetro (m)"])
                 if zona["pittura"]:
                     pareti_m2 += float(riga["Perimetro (m)"]) * altezza
                     soffitti_m2 += float(riga["Superficie (m²)"])
 
-            t1, t2, t3 = st.columns(3)
-            t1.metric("Battiscopa", f"{numero_it(batt_m, 2)} m")
-            t2.metric(f"Pareti (h {numero_it(altezza, 2)} m)",
+            t1, t2, t3, t4 = st.columns(4)
+            t1.metric("Pavimento", f"{numero_it(pav_m2, 2)} m²")
+            t2.metric("Battiscopa", f"{numero_it(batt_m, 2)} m")
+            t3.metric(f"Pareti (h {numero_it(altezza, 2)} m)",
                       f"{numero_it(pareti_m2, 2)} m²")
-            t3.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
+            t4.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
 
-            v1, v2 = st.columns(2)
-            if v1.button("➕ Battiscopa nel computo (rimozione + posa)"):
-                aggiungi_voce_computo(
-                    "Battiscopa", "Rimozione battiscopa esistente",
-                    "m", round(batt_m, 2), None)
-                aggiungi_voce_computo(
-                    "Battiscopa", "Fornitura e posa nuovo battiscopa",
-                    "m", round(batt_m, 2), None)
-                st.toast("Battiscopa aggiunto al computo (2 voci) ✔")
-            if v2.button("➕ Tinteggiatura nel computo (pareti + soffitti)"):
-                aggiungi_voce_computo(
-                    "Tinteggiature",
-                    f"Tinteggiatura pareti (h {numero_it(altezza, 2)} m)",
-                    "m²", round(pareti_m2, 2), None)
-                aggiungi_voce_computo(
-                    "Tinteggiature", "Tinteggiatura soffitti",
-                    "m²", round(soffitti_m2, 2), None)
-                st.toast("Tinteggiature aggiunte al computo (2 voci) ✔")
+            # ---------------- dalle superfici alle voci del listino
+            grandezze = {
+                "pavimento": pav_m2,
+                # il listino chiede la superficie netta più ~5% di sfrido
+                "pavimento_sfrido": pav_m2 * 1.05,
+                "battiscopa": batt_m,
+                "tinteggiatura": pareti_m2 + soffitti_m2,
+            }
+            st.markdown("**➕ Porta queste quantità nel computo**")
+            st.caption(
+                "Le quantità vengono **scritte** nelle voci del listino, non "
+                "sommate: puoi rifare il rilevamento, cambiare le spunte e "
+                "ripremere il bottone senza contare niente due volte. I "
+                "prezzi restano quelli del listino, modificabili come sempre.")
+            proposte = {}
+            for codice, grandezza, acceso in VOCI_DA_SUPERFICI:
+                voce = listino.voce_per_codice(codice)
+                quantita = round(grandezze.get(grandezza, 0.0), 2)
+                if voce is None or quantita <= 0:
+                    continue
+                attuale = float(st.session_state.get(f"lq_{codice}") or 0.0)
+                etichetta = (f"**{codice}** · {voce['descrizione']} → "
+                             f"**{numero_it(quantita, 2)} {voce['um']}**")
+                if attuale and abs(attuale - quantita) > 0.005:
+                    etichetta += (f" :orange[(sostituisce "
+                                  f"{numero_it(attuale, 2)})]")
+                if st.checkbox(etichetta, value=acceso,
+                               key=f"supvoce_{codice}"):
+                    proposte[codice] = quantita
+            if not proposte:
+                st.caption(":gray[Nessuna voce selezionata.]")
+            if st.button("➕ Scrivi le quantità nel listino", type="primary",
+                         disabled=not proposte):
+                st.session_state.listino_pending = dict(proposte)
+                st.toast(f"{len(proposte)} voci aggiornate nel computo ✔")
+                st.rerun()
 
         st.divider()
         st.download_button(
@@ -2041,231 +2488,16 @@ with tab_bp:
     _, ristr_da_computo = calcoli.totale_con_imprevisti(
         totale_computo_bp, st.session_state.imprevisti)
 
-    # ------------------------------------------------ studio di fattibilità
-    with sotto_fatt:
-        # impaginazione «da Excel»: tre blocchi affiancati (riepilogo,
-        # matrici, dettaglio costi) su una larghezza fissa; se lo schermo
-        # è più stretto compare lo scorrimento orizzontale.
-        st.markdown("""
-<style>
-.st-key-bp_scroll { overflow-x: auto; padding-bottom: 6px; }
-.st-key-bp_scroll [data-testid="stHorizontalBlock"] { min-width: 1750px; }
-.st-key-bp_scroll [data-testid="stHorizontalBlock"]
- [data-testid="stHorizontalBlock"] { min-width: 0; }
-/* prezzi base evidenziati come in Excel: acquisto giallino, vendita azzurro */
-.st-key-bp_in_acq input {
-    background-color: #FFF2CC !important;
-    color: #7F6000 !important;
-    font-weight: 700;
-}
-.st-key-bp_in_ven input {
-    background-color: #DDEBF7 !important;
-    color: #1F4E79 !important;
-    font-weight: 700;
-}
-</style>
-""", unsafe_allow_html=True)
-
-        mq_eff = st.session_state.bp_mq or mq_da_planimetria
-        ristr_eff = st.session_state.bp_ristr or ristr_da_computo
-        parametri_bp = {
-            "prezzo_acquisto": st.session_state.bp_acquisto,
-            "prezzo_vendita": st.session_state.bp_vendita,
-            "imposta_pct": st.session_state.bp_imposta,
-            "imposte_fisse": st.session_state.bp_imposte_fisse,
-            "notaio": st.session_state.bp_notaio,
-            "agenzia_in_pct": st.session_state.bp_ag_in,
-            "agenzia_out_pct": st.session_state.bp_ag_out,
-            "iva_agenzia_pct": st.session_state.bp_iva_ag,
-            "imprevisti": st.session_state.bp_imprevisti,
-            "spese_mutuo": st.session_state.bp_mutuo,
-            "ristrutturazione": ristr_eff,
-            "mq": mq_eff,
-            "durata_mesi": st.session_state.bp_durata,
-        }
-        esito = fattibilita.studio_fattibilita(parametri_bp)
-        acq = esito["costi_acquisto"]
-        ven = esito["costi_vendita"]
-
-        with st.container(key="bp_scroll"):
-            col_sum, col_matrici, col_costi = st.columns(
-                [1.05, 2.3, 1.5], gap="large")
-
-            # ------------------------------------------ riepilogo (Summary)
-            with col_sum:
-                st.number_input("Mq commerciali (0 = dalla planimetria)",
-                                min_value=0.0, step=1.0, key="bp_mq")
-                st.number_input("Passo sensitività (€)", min_value=1000.0,
-                                step=1000.0, key="bp_passo")
-                st.number_input("Durata operazione (mesi)", min_value=1,
-                                max_value=120, step=1, key="bp_durata")
-                st.markdown(
-                    '<div style="background:#F0A84033;border:1px solid '
-                    '#F0A840;padding:4px 10px;border-radius:6px;'
-                    'text-align:center;font-weight:700;letter-spacing:.04em;'
-                    'margin:8px 0 6px;">ESTIMATED</div>',
-                    unsafe_allow_html=True)
-                with st.container(key="bp_in_acq"):
-                    st.number_input("Prezzo base (acquisto, €)",
-                                    min_value=0.0, step=5000.0,
-                                    format="%.0f", key="bp_acquisto",
-                                    on_change=bp_ricalcola_euro)
-                st.markdown(righe_bp([
-                    ("€/mq acquisto",
-                     numero_it(esito["eur_mq_acquisto"], 0) + " €"
-                     if esito["eur_mq_acquisto"] else "—", None),
-                    ("Buy cost", euro(acq["totale"]), None),
-                    ("Prezzo netto — entry", euro(esito["entry"]), "bold"),
-                ]), unsafe_allow_html=True)
-                with st.container(key="bp_in_ven"):
-                    st.number_input("Estimated sell price (€)",
-                                    min_value=0.0, step=5000.0,
-                                    format="%.0f", key="bp_vendita",
-                                    on_change=bp_ricalcola_euro,
-                                    help="Puoi stimarlo con l'MCA (terza "
-                                         "sezione)")
-                st.markdown(righe_bp([
-                    ("€/mq vendita",
-                     numero_it(esito["eur_mq_vendita"], 0) + " €"
-                     if esito["eur_mq_vendita"] else "—", None),
-                    ("Sell cost", euro(ven["totale"]), None),
-                    ("Prezzo netto — exit", euro(esito["exit"]), "bold"),
-                ]), unsafe_allow_html=True)
-                st.markdown("<div style='height:8px'></div>",
-                            unsafe_allow_html=True)
-                st.markdown(righe_bp([
-                    ("Net Return (ROI)",
-                     numero_it(esito["multiplo"], 2) + "x", "bold"),
-                    ("Return of Equity (ROE)",
-                     numero_it(esito["roe"] * 100, 1) + " %", None),
-                    (f"Rendimento annuo ({st.session_state.bp_durata} mesi)",
-                     numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %",
-                     None),
-                    ("Total cost",
-                     euro(acq["totale"] + ven["totale"]), "cattivo"),
-                    ("EBIT", euro(esito["ebit"]),
-                     "buono" if esito["ebit"] >= 0 else "cattivo"),
-                ]), unsafe_allow_html=True)
-
-            # --------------------------------------- matrici di sensitività
-            with col_matrici:
-                if (st.session_state.bp_acquisto > 0
-                        and st.session_state.bp_vendita > 0):
-                    passo = st.session_state.bp_passo
-                    st.markdown("**Money multiple** "
-                                ":gray[(net sell / net purchase — acquisto "
-                                "sulle righe, vendita sulle colonne)]")
-                    pa, pv, mat = fattibilita.matrice_sensitivita(
-                        parametri_bp, passo, metrica="multiplo")
-                    st.plotly_chart(
-                        grafico_sensitivita(
-                            pa, pv, mat, "multiplo",
-                            base_acquisto=st.session_state.bp_acquisto,
-                            base_vendita=st.session_state.bp_vendita),
-                        config={"displayModeBar": False})
-                    st.markdown("**Net gain** :gray[(guadagno assoluto, €)]")
-                    pa, pv, mat = fattibilita.matrice_sensitivita(
-                        parametri_bp, passo, metrica="guadagno")
-                    st.plotly_chart(
-                        grafico_sensitivita(
-                            pa, pv, mat, "guadagno",
-                            base_acquisto=st.session_state.bp_acquisto,
-                            base_vendita=st.session_state.bp_vendita),
-                        config={"displayModeBar": False})
-                else:
-                    st.info("Inserisci **prezzo di acquisto** e **prezzo "
-                            "di vendita** per vedere le matrici di "
-                            "sensitività (la vendita puoi stimarla "
-                            "con l'MCA).")
-
-            # ------------------------------------------- dettaglio costi
-            with col_costi:
-                st.markdown(
-                    '<div style="background:#24345988;border:1px solid '
-                    '#3C4C6E;padding:4px 10px;border-radius:6px;'
-                    'text-align:center;font-weight:700;margin-bottom:6px;">'
-                    'SPESE ACQUISTO — dettaglio</div>',
-                    unsafe_allow_html=True)
-                e1, e2, e3 = st.columns([1.9, 1.0, 1.2])
-                e1.caption("Voce")
-                e2.caption("% / €")
-                e3.caption("Netto")
-                riga_costo_bp(
-                    "Imposte d'acquisto",
-                    centro={"chiave": "bp_imposta", "min_value": 0.0,
-                            "max_value": 30.0, "step": 0.5,
-                            "on_change": bp_ricalcola_euro},
-                    destra={"chiave": "bp_imposta_eur", "min_value": 0.0,
-                            "step": 100.0, "format": "%.2f",
-                            "on_change": bp_pct_da_euro_imposta})
-                riga_costo_bp(
-                    "Imposte fisse",
-                    destra={"chiave": "bp_imposte_fisse", "min_value": 0.0,
-                            "step": 50.0, "format": "%.2f"})
-                riga_costo_bp(
-                    "Notaio",
-                    destra={"chiave": "bp_notaio", "min_value": 0.0,
-                            "step": 100.0, "format": "%.2f",
-                            "help": "Compreso IVA, visure, archivio "
-                                    "notarile…"})
-                riga_costo_bp(
-                    "Spese e interessi mutuo",
-                    destra={"chiave": "bp_mutuo", "min_value": 0.0,
-                            "step": 100.0, "format": "%.2f"})
-                riga_costo_bp(
-                    "Imprevisti e condominio",
-                    destra={"chiave": "bp_imprevisti", "min_value": 0.0,
-                            "step": 500.0, "format": "%.2f"})
-                riga_costo_bp(
-                    "Agenzia IN",
-                    centro={"chiave": "bp_ag_in", "min_value": 0.0,
-                            "max_value": 10.0, "step": 0.5,
-                            "on_change": bp_ricalcola_euro,
-                            "help": "Commissione % sul prezzo di acquisto; "
-                                    "il € a destra è IVA inclusa"},
-                    destra={"chiave": "bp_ag_in_eur", "min_value": 0.0,
-                            "step": 100.0, "format": "%.2f",
-                            "on_change": bp_pct_da_euro_ag_in})
-                riga_costo_bp(
-                    ":orange[**Ristrutturazione stimata**] (0 = dal "
-                    "computo)",
-                    destra={"chiave": "bp_ristr", "min_value": 0.0,
-                            "step": 1000.0, "format": "%.2f"})
-                st.caption("🔗 Ristrutturazione considerata: "
-                           f"**{euro(ristr_eff)}** "
-                           + ("(a mano)" if st.session_state.bp_ristr
-                              else "(dal computo, imprevisti inclusi)")
-                           + f" · mq: {numero_it(mq_eff, 0)} "
-                           + ("(a mano)" if st.session_state.bp_mq
-                              else "(dalla planimetria)"))
-                st.markdown(righe_bp([
-                    ("TOTALE SPESE ACQUISTO", euro(acq["totale"]), "bold"),
-                ]), unsafe_allow_html=True)
-                st.markdown("<div style='height:10px'></div>",
-                            unsafe_allow_html=True)
-                riga_costo_bp(
-                    "Agenzia OUT",
-                    centro={"chiave": "bp_ag_out", "min_value": 0.0,
-                            "max_value": 10.0, "step": 0.5,
-                            "on_change": bp_ricalcola_euro,
-                            "help": "Commissione % sul prezzo di vendita; "
-                                    "il € a destra è IVA inclusa"},
-                    destra={"chiave": "bp_ag_out_eur", "min_value": 0.0,
-                            "step": 100.0, "format": "%.2f",
-                            "on_change": bp_pct_da_euro_ag_out})
-                st.markdown(righe_bp([
-                    ("TOTALE SPESE (acquisto + vendita)",
-                     euro(acq["totale"] + ven["totale"]), "bold"),
-                ]), unsafe_allow_html=True)
 
     # ------------------------------------------------- spese a consuntivo
     with sotto_spese:
         st.caption("Il registro delle spese reali dell'operazione, come il "
-                   "tuo foglio «Spese». A sinistra le spese già **sostenute** "
-                   "(le fatture), al centro il **riepilogo per categoria** e "
-                   "le spese ancora **da sostenere**, a destra la torta. La "
-                   "somma sostenute + da sostenere è il **costo totale** che "
-                   "confluirà nel business plan.")
+                   "tuo foglio «Spese». In alto le spese già **sostenute** "
+                   "(le fatture); sotto, affiancati, il **riepilogo per "
+                   "categoria**, le spese ancora **da sostenere** e la "
+                   "torta. La quota **cantiere** (lavori, materiale, "
+                   "architetto) può sostituire la ristrutturazione stimata "
+                   "nello studio di fattibilità.")
 
         # ---- caricamento fatture con auto-compilazione ----
         with st.expander("📎 Carica fatture (PDF o XML) e auto-compila"):
@@ -2384,19 +2616,32 @@ with tab_bp:
                 st.metric("Totale da sostenere", euro(tot_prev))
 
                 costi_totali = round(tot_sostenute + tot_prev, 2)
-                st.session_state.spese_costi_totali = costi_totali
+                # Il totale comprende TUTTE le categorie (acquisto, agenzia,
+                # costi indiretti…); allo studio di fattibilità va invece la
+                # sola quota cantiere, che lì sostituisce la ristrutturazione
+                # stimata. La card dice entrambe le cifre: prima l'etichetta
+                # prometteva «→ business plan» su un numero che nessuno
+                # leggeva.
+                quota_cantiere = round(sum(
+                    r["importo"] for r in righe_spese + righe_prev
+                    if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
                 st.markdown(
                     '<div style="background:linear-gradient(135deg,#243459,'
                     '#1A2744);border:1px solid #C9A96A;border-radius:12px;'
                     'padding:12px 14px;margin:6px 0 10px;">'
                     '<div style="font-size:0.72rem;color:#C9A96A;'
-                    'letter-spacing:.05em;">💠 COSTI TOTALI (→ business plan)'
+                    'letter-spacing:.05em;">💠 COSTI TOTALI DELL\'OPERAZIONE'
                     '</div>'
                     '<div style="font-size:1.45rem;font-weight:700;'
                     f'color:#ECE7DA;">{euro(costi_totali)}</div>'
                     '<div style="font-size:0.72rem;color:#A9B4C9;">'
                     f'sostenute {euro(tot_sostenute)} + da sostenere '
-                    f'{euro(tot_prev)}</div></div>',
+                    f'{euro(tot_prev)}</div>'
+                    '<div style="font-size:0.72rem;color:#A9B4C9;'
+                    'margin-top:5px;padding-top:5px;'
+                    'border-top:1px solid #3C4C6E;">di cui cantiere '
+                    f'<b style="color:#ECE7DA;">{euro(quota_cantiere)}</b>'
+                    ' — riportabile nello studio di fattibilità</div></div>',
                     unsafe_allow_html=True)
 
             with col_torta:
@@ -2409,20 +2654,304 @@ with tab_bp:
 
         # confronto col preventivo del computo (su sostenute + da sostenere)
         righe_cantiere = righe_spese + righe_prev
+        # Costo cantiere a consuntivo, sulle categorie che il computo
+        # preventiva. Vive qui perché è qui che le tabelle delle spese
+        # restituiscono i valori aggiornati; lo studio di fattibilità lo
+        # riusa ed è scritto DOPO nel codice apposta, così legge i numeri di
+        # questo giro e non quelli del precedente.
+        cantiere_consuntivo = round(sum(
+            r["importo"] for r in righe_cantiere
+            if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
         if righe_cantiere:
             st.divider()
             st.subheader("⚖️ Preventivo vs consuntivo (cantiere)")
-            consuntivo_cantiere = sum(
-                r["importo"] for r in righe_cantiere
-                if r["categoria"] in fattibilita.CATEGORIE_CANTIERE)
-            scostamento = consuntivo_cantiere - ristr_da_computo
+            scostamento = cantiere_consuntivo - ristr_da_computo
             c1, c2, c3 = st.columns(3)
             c1.metric("Preventivo (computo + imprevisti)",
                       euro(ristr_da_computo))
             c2.metric("Consuntivo cantiere (lavori+materiali+architetto)",
-                      euro(consuntivo_cantiere))
+                      euro(cantiere_consuntivo))
             c3.metric("Scostamento", euro(scostamento),
                       delta=euro(scostamento), delta_color="inverse")
+
+    # ------------------------------------------------ studio di fattibilità
+    with sotto_fatt:
+        # impaginazione «da Excel»: tre blocchi affiancati (riepilogo,
+        # matrici, dettaglio costi). La larghezza fissa a 1750px tagliava la
+        # terza colonna a metà parola su uno schermo normale (un contenitore
+        # da 1420px a finestra 1600px) e, per raggiungerla, lo scorrimento
+        # orizzontale spingeva EBIT e ROE fuori vista: proprio i due numeri
+        # contro cui la matrice va letta. Ora sotto i 1400px le tre colonne
+        # si impilano, sopra stanno affiancate senza scorrimento.
+        st.markdown("""
+<style>
+.st-key-bp_scroll { overflow-x: auto; padding-bottom: 6px; }
+.st-key-bp_scroll [data-testid="stHorizontalBlock"] { min-width: 1120px; }
+.st-key-bp_scroll [data-testid="stHorizontalBlock"]
+ [data-testid="stHorizontalBlock"] { min-width: 0; }
+@media (max-width: 1400px) {
+    .st-key-bp_scroll [data-testid="stHorizontalBlock"] {
+        min-width: 0; flex-wrap: wrap;
+    }
+    .st-key-bp_scroll > div > [data-testid="stHorizontalBlock"] > div {
+        flex: 1 1 100% !important; min-width: 0 !important;
+    }
+}
+/* prezzi base evidenziati come in Excel: acquisto giallino, vendita azzurro */
+.st-key-bp_in_acq input {
+    background-color: #FFF2CC !important;
+    color: #7F6000 !important;
+    font-weight: 700;
+}
+.st-key-bp_in_ven input {
+    background-color: #DDEBF7 !important;
+    color: #1F4E79 !important;
+    font-weight: 700;
+}
+/* Avviso «valore digitato ma non applicato» (lo disegna guardia_prezzi_bp). */
+.cme-nonapplicato {
+    display: block;
+    margin: 3px 0 0;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #C9A96A;
+    color: #1A2744;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+</style>
+""", unsafe_allow_html=True)
+
+        mq_eff = st.session_state.bp_mq or mq_da_planimetria
+        # ordine di precedenza della ristrutturazione: consuntivo reale se
+        # richiesto esplicitamente, altrimenti la cifra a mano, altrimenti
+        # il preventivo del computo.
+        usa_consuntivo = (st.session_state.get("bp_usa_consuntivo")
+                          and cantiere_consuntivo > 0)
+        if usa_consuntivo:
+            ristr_eff = cantiere_consuntivo
+        else:
+            ristr_eff = st.session_state.bp_ristr or ristr_da_computo
+        parametri_bp = {
+            "prezzo_acquisto": st.session_state.bp_acquisto,
+            "prezzo_vendita": st.session_state.bp_vendita,
+            "imposta_pct": st.session_state.bp_imposta,
+            "imposte_fisse": st.session_state.bp_imposte_fisse,
+            "notaio": st.session_state.bp_notaio,
+            "agenzia_in_pct": st.session_state.bp_ag_in,
+            "agenzia_out_pct": st.session_state.bp_ag_out,
+            "iva_agenzia_pct": st.session_state.bp_iva_ag,
+            "imprevisti": st.session_state.bp_imprevisti,
+            "spese_mutuo": st.session_state.bp_mutuo,
+            "ristrutturazione": ristr_eff,
+            "mq": mq_eff,
+            "durata_mesi": st.session_state.bp_durata,
+        }
+        esito = fattibilita.studio_fattibilita(parametri_bp)
+        acq = esito["costi_acquisto"]
+        ven = esito["costi_vendita"]
+
+        with st.container(key="bp_scroll"):
+            col_sum, col_matrici, col_costi = st.columns(
+                [1.15, 2.15, 1.7], gap="large")
+
+            # ------------------------------------------ riepilogo (Summary)
+            with col_sum:
+                st.number_input("Mq commerciali (0 = dalla planimetria)",
+                                min_value=0.0, step=1.0, key="bp_mq")
+                st.number_input("Passo sensitività (€)", min_value=1000.0,
+                                step=1000.0, key="bp_passo")
+                st.number_input("Durata operazione (mesi)", min_value=1,
+                                max_value=120, step=1, key="bp_durata")
+                st.markdown(
+                    '<div style="background:#F0A84033;border:1px solid '
+                    '#F0A840;padding:4px 10px;border-radius:6px;'
+                    'text-align:center;font-weight:700;letter-spacing:.04em;'
+                    'margin:8px 0 6px;">ESTIMATED</div>',
+                    unsafe_allow_html=True)
+                with st.container(key="bp_in_acq"):
+                    st.number_input("Prezzo base (acquisto, €)",
+                                    min_value=0.0, step=5000.0,
+                                    format="%.0f", key="bp_acquisto",
+                                    on_change=bp_ricalcola_euro)
+                st.markdown(righe_bp([
+                    ("€/mq acquisto",
+                     numero_it(esito["eur_mq_acquisto"], 0) + " €"
+                     if esito["eur_mq_acquisto"] else "—", None),
+                    ("Buy cost", euro(acq["totale"]), None),
+                    ("Prezzo netto — entry", euro(esito["entry"]), "bold"),
+                ]), unsafe_allow_html=True)
+                with st.container(key="bp_in_ven"):
+                    st.number_input("Estimated sell price (€)",
+                                    min_value=0.0, step=5000.0,
+                                    format="%.0f", key="bp_vendita",
+                                    on_change=bp_ricalcola_euro,
+                                    help="Puoi stimarlo con l'MCA (terza "
+                                         "sezione)")
+                st.markdown(righe_bp([
+                    ("€/mq vendita",
+                     numero_it(esito["eur_mq_vendita"], 0) + " €"
+                     if esito["eur_mq_vendita"] else "—", None),
+                    ("Sell cost", euro(ven["totale"]), None),
+                    ("Prezzo netto — exit", euro(esito["exit"]), "bold"),
+                ]), unsafe_allow_html=True)
+                st.markdown(
+                    nota_base_calcolo(st.session_state.bp_acquisto,
+                                      st.session_state.bp_vendita),
+                    unsafe_allow_html=True)
+                guardia_prezzi_bp(st.session_state.bp_acquisto,
+                                  st.session_state.bp_vendita)
+                # a 12 mesi il rendimento annualizzato COINCIDE con il ROE:
+                # senza dirlo sembrano due conferme indipendenti.
+                durata_bp = st.session_state.bp_durata
+                etichetta_annuo = (
+                    "Rendimento annuo (12 mesi: coincide col ROE)"
+                    if durata_bp == 12
+                    else f"Rendimento annuo ({durata_bp} mesi)")
+                st.markdown(righe_bp([
+                    ("Net Return (ROI)",
+                     numero_it(esito["multiplo"], 2) + "x", "bold"),
+                    ("Return on Equity (ROE)",
+                     numero_it(esito["roe"] * 100, 1) + " %", None),
+                    (etichetta_annuo,
+                     numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %",
+                     None),
+                    ("Total cost",
+                     euro(acq["totale"] + ven["totale"]), "cattivo"),
+                    ("EBIT", euro(esito["ebit"]),
+                     "buono" if esito["ebit"] >= 0 else "cattivo"),
+                ]), unsafe_allow_html=True)
+
+            # --------------------------------------- matrici di sensitività
+            with col_matrici:
+                if (st.session_state.bp_acquisto > 0
+                        and st.session_state.bp_vendita > 0):
+                    passo = st.session_state.bp_passo
+                    st.markdown("**Money multiple** "
+                                ":gray[(net sell / net purchase — acquisto "
+                                "sulle righe, vendita sulle colonne)]")
+                    pa, pv, mat = fattibilita.matrice_sensitivita(
+                        parametri_bp, passo, metrica="multiplo")
+                    st.plotly_chart(
+                        grafico_sensitivita(
+                            pa, pv, mat, "multiplo",
+                            base_acquisto=st.session_state.bp_acquisto,
+                            base_vendita=st.session_state.bp_vendita),
+                        config={"displayModeBar": False})
+                    st.markdown(legenda_heatmap("multiplo"),
+                                unsafe_allow_html=True)
+                    st.markdown("**Net gain** :gray[(guadagno assoluto, €)]")
+                    pa, pv, mat = fattibilita.matrice_sensitivita(
+                        parametri_bp, passo, metrica="guadagno")
+                    st.plotly_chart(
+                        grafico_sensitivita(
+                            pa, pv, mat, "guadagno",
+                            base_acquisto=st.session_state.bp_acquisto,
+                            base_vendita=st.session_state.bp_vendita),
+                        config={"displayModeBar": False})
+                    st.markdown(legenda_heatmap("guadagno"),
+                                unsafe_allow_html=True)
+                else:
+                    st.info("Inserisci **prezzo di acquisto** e **prezzo "
+                            "di vendita** per vedere le matrici di "
+                            "sensitività (la vendita puoi stimarla "
+                            "con l'MCA).")
+
+            # ------------------------------------------- dettaglio costi
+            with col_costi:
+                st.markdown(
+                    '<div style="background:#24345988;border:1px solid '
+                    '#3C4C6E;padding:4px 10px;border-radius:6px;'
+                    'text-align:center;font-weight:700;margin-bottom:6px;">'
+                    'SPESE ACQUISTO — dettaglio</div>',
+                    unsafe_allow_html=True)
+                e1, e2, e3 = st.columns([1.7, 0.95, 1.35])
+                e1.caption("Voce")
+                e2.caption("% / €")
+                e3.caption("Netto")
+                riga_costo_bp(
+                    "Imposte d'acquisto",
+                    centro={"chiave": "bp_imposta", "min_value": 0.0,
+                            "max_value": 30.0, "step": 0.5,
+                            "on_change": bp_ricalcola_euro},
+                    destra={"chiave": "bp_imposta_eur", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "on_change": bp_pct_da_euro_imposta})
+                riga_costo_bp(
+                    "Imposte fisse",
+                    destra={"chiave": "bp_imposte_fisse", "min_value": 0.0,
+                            "step": 50.0, "format": "%.2f"})
+                riga_costo_bp(
+                    "Notaio",
+                    destra={"chiave": "bp_notaio", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "help": "Compreso IVA, visure, archivio "
+                                    "notarile…"})
+                riga_costo_bp(
+                    "Spese e interessi mutuo",
+                    destra={"chiave": "bp_mutuo", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f"})
+                riga_costo_bp(
+                    "Imprevisti e condominio",
+                    destra={"chiave": "bp_imprevisti", "min_value": 0.0,
+                            "step": 500.0, "format": "%.2f"})
+                riga_costo_bp(
+                    "Agenzia IN",
+                    centro={"chiave": "bp_ag_in", "min_value": 0.0,
+                            "max_value": 10.0, "step": 0.5,
+                            "on_change": bp_ricalcola_euro,
+                            "help": "Commissione % sul prezzo di acquisto; "
+                                    "il € a destra è IVA inclusa"},
+                    destra={"chiave": "bp_ag_in_eur", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "on_change": bp_pct_da_euro_ag_in})
+                riga_costo_bp(
+                    ":orange[**Ristrutturazione stimata**] (0 = dal "
+                    "computo)",
+                    destra={"chiave": "bp_ristr", "min_value": 0.0,
+                            "step": 1000.0, "format": "%.2f"})
+                # A cantiere avviato le fatture reali valgono più di ogni
+                # stima: l'opzione compare solo quando un consuntivo esiste
+                # davvero, altrimenti sarebbe un interruttore che non fa nulla.
+                if cantiere_consuntivo > 0:
+                    st.checkbox(
+                        "Usa i costi reali del cantiere "
+                        f"({euro(cantiere_consuntivo)})",
+                        key="bp_usa_consuntivo",
+                        help="Lavori + materiale + architetto dalla scheda "
+                             "«Spese a consuntivo» (sostenute e da "
+                             "sostenere), al posto della stima. Ha la "
+                             "precedenza sulla cifra a mano qui sopra.")
+                if usa_consuntivo:
+                    provenienza_ristr = "(dal consuntivo: fatture reali)"
+                elif st.session_state.bp_ristr:
+                    provenienza_ristr = "(a mano)"
+                else:
+                    provenienza_ristr = "(dal computo, imprevisti inclusi)"
+                st.caption("🔗 Ristrutturazione considerata: "
+                           f"**{euro(ristr_eff)}** {provenienza_ristr}"
+                           + f" · mq: {numero_it(mq_eff, 0)} "
+                           + ("(a mano)" if st.session_state.bp_mq
+                              else "(dalla planimetria)"))
+                st.markdown(righe_bp([
+                    ("TOTALE SPESE ACQUISTO", euro(acq["totale"]), "bold"),
+                ]), unsafe_allow_html=True)
+                st.markdown("<div style='height:10px'></div>",
+                            unsafe_allow_html=True)
+                riga_costo_bp(
+                    "Agenzia OUT",
+                    centro={"chiave": "bp_ag_out", "min_value": 0.0,
+                            "max_value": 10.0, "step": 0.5,
+                            "on_change": bp_ricalcola_euro,
+                            "help": "Commissione % sul prezzo di vendita; "
+                                    "il € a destra è IVA inclusa"},
+                    destra={"chiave": "bp_ag_out_eur", "min_value": 0.0,
+                            "step": 100.0, "format": "%.2f",
+                            "on_change": bp_pct_da_euro_ag_out})
+                st.markdown(righe_bp([
+                    ("TOTALE SPESE (acquisto + vendita)",
+                     euro(acq["totale"] + ven["totale"]), "bold"),
+                ]), unsafe_allow_html=True)
 
     # --------------------------------------------- MCA prezzo di vendita
     with sotto_mca:
@@ -2492,3 +3021,18 @@ with tab_bp:
                     st.session_state.bp_vendita_pending = float(
                         round(esito_mca["valore"], 0))
                     st.rerun()
+
+
+# ---------------------------------------------------------------- lingua
+# Streamlit serve la pagina con <html lang="en"> e non offre un'opzione per
+# cambiarlo. Su un'interfaccia interamente italiana ogni screen reader applica
+# fonetica inglese a «Computo», «Demolizioni», «Imprevisti». Il componente
+# gira nella stessa origine e può correggere l'attributo sul documento padre;
+# se il browser lo impedisce non succede nulla di male.
+st.iframe(
+    '<!doctype html><html><body><script>'
+    'try { window.parent.document.documentElement.lang = "it"; }'
+    ' catch (errore) {}'
+    '</script></body></html>',
+    height=1,
+)
