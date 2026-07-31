@@ -1521,6 +1521,10 @@ if "da_caricare" in st.session_state:
     st.session_state.pop("cat_attiva", None)
     st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
+    # i comandi delle etichette devono ripartire dai valori del progetto
+    # appena aperto, non da quelli rimasti nei widget della sessione
+    for _k in ("et_font_w", "et_nome_w", "et_m2_w", "et_perim_w", "et_pct_w"):
+        st.session_state.pop(_k, None)
     # business plan
     bp_salvato = dati.get("business_plan") or {}
     for _chiave, _valore in IMPOSTAZIONI_BP.items():
@@ -2383,12 +2387,29 @@ with tab_plan:
         st.markdown(legenda, unsafe_allow_html=True)
 
         with st.expander("🔤 Etichette sulle zone (layout)"):
-            st.slider("Dimensione carattere", 10, 24, key="et_font")
+            # Questi comandi stanno DOPO il disegno, e ogni gesto sul disegno
+            # fa ripartire lo script a metà (st.rerun in gestisci_evento):
+            # Streamlit butta via lo stato dei widget che in quel giro non ha
+            # disegnato, e la dimensione del carattere tornava al minimo
+            # appena si trascinava un'etichetta. Il valore buono vive quindi
+            # nelle chiavi et_* — le stesse salvate nel progetto — e i widget
+            # (key separata, _w) le ricaricano ogni volta con value=.
+            st.session_state.et_font = st.slider(
+                "Dimensione carattere", 10, 24,
+                value=int(st.session_state.et_font), key="et_font_w")
             e1, e2, e3, e4 = st.columns(4)
-            e1.checkbox("Nome / categoria", key="et_nome")
-            e2.checkbox("Superficie (m²)", key="et_m2")
-            e3.checkbox("Perimetro (m)", key="et_perim")
-            e4.checkbox("Percentuale", key="et_pct")
+            st.session_state.et_nome = e1.checkbox(
+                "Nome / categoria", value=bool(st.session_state.et_nome),
+                key="et_nome_w")
+            st.session_state.et_m2 = e2.checkbox(
+                "Superficie (m²)", value=bool(st.session_state.et_m2),
+                key="et_m2_w")
+            st.session_state.et_perim = e3.checkbox(
+                "Perimetro (m)", value=bool(st.session_state.et_perim),
+                key="et_perim_w")
+            st.session_state.et_pct = e4.checkbox(
+                "Percentuale", value=bool(st.session_state.et_pct),
+                key="et_pct_w")
             st.caption("Di norma le etichette stanno **fuori dalle aree**, "
                        "collegate da una linea di richiamo. Se ne hai "
                        "trascinata qualcuna, questo tasto le rimette tutte "
