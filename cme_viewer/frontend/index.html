@@ -55,7 +55,16 @@
        inattivi stanno a 14,8:1). Navy su oro lo porta oltre 8:1. */
     .tb-btn.attivo { background: #C9A96A; border-color: #8A6D2F; color: #1A2744; }
     .tb-btn.attivo .lbl { font-weight: 700; }
-    .tb-btn .ico { font-size: 17px; line-height: 1.15; }
+    .tb-btn .ico { font-size: 17px; line-height: 1.15; display: block; }
+    /* icone disegnate (SVG) invece delle emoji di sistema: stesso tratto per
+       tutti gli strumenti, e seguono il colore del pulsante anche da attivo */
+    .tb-btn .ico svg {
+      width: 19px; height: 19px; display: block;
+      fill: none; stroke: currentColor; stroke-width: 1.7;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .tb-riga .tb-btn .ico svg { width: 15px; height: 15px; }
+    .tb-btn.spento { opacity: .55; }
     /* 8,5px erano sotto qualsiasi soglia di leggibilità, per giunta in
        maiuscoletto: 11px è il minimo sotto cui il testo smette di essere testo. */
     .tb-btn .lbl { font-size: 11px; font-weight: 600; letter-spacing: .01em;
@@ -71,22 +80,25 @@
   <div id="wrap">
     <div id="toolbar">
       <button class="tb-btn attivo" data-mode="sposta" title="Sposta la vista (trascina); la rotellina zooma sempre">
-        <span class="ico">✋</span><span class="lbl">Sposta</span></button>
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l2.5 2.5" transform="translate(0,0)"/></svg></span><span class="lbl">Sposta</span></button>
       <button class="tb-btn" data-mode="disegna" title="Disegna un'area: clicca gli angoli, chiudi sul primo punto o con doppio clic">
-        <span class="ico">✏️</span><span class="lbl">Area</span></button>
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 6l8-2 6 6-2 9-9 1z"/><circle cx="5" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="13" cy="4" r="1.9" fill="currentColor" stroke="none"/><circle cx="19" cy="10" r="1.9" fill="currentColor" stroke="none"/><circle cx="17" cy="19" r="1.9" fill="currentColor" stroke="none"/><circle cx="8" cy="20" r="1.9" fill="currentColor" stroke="none"/></svg></span><span class="lbl">Area</span></button>
       <button class="tb-btn" data-mode="modifica" title="Seleziona e modifica: trascina i vertici, Canc elimina">
-        <span class="ico">➤</span><span class="lbl">Modifica</span></button>
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 3l13 8-5.5 1.8L10 19z" fill="currentColor" stroke="none"/><path d="M14 14l6 6"/></svg></span><span class="lbl">Modifica</span></button>
       <button class="tb-btn" data-mode="misura" title="Misura al volo (temporanea, non salvata): trascina tra due punti; Esc cancella">
-        <span class="ico">📏</span><span class="lbl">Misura</span></button>
-      <button class="tb-btn" data-mode="parete" title="Traccia una parete (esistente, da demolire o da costruire): trascina da un capo all'altro">
-        <span class="ico">🧱</span><span class="lbl">Parete</span></button>
+        <span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M7 8v3M12 8v4M17 8v3"/></svg></span><span class="lbl">Misura</span></button>
+      <button class="tb-btn" data-mode="parete" title="Traccia una parete (da demolire o da costruire): trascina da un capo all'altro">
+        <span class="ico"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="1.2"/><path d="M2.5 9.7h19M2.5 14.3h19M9 5v4.7M15 9.7v4.6M9 14.3V19"/></svg></span><span class="lbl">Parete</span></button>
       <button class="tb-btn" data-mode="scala" title="Imposta la scala: trascina lungo una misura nota">
-        <span class="ico">↔️</span><span class="lbl">Scala</span></button>
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M4 6v12M20 6v12M4 12h16"/><path d="M8 9l-4 3 4 3M16 9l4 3-4 3" fill="none"/></svg></span><span class="lbl">Scala</span></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" id="b-aree" title="Nascondi/mostra le aree dei locali e le loro etichette (comodo per tracciare i muri)">
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg></span><span class="lbl">Aree</span></button>
       <div class="tb-sep"></div>
       <div class="tb-riga">
-        <button class="tb-btn" id="b-zin" title="Zoom avanti"><span class="ico">＋</span></button>
-        <button class="tb-btn" id="b-zout" title="Zoom indietro"><span class="ico">－</span></button>
-        <button class="tb-btn" id="b-fit" title="Adatta alla finestra"><span class="ico">⛶</span></button>
+        <button class="tb-btn" id="b-zin" title="Zoom avanti"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></button>
+        <button class="tb-btn" id="b-zout" title="Zoom indietro"><span class="ico"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></span></button>
+        <button class="tb-btn" id="b-fit" title="Adatta alla finestra"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></span></button>
       </div>
     </div>
     <canvas id="cv" tabindex="0"></canvas>

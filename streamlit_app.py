@@ -91,6 +91,9 @@ VOCI_DA_SUPERFICI = [
     ("2.14", "battiscopa", True),         # posa battiscopa
     ("2.17", "tinteggiatura", False),     # rasatura muri e soffitti
     ("2.18", "tinteggiatura", True),      # tinteggiatura muri e soffitti
+    # dai muri tracciati sulla planimetria (lunghezza × altezza)
+    ("1.02", "muri_demolire", True),      # demolizione murature
+    ("2.01", "muri_costruire", True),     # ricostruzione muri in forati
 ]
 
 # Business plan: colonne delle tabelle e impostazioni predefinite
@@ -1171,6 +1174,12 @@ def gestisci_evento(ev, pianta):
     elif tipo == "scala":
         st.session_state.scala_temp = {"p1": list(ev["p1"]),
                                        "p2": list(ev["p2"])}
+    elif tipo == "rinomina":
+        # doppio clic sull'etichetta: cambia SOLO il nome del locale, la
+        # categoria (e quindi colore e percentuale commerciale) resta
+        for zona in pianta["zone"]:
+            if zona["id"] == ev.get("id"):
+                zona["nome"] = (ev.get("nome") or "").strip() or None
     st.rerun()
 
 
@@ -2015,9 +2024,13 @@ with tab_plan:
                                             impostazioni),
                 "etichetta_pos": (z.get("etichetta_pos")
                                   or pos_default.get(z["id"])),
+                # serve alla rinomina con doppio clic sull'etichetta: si
+                # modifica il nome, non la riga calcolata (m², %)
+                "nome": z.get("nome") or "",
             } for z in pianta["zone"]]
             pareti_props = [{
                 "id": p["id"], "p1": p["p1"], "p2": p["p2"],
+                "tipo": p.get("tipo", "esistente"),
                 "colore": TIPI_PARETE.get(p.get("tipo", "esistente"),
                                           TIPI_PARETE["esistente"])["colore"],
                 "etichetta": etichetta_parete(p, pianta["mpp"]),
@@ -2032,6 +2045,8 @@ with tab_plan:
                 colore_attivo=colore_attivo,
                 mpp=pianta["mpp"] or 0.0,
                 font_px=st.session_state.et_font,
+                tipo_parete=st.session_state.get("tipo_parete_codice",
+                                                 "demolire"),
                 key=f"viewer_{pianta['uid']}",
             )
             ev = evento_viewer(valore)
@@ -2280,6 +2295,20 @@ with tab_plan:
             e2.checkbox("Superficie (m²)", key="et_m2")
             e3.checkbox("Perimetro (m)", key="et_perim")
             e4.checkbox("Percentuale", key="et_pct")
+            st.caption("Di norma le etichette stanno **fuori dalle aree**, "
+                       "collegate da una linea di richiamo. Se ne hai "
+                       "trascinata qualcuna, questo tasto le rimette tutte "
+                       "al loro posto.")
+            spostate = sum(1 for p in piante
+                           for elenco in (p["zone"], p["pareti"])
+                           for e in elenco if e.get("etichetta_pos"))
+            if st.button(f"↩️ Riporta le etichette fuori dal disegno "
+                         f"({spostate} spostate)", disabled=not spostate):
+                for p in piante:
+                    for elenco in (p["zone"], p["pareti"]):
+                        for elemento in elenco:
+                            elemento.pop("etichetta_pos", None)
+                st.rerun()
 
         # ------------------------------------------- superfici commerciali
         st.subheader("🧮 Superfici commerciali (tutte le planimetrie)")
@@ -2318,6 +2347,25 @@ with tab_plan:
         # ------------------------- dalle superfici alle voci del computo
         st.subheader("📏 Dalle superfici al computo (locale per locale)")
         righe_loc, senza_scala_loc = planimetria.riepilogo_locali(piante)
+        grandezze = {}
+        # L'altezza serve sia ai locali (pareti da tinteggiare) sia ai muri
+        # da demolire/costruire: vive in alt_locali (salvata nel progetto) e
+        # la casella la ricarica ogni volta che rinasce — Streamlit scarta lo
+        # stato dei widget che in un giro non ha disegnato, e ripartendo dal
+        # minimo le pareti diventavano «perimetro × 1»: un numero plausibile
+        # e sbagliato, che finiva dritto nel computo.
+        st.session_state.setdefault("alt_locali", 2.70)
+        if righe_loc or any(p.get("pareti") for p in piante):
+            altezza = st.number_input(
+                "Altezza dei locali e dei muri (m)", min_value=1.0,
+                max_value=6.0, step=0.05, format="%.2f",
+                value=float(st.session_state.alt_locali),
+                key="alt_locali_widget",
+                help="Usata per pareti da tinteggiare e per la superficie "
+                     "dei muri da demolire o costruire (lunghezza × altezza).")
+            st.session_state.alt_locali = altezza
+        else:
+            altezza = float(st.session_state.alt_locali)
         if senza_scala_loc:
             st.warning("Locali esclusi perché la planimetria è **senza "
                        "scala**: " + ", ".join(senza_scala_loc))
@@ -2332,22 +2380,6 @@ with tab_plan:
                        "calpestabile. Le aperture (porte/finestre) non "
                        "vengono detratte: affina tu le quantità nel computo "
                        "se serve.")
-            # Questa casella esiste solo quando ci sono zone disegnate, e
-            # Streamlit scarta lo stato dei widget che in un giro non ha
-            # disegnato: al primo giro utile ripartiva dal minimo (1,00 m),
-            # in silenzio. Le pareti risultavano «perimetro × 1» — un numero
-            # plausibile e sbagliato, che finiva dritto nel computo. Il
-            # valore buono vive quindi in una chiave normale (alt_locali, che
-            # è anche quella salvata nel progetto) e la casella la ricarica
-            # ogni volta che rinasce.
-            st.session_state.setdefault("alt_locali", 2.70)
-            altezza = st.number_input(
-                "Altezza dei locali (m)", min_value=1.0, max_value=6.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.alt_locali),
-                key="alt_locali_widget")
-            st.session_state.alt_locali = altezza
-
             zona_per_rif = {(p["uid"], z["id"]): z
                             for p in piante for z in p["zone"]}
             righe_tab = []
@@ -2380,8 +2412,15 @@ with tab_plan:
                 riferimenti.append((r["uid"], r["id"]))
 
             chiave_tab = "edloc_" + str(abs(hash(tuple(riferimenti))) % 10 ** 8)
+            # Al data_editor va passata SEMPRE la stessa tabella di partenza:
+            # ricostruirla a ogni giro (dai valori appena scritti nelle zone)
+            # gli faceva perdere il primo clic sulle spunte — bisognava
+            # cliccare due volte. La rigeneriamo solo quando cambiano i locali.
+            if st.session_state.get("loc_base_chiave") != chiave_tab:
+                st.session_state.loc_base_chiave = chiave_tab
+                st.session_state.loc_base_df = pd.DataFrame(righe_tab)
             df_loc = st.data_editor(
-                pd.DataFrame(righe_tab),
+                st.session_state.loc_base_df,
                 hide_index=True, key=chiave_tab,
                 disabled=["Pianta", "Locale", "Superficie (m²)",
                           "Perimetro (m)"],
@@ -2422,14 +2461,50 @@ with tab_plan:
                       f"{numero_it(pareti_m2, 2)} m²")
             t4.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
 
-            # ---------------- dalle superfici alle voci del listino
-            grandezze = {
+            grandezze.update({
                 "pavimento": pav_m2,
                 # il listino chiede la superficie netta più ~5% di sfrido
                 "pavimento_sfrido": pav_m2 * 1.05,
                 "battiscopa": batt_m,
                 "tinteggiatura": pareti_m2 + soffitti_m2,
-            }
+            })
+
+        # ------------------------------- dai muri tracciati alle demolizioni
+        st.subheader("🧱 Dai muri al computo (demolire / costruire)")
+        riep_muri, senza_scala_muri = planimetria.riepilogo_pareti(
+            piante, altezza)
+        if senza_scala_muri:
+            st.warning("Muri esclusi perché la planimetria è **senza "
+                       "scala**: " + ", ".join(senza_scala_muri))
+        if not riep_muri:
+            st.info("Traccia i muri con lo strumento **PARETE** sul disegno "
+                    "(scegli sopra se sono da demolire o da costruire): qui "
+                    "trovi metri lineari e superfici pronti per il computo.")
+        else:
+            vuoto = {"n": 0, "ml": 0.0, "m2": 0.0}
+            dem = riep_muri.get("demolire", vuoto)
+            cos = riep_muri.get("costruire", vuoto)
+            esi = riep_muri.get("esistente", vuoto)
+            st.caption(f"Superficie = lunghezza × altezza "
+                       f"(**{numero_it(altezza, 2)} m**). Le aperture non "
+                       "vengono detratte: se un muro ha una porta, affina la "
+                       "quantità nel computo.")
+            w1, w2, w3, w4 = st.columns(4)
+            w1.metric(f"🔴 Da demolire ({dem['n']})",
+                      f"{numero_it(dem['ml'], 2)} m")
+            w2.metric("→ superficie", f"{numero_it(dem['m2'], 2)} m²")
+            w3.metric(f"🟡 Da costruire ({cos['n']})",
+                      f"{numero_it(cos['ml'], 2)} m")
+            w4.metric("→ superficie", f"{numero_it(cos['m2'], 2)} m²")
+            if esi["n"]:
+                st.caption(f":gray[Esclusi {esi['n']} muri «esistenti» "
+                           f"({numero_it(esi['ml'], 2)} m): non sono "
+                           "lavorazioni.]")
+            grandezze["muri_demolire"] = dem["m2"]
+            grandezze["muri_costruire"] = cos["m2"]
+
+        # ---------------- dalle misure della planimetria alle voci del listino
+        if any(v > 0 for v in grandezze.values()):
             st.markdown("**➕ Porta queste quantità nel computo**")
             st.caption(
                 "Le quantità vengono **scritte** nelle voci del listino, non "

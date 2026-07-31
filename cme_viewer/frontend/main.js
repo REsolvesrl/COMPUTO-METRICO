@@ -18,6 +18,7 @@ let scale = 1, tx = 0, ty = 0, fitScale = 1;
 let mode = "sposta";
 let zone = [], pareti = [], scalaTemp = null;
 let coloreAttivo = "#E57373", mpp = 0, fontPx = 14;
+let tipoParete = "demolire";  // che muro si sta per tracciare (dal server)
 
 let drawing = [];            // poligono in corso (coord. immagine)
 let cursorPos = null;        // mouse in coord. immagine (per il rubber band)
@@ -27,6 +28,8 @@ let vecStart = null, vecEnd = null;
 let misure = [];             // misure "al volo": SOLO locali, mai inviate
 let labelRects = [];         // rettangoli (schermo) delle etichette disegnate
 let seqN = 0;
+let mostraAree = true;       // aree dei locali + etichette a schermo
+let editor = null;           // <input> di rinomina sovrapposto all'etichetta
 
 const COL_SCALA = "#111111";       // nero — vettore di scala
 const COL_MISURA = "#3D9BE9";      // azzurro — misure al volo
@@ -194,37 +197,102 @@ function tratteggio(on) {
   ctx.setLineDash(on ? [8 / scale, 6 / scale] : []);
 }
 
-// Vettore ben visibile: alone bianco sotto, colore sopra, tacche alle
-// estremità. spessore in px schermo (viene diviso per lo zoom).
-function drawVettore(p1, p2, dashed, colore, spessore, evidenzia) {
+function seg(ax, ay, bx, by) {
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+}
+
+// Simboli in stile disegno tecnico. Ogni tipo ha il suo segno, riconoscibile
+// anche a colpo d'occhio e in bianco e nero:
+//   scala     → linea di quota con le barrette oblique a 45° dei disegni CAD
+//   misura    → linea con le punte di freccia
+//   demolire  → tratteggio con le crocette (la convenzione delle demolizioni)
+//   costruire → linea piena con i giunti dei mattoni
+// spessore è in px schermo: viene diviso per lo zoom, così il segno resta
+// dello stesso peso a qualunque ingrandimento.
+function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile) {
   const lw = (spessore || 5) / scale;
   const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
   const L = Math.hypot(dx, dy) || 1;
-  const nx = -dy / L * (12 / scale), ny = dx / L * (12 / scale);
+  const ux = dx / L, uy = dy / L;          // versore lungo il segmento
+  const nx = -uy, ny = ux;                 // normale
+  const T = 11 / scale;                    // sbraccio delle tacche
+  const capo = 13 / scale;
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
   if (evidenzia) {                        // selezione: alone extra
     ctx.strokeStyle = "rgba(255,255,255,0.95)";
     ctx.lineWidth = lw + 8 / scale;
     ctx.beginPath();
-    ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+    seg(p1[0], p1[1], p2[0], p2[1]);
     ctx.stroke();
   }
-  ctx.strokeStyle = "rgba(255,255,255,0.75)";   // alone di contrasto
+  ctx.strokeStyle = "rgba(255,255,255,0.78)";   // alone di contrasto
   ctx.lineWidth = lw + 4 / scale;
   ctx.beginPath();
-  ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+  seg(p1[0], p1[1], p2[0], p2[1]);
   ctx.stroke();
 
+  // --- corpo della linea
   ctx.strokeStyle = colore;
   ctx.lineWidth = lw;
-  tratteggio(dashed);
+  if (stile === "demolire") ctx.setLineDash([13 / scale, 8 / scale]);
+  else tratteggio(dashed);
   ctx.beginPath();
-  ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+  seg(p1[0], p1[1], p2[0], p2[1]);
   ctx.stroke();
   tratteggio(false);
+
+  // --- segno caratteristico
+  ctx.lineWidth = Math.max(1.6 / scale, lw * 0.55);
   ctx.beginPath();
-  ctx.moveTo(p1[0] - nx, p1[1] - ny); ctx.lineTo(p1[0] + nx, p1[1] + ny);
-  ctx.moveTo(p2[0] - nx, p2[1] - ny); ctx.lineTo(p2[0] + nx, p2[1] + ny);
+  if (stile === "scala") {
+    // barrette a 45°: (n+u)/√2 ruotato, il tratto obliquo delle quote
+    const ox = (ux + nx) * 0.7071, oy = (uy + ny) * 0.7071;
+    seg(p1[0] - ox * T, p1[1] - oy * T, p1[0] + ox * T, p1[1] + oy * T);
+    seg(p2[0] - ox * T, p2[1] - oy * T, p2[0] + ox * T, p2[1] + oy * T);
+    // e i piedini perpendicolari che chiudono la quota
+    seg(p1[0] - nx * T * 0.8, p1[1] - ny * T * 0.8,
+        p1[0] + nx * T * 0.8, p1[1] + ny * T * 0.8);
+    seg(p2[0] - nx * T * 0.8, p2[1] - ny * T * 0.8,
+        p2[0] + nx * T * 0.8, p2[1] + ny * T * 0.8);
+  } else if (stile === "misura") {
+    const a = capo * 0.55;
+    seg(p1[0], p1[1], p1[0] + ux * capo + nx * a, p1[1] + uy * capo + ny * a);
+    seg(p1[0], p1[1], p1[0] + ux * capo - nx * a, p1[1] + uy * capo - ny * a);
+    seg(p2[0], p2[1], p2[0] - ux * capo + nx * a, p2[1] - uy * capo + ny * a);
+    seg(p2[0], p2[1], p2[0] - ux * capo - nx * a, p2[1] - uy * capo - ny * a);
+  } else if (stile === "demolire") {
+    // crocette lungo il tracciato, come sulle tavole di demolizione
+    const passo = 30 / scale, c = 6 / scale;
+    for (let d = passo * 0.5; d < L; d += passo) {
+      const cx = p1[0] + ux * d, cy = p1[1] + uy * d;
+      seg(cx - (ux + nx) * c, cy - (uy + ny) * c,
+          cx + (ux + nx) * c, cy + (uy + ny) * c);
+      seg(cx - (ux - nx) * c, cy - (uy - ny) * c,
+          cx + (ux - nx) * c, cy + (uy - ny) * c);
+    }
+    seg(p1[0] - nx * T * 0.7, p1[1] - ny * T * 0.7,
+        p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
+    seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
+        p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
+  } else if (stile === "costruire") {
+    // giunti dei mattoni: trattini trasversali a passo regolare
+    const passo = 26 / scale, h = 5.5 / scale;
+    for (let d = passo; d < L - passo * 0.4; d += passo) {
+      const cx = p1[0] + ux * d, cy = p1[1] + uy * d;
+      seg(cx - nx * h, cy - ny * h, cx + nx * h, cy + ny * h);
+    }
+    seg(p1[0] - nx * T * 0.7, p1[1] - ny * T * 0.7,
+        p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
+    seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
+        p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
+  } else {
+    seg(p1[0] - nx * T, p1[1] - ny * T, p1[0] + nx * T, p1[1] + ny * T);
+    seg(p2[0] - nx * T, p2[1] - ny * T, p2[0] + nx * T, p2[1] + ny * T);
+  }
   ctx.stroke();
 }
 
@@ -248,7 +316,7 @@ function render() {
   ctx.imageSmoothingEnabled = scale < 3;
   ctx.drawImage(img, 0, 0);
 
-  for (const z of zone) {
+  for (const z of (mostraAree ? zone : [])) {
     const sel = (z.id === selZona);
     ctx.beginPath();
     z.punti.forEach(function (p, i) {
@@ -283,24 +351,28 @@ function render() {
 
   for (const p of pareti) {
     drawVettore(p.p1, p.p2, false, p.colore || "#C9A96A", 5,
-                p.id === selParete);
+                p.id === selParete, p.tipo || "esistente");
   }
   for (const m of misure) {
-    drawVettore(m.p1, m.p2, true, COL_MISURA, 4, false);
+    drawVettore(m.p1, m.p2, false, COL_MISURA, 3.5, false, "misura");
   }
-  if (scalaTemp) drawVettore(scalaTemp.p1, scalaTemp.p2, true, COL_SCALA, 6);
+  if (scalaTemp) {
+    drawVettore(scalaTemp.p1, scalaTemp.p2, false, COL_SCALA, 4.5, false,
+                "scala");
+  }
   if (drag && drag.kind === "vector" && vecStart && vecEnd) {
     const col = (mode === "scala") ? COL_SCALA
       : (mode === "misura") ? COL_MISURA : coloreParete();
-    drawVettore(vecStart, vecEnd, mode !== "parete", col,
-                mode === "scala" ? 6 : 5);
+    const stile = (mode === "parete") ? (tipoParete || "demolire") : mode;
+    drawVettore(vecStart, vecEnd, false, col,
+                mode === "scala" ? 4.5 : 4, false, stile);
   }
 
   // --- spazio schermo (etichette e maniglie) ---
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   labelRects = [];
 
-  for (const z of zone) {
+  for (const z of (mostraAree ? zone : [])) {
     const pos = posEtichettaZona(z);
     // linea di richiamo quando l'etichetta sta fuori dalla sua area
     if (z.etichetta && z.etichetta_pos && z.punti.length >= 3 &&
@@ -391,8 +463,10 @@ function render() {
 }
 
 function coloreParete() {
-  // il colore della parete in corso arriva dal server nel prossimo render;
-  // durante il trascinamento usiamo un neutro ben visibile
+  // stesso colore che avrà una volta salvata (rosso demolire, giallo
+  // costruire), così durante il tracciamento si vede già cosa si sta facendo
+  if (tipoParete === "demolire") return "#E53935";
+  if (tipoParete === "costruire") return "#FFD400";
   return "#C9A96A";
 }
 
@@ -598,8 +672,47 @@ function onUp() {
   render();
 }
 
-function onDbl() {
-  if (mode === "disegna" && drawing.length >= 3) chiudiPoligono();
+// Rinomina al volo: doppio clic sull'etichetta di un'area e si scrive il
+// nome lì sopra. Cambia SOLO il nome: categoria, superficie e percentuale
+// restano quelli calcolati dal server.
+function apriEditor(z, r) {
+  chiudiEditor();
+  editor = document.createElement("input");
+  editor.type = "text";
+  editor.value = z.nome || "";
+  editor.placeholder = "Nome del locale";
+  editor.setAttribute("style",
+    "position:absolute;z-index:5;box-sizing:border-box;" +
+    "left:" + Math.round(r.x - 4) + "px;top:" + Math.round(r.y + r.h / 2 - 15) +
+    "px;width:" + Math.max(130, Math.round(r.w + 8)) + "px;" +
+    "font:600 " + fontPx + "px system-ui,sans-serif;padding:5px 7px;" +
+    "border:2px solid " + z.colore + ";border-radius:7px;" +
+    "background:#fff;color:#1A2744;box-shadow:0 3px 10px rgba(0,0,0,.28);");
+  editor.addEventListener("keydown", function (e) {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      send({ tipo: "rinomina", elemento: "zona", id: z.id,
+             nome: editor.value.trim() });
+      chiudiEditor();
+    } else if (e.key === "Escape") {
+      chiudiEditor();
+    }
+  });
+  editor.addEventListener("blur", chiudiEditor);
+  cont.appendChild(editor);
+  editor.focus();
+  editor.select();
+}
+
+function chiudiEditor() {
+  if (editor && editor.parentNode) editor.parentNode.removeChild(editor);
+  editor = null;
+}
+
+function onDbl(e) {
+  if (mode === "disegna" && drawing.length >= 3) { chiudiPoligono(); return; }
+  const q = hitLabel(scrOf(e));
+  if (q && q.el === "zona") apriEditor(q.obj, q.r);
 }
 
 function onKey(e) {
@@ -639,6 +752,7 @@ function onRender(event) {
   coloreAttivo = a.colore_attivo || "#E57373";
   mpp = a.mpp || 0;
   fontPx = a.font_px || 14;
+  tipoParete = a.tipo_parete || "demolire";
 
   if (selZona != null && !zone.some(function (z) { return z.id === selZona; })) {
     selZona = null;
@@ -678,6 +792,17 @@ function init() {
     zoomAt(cont.clientWidth / 2, contH / 2, 1 / 1.3);
   });
   document.getElementById("b-fit").addEventListener("click", fit);
+  // nascondi/mostra le aree: serve per tracciare i muri senza il velo
+  // colorato dei locali sotto. È solo visivo, non tocca i dati.
+  const bAree = document.getElementById("b-aree");
+  bAree.addEventListener("click", function () {
+    mostraAree = !mostraAree;
+    bAree.classList.toggle("spento", !mostraAree);
+    bAree.title = mostraAree ? "Nascondi le aree dei locali e le etichette"
+                             : "Mostra di nuovo le aree dei locali";
+    chiudiEditor();
+    render();
+  });
 
   cv.addEventListener("wheel", function (e) {
     e.preventDefault();

@@ -25,6 +25,7 @@ Il componente restituisce eventi come dizionari con un campo `seq` progressivo
 - {"tipo": "scala", "p1": [x, y], "p2": [x, y]}
 - {"tipo": "parete", "p1": [x, y], "p2": [x, y]}
 - {"tipo": "parete_eliminata", "id": n}
+- {"tipo": "rinomina", "elemento": "zona", "id": n, "nome": "Cucina"}
 """
 
 import base64
@@ -45,7 +46,8 @@ def pil_a_src(image, qualita=85):
 
 
 def image_viewer(src, zone=(), pareti=(), scala_temp=None,
-                 colore_attivo="#E57373", mpp=0.0, font_px=14, key=None):
+                 colore_attivo="#E57373", mpp=0.0, font_px=14,
+                 tipo_parete="demolire", key=None):
     """Mostra la planimetria e restituisce l'ultimo evento (o None).
 
     src: data-URL dell'immagine (usa pil_a_src una sola volta per pianta).
@@ -59,4 +61,4 @@ def image_viewer(src, zone=(), pareti=(), scala_temp=None,
     return _component(src=src, zone=list(zone), pareti=list(pareti),
                       scala_temp=scala_temp, colore_attivo=colore_attivo,
                       mpp=float(mpp or 0.0), font_px=int(font_px),
-                      key=key, default=None)
+                      tipo_parete=tipo_parete, key=key, default=None)

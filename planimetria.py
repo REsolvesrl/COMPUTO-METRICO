@@ -189,6 +189,39 @@ def riepilogo_locali(piante):
     return righe, senza_scala
 
 
+def riepilogo_pareti(piante, altezza):
+    """Muri tracciati, raggruppati per tipo di intervento (demolire/costruire).
+
+    piante: [{"nome", "mpp", "pareti": [{"tipo", "p1", "p2"}]}].
+    altezza: altezza dei muri in metri (la superficie è lunghezza × altezza:
+    è così che si computano demolizioni e ricostruzioni murarie).
+
+    Ritorna ({tipo: {"n", "ml", "m2"}}, senza_scala): le planimetrie senza
+    scala non sono misurabili e finiscono in senza_scala.
+    """
+    totali = {}
+    senza_scala = []
+    h = float(altezza or 0.0)
+    for pianta in piante:
+        pareti = pianta.get("pareti") or []
+        if not pareti:
+            continue
+        mpp = pianta.get("mpp")
+        if not mpp:
+            senza_scala.append(pianta.get("nome") or "Planimetria")
+            continue
+        for parete in pareti:
+            tipo = parete.get("tipo") or "esistente"
+            metri = distanza_pixel(parete["p1"], parete["p2"]) * mpp
+            voce = totali.setdefault(tipo, {"n": 0, "ml": 0.0, "m2": 0.0})
+            voce["n"] += 1
+            voce["ml"] += metri
+            voce["m2"] += metri * h
+    return ({tipo: {"n": v["n"], "ml": round(v["ml"], 3),
+                    "m2": round(v["m2"], 3)}
+             for tipo, v in totali.items()}, senza_scala)
+
+
 def riepilogo_superfici(piante, percentuali):
     """Riepilogo delle superfici di tutte le planimetrie di un progetto.
 

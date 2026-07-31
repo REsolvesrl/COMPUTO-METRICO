@@ -13,6 +13,7 @@ from planimetria import (
     posiziona_etichette,
     punto_in_poligono,
     riepilogo_locali,
+    riepilogo_pareti,
     riepilogo_superfici,
 )
 
@@ -240,3 +241,41 @@ def test_riepilogo_locali_superficie_e_perimetro():
     assert cucina["uid"] == 7 and cucina["id"] == 1
     balcone = righe[1]
     assert balcone["nome"] == "Balcone scoperto"   # senza nome → categoria
+
+
+# ------------------------------------------------- muri (demolire/costruire)
+
+PIANTE_PARETI = [{
+    "nome": "Piano terra", "mpp": 0.01,      # 1 px = 1 cm
+    "pareti": [
+        # 500 px = 5,00 m da demolire
+        {"tipo": "demolire", "p1": [0, 0], "p2": [500, 0]},
+        # 300 px = 3,00 m da demolire (verticale)
+        {"tipo": "demolire", "p1": [0, 0], "p2": [0, 300]},
+        # 400 px = 4,00 m da costruire
+        {"tipo": "costruire", "p1": [0, 0], "p2": [400, 0]},
+    ],
+}]
+
+
+def test_riepilogo_pareti_per_tipo():
+    totali, senza = riepilogo_pareti(PIANTE_PARETI, altezza=2.7)
+    assert senza == []
+    assert totali["demolire"]["n"] == 2
+    assert totali["demolire"]["ml"] == pytest.approx(8.0)      # 5 + 3
+    assert totali["demolire"]["m2"] == pytest.approx(21.6)     # 8 x 2,7
+    assert totali["costruire"]["ml"] == pytest.approx(4.0)
+    assert totali["costruire"]["m2"] == pytest.approx(10.8)    # 4 x 2,7
+
+
+def test_riepilogo_pareti_senza_scala_esclusa():
+    piante = [{"nome": "Senza scala", "mpp": None,
+               "pareti": [{"tipo": "demolire", "p1": [0, 0], "p2": [100, 0]}]}]
+    totali, senza = riepilogo_pareti(piante, altezza=2.7)
+    assert totali == {}
+    assert senza == ["Senza scala"]
+
+
+def test_riepilogo_pareti_senza_pareti():
+    assert riepilogo_pareti([{"nome": "X", "mpp": 0.01, "pareti": []}], 2.7) \
+        == ({}, [])
