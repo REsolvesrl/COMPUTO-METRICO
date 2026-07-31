@@ -1,4 +1,4 @@
-"""CME — Computo Metrico Estimativo.
+﻿"""CME — Computo Metrico Estimativo.
 
 Interfaccia Streamlit a due schede:
 1. Computo metrico — tabella voci, quantità calcolate, totali, export.
@@ -11,6 +11,7 @@ il visualizzatore interattivo in cme_viewer/.
 """
 
 import base64
+import copy
 import hashlib
 import io
 import json
@@ -1130,9 +1131,71 @@ def evento_viewer(valore):
     return valore
 
 
+# ------------------------------------------- annulla (planimetria)
+# Della planimetria si conserva solo quello che l'utente disegna — zone,
+# muri e scala — non le immagini: sono la parte pesante e non cambiano mai
+# per un tratto di matita. Bastano pochi kB per passo, così si possono
+# tenere gli ultimi PASSI_STORIA gesti senza appesantire la sessione.
+PASSI_STORIA = 25
+
+
+def istantanea_piante():
+    """Fotografia di ciò che si può annullare: zone, muri e scala."""
+    return [{"uid": p["uid"],
+             "mpp": p["mpp"],
+             "prossimo_id": p["prossimo_id"],
+             "zone": copy.deepcopy(p["zone"]),
+             "pareti": copy.deepcopy(p["pareti"])}
+            for p in st.session_state.piante]
+
+
+def registra_storia(descrizione):
+    """Da chiamare PRIMA di modificare zone, muri o scala."""
+    storia = st.session_state.setdefault("storia", [])
+    storia.append({"descrizione": descrizione, "piante": istantanea_piante()})
+    del storia[:-PASSI_STORIA]
+
+
+def annulla_ultima():
+    """Riporta zone, muri e scala com'erano prima dell'ultima operazione."""
+    storia = st.session_state.get("storia") or []
+    if not storia:
+        return None
+    passo = storia.pop()
+    per_uid = {s["uid"]: s for s in passo["piante"]}
+    for pianta in st.session_state.piante:
+        salvata = per_uid.get(pianta["uid"])
+        if salvata is None:
+            continue
+        pianta["mpp"] = salvata["mpp"]
+        pianta["prossimo_id"] = salvata["prossimo_id"]
+        pianta["zone"] = copy.deepcopy(salvata["zone"])
+        pianta["pareti"] = copy.deepcopy(salvata["pareti"])
+    # le selezioni potrebbero puntare a roba che non esiste più
+    st.session_state.sel_zona = None
+    st.session_state.sel_parete = None
+    st.session_state.scala_temp = None
+    st.session_state.pop("ultimo_rilevamento", None)
+    return passo["descrizione"]
+
+
+# eventi del visualizzatore che modificano il disegno (gli altri — selezione,
+# spostamento di un'etichetta — non vale la pena annullarli)
+DA_ANNULLARE = {
+    "zona_chiusa": "disegno dell'area",
+    "zona_modificata": "modifica dell'area",
+    "zona_eliminata": "eliminazione dell'area",
+    "parete": "tracciamento del muro",
+    "parete_eliminata": "eliminazione del muro",
+    "rinomina": "rinomina del locale",
+}
+
+
 def gestisci_evento(ev, pianta):
     """Applica l'evento del visualizzatore allo stato e riesegue la pagina."""
     tipo = ev.get("tipo")
+    if tipo in DA_ANNULLARE:
+        registra_storia(DA_ANNULLARE[tipo])
     if tipo == "zona_chiusa":
         punti = [[float(x), float(y)] for x, y in ev.get("punti", [])]
         if len(punti) >= 3:
@@ -1388,6 +1451,7 @@ st.session_state.setdefault("sel_zona", None)
 st.session_state.setdefault("sel_parete", None)
 st.session_state.setdefault("upl_count", 0)
 st.session_state.setdefault("ultimo_rilevamento", None)
+st.session_state.setdefault("storia", [])   # annulla (aree, muri, scala)
 st.session_state.setdefault("et_font", 14)
 st.session_state.setdefault("et_nome", True)
 st.session_state.setdefault("et_m2", True)
@@ -1452,6 +1516,8 @@ if "da_caricare" in st.session_state:
     st.session_state.scala_temp = None
     st.session_state.ultimo_seq = None
     st.session_state.ultimo_rilevamento = None
+    # le istantanee dell'annulla riguardano il progetto precedente
+    st.session_state.storia = []
     st.session_state.pop("cat_attiva", None)
     st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
@@ -2001,6 +2067,26 @@ with tab_plan:
             st.session_state.tipo_parete_codice = codici_tipi[
                 nomi_tipi.index(tipo_scelto)]
 
+            # ---- annulla l'ultima operazione sul disegno ----
+            storia = st.session_state.get("storia") or []
+            c_und, c_info = st.columns([1, 3], vertical_alignment="center")
+            if c_und.button(
+                    f"↩️ Annulla ({len(storia)})", disabled=not storia,
+                    use_container_width=True,
+                    help="Torna indietro di un passo su aree, muri e scala. "
+                         "Non tocca il computo né le altre schede."):
+                fatto = annulla_ultima()
+                if fatto:
+                    st.toast(f"Annullato: {fatto} ↩️")
+                st.rerun()
+            if storia:
+                c_info.caption(f"Ultima operazione: **{storia[-1]['descrizione']}**"
+                               f" · si può tornare indietro di "
+                               f"{len(storia)} pass{'o' if len(storia) == 1 else 'i'}")
+            else:
+                c_info.caption(":gray[Niente da annullare: non hai ancora "
+                               "modificato il disegno in questa sessione.]")
+
             if pianta["mpp"]:
                 st.caption("✅ Scala impostata — le misure sono in metri "
                            "reali. ✏️ disegna le aree, 📏 misura al volo, "
@@ -2069,6 +2155,7 @@ with tab_plan:
                 s_no.write("")
                 if s_ok.button("📏 Imposta scala", type="primary"):
                     if metri > 0:
+                        registra_storia("impostazione della scala")
                         pianta["mpp"] = planimetria.metri_per_pixel(
                             dist_px, metri)
                         st.session_state.scala_temp = None
@@ -2098,6 +2185,7 @@ with tab_plan:
                 nome_cat_nuova = (nomi_cat[etichette_cat.index(cat_nuova)]
                                   if cat_nuova in etichette_cat else None)
                 if nome_cat_nuova and nome_cat_nuova != zona_sel["categoria"]:
+                    registra_storia("cambio di categoria")
                     zona_sel["categoria"] = nome_cat_nuova
                     st.rerun()
                 a_add.write("")
@@ -2119,6 +2207,7 @@ with tab_plan:
                             "m²", round(area_sel, 2), None)
                         st.toast("Aggiunta al computo ✔")
                 if a_del.button("🗑 Elimina"):
+                    registra_storia("eliminazione dell'area")
                     pianta["zone"] = [z for z in pianta["zone"]
                                       if z["id"] != zona_sel["id"]]
                     st.session_state.sel_zona = None
@@ -2145,6 +2234,7 @@ with tab_plan:
                     key=f"pt_{pianta['uid']}_{parete_sel['id']}")
                 codice_nuovo = opz_codici[opz_nomi.index(tipo_nuovo)]
                 if codice_nuovo != codice_cur:
+                    registra_storia("cambio di tipo del muro")
                     parete_sel["tipo"] = codice_nuovo
                     st.rerun()
                 b_len.metric("Lunghezza",
@@ -2152,6 +2242,7 @@ with tab_plan:
                 b_del.write("")
                 if b_del.button("🗑 Elimina",
                                 key=f"pdel_{parete_sel['id']}"):
+                    registra_storia("eliminazione del muro")
                     pianta["pareti"] = [p for p in pianta["pareti"]
                                         if p["id"] != parete_sel["id"]]
                     st.session_state.sel_parete = None
@@ -2255,6 +2346,7 @@ with tab_plan:
                                    "questo disegno. Prova a impostare prima "
                                    "la scala, o disegna le aree a mano.")
                     else:
+                        registra_storia("rilevamento automatico delle stanze")
                         nuovi_id = []
                         for punti in proposte:
                             zid = nuovo_id(pianta)
