@@ -1573,6 +1573,17 @@ if "listino_pending" in st.session_state:
     for _cod, _quantita in st.session_state.pop("listino_pending").items():
         st.session_state[f"lq_{_cod}"] = _quantita
 
+# I comandi delle etichette stanno SOTTO il disegno, ma il disegno legge i
+# loro valori PRIMA: senza questo riallineamento userebbe quelli del giro
+# precedente (portando il cursore da 10 a 11 le etichette rimpicciolivano,
+# perché mostravano ancora il 10 di prima). Qui le chiavi «di verità» si
+# aggiornano al valore corrente dei widget, che Streamlit ha già applicato a
+# inizio giro; se un widget non esiste — perché lo script era ripartito a
+# metà — resta l'ultimo valore buono.
+for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim"):
+    if _et + "_w" in st.session_state:
+        st.session_state[_et] = st.session_state[_et + "_w"]
+
 
 # ------------------------------------------------------------------ pagina
 
