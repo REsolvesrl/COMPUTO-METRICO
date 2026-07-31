@@ -25,6 +25,7 @@ let cursorPos = null;        // mouse in coord. immagine (per il rubber band)
 let selZona = null, selParete = null;
 let drag = null;             // {kind:"pan"|"vertex"|"move"|"vector"|"label"}
 let vecStart = null, vecEnd = null;
+let vettoreAperto = false;   // primo punto fissato, si attende il secondo clic
 let misure = [];             // misure "al volo": SOLO locali, mai inviate
 let labelRects = [];         // rettangoli (schermo) delle etichette disegnate
 let seqN = 0;
@@ -360,12 +361,22 @@ function render() {
     drawVettore(scalaTemp.p1, scalaTemp.p2, false, COL_SCALA, 4.5, false,
                 "scala");
   }
-  if (drag && drag.kind === "vector" && vecStart && vecEnd) {
+  if (vecStart && vecEnd &&
+      (vettoreAperto || (drag && drag.kind === "vector"))) {
     const col = (mode === "scala") ? COL_SCALA
       : (mode === "misura") ? COL_MISURA : coloreParete();
     const stile = (mode === "parete") ? (tipoParete || "demolire") : mode;
     drawVettore(vecStart, vecEnd, false, col,
                 mode === "scala" ? 4.5 : 4, false, stile);
+    if (vettoreAperto) {          // pallino sul punto già fissato
+      ctx.beginPath();
+      ctx.arc(vecStart[0], vecStart[1], 4.5 / scale, 0, Math.PI * 2);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 / scale;
+      ctx.stroke();
+    }
   }
 
   // --- spazio schermo (etichette e maniglie) ---
@@ -474,7 +485,8 @@ function coloreParete() {
 function setMode(m) {
   mode = m;
   drawing = [];
-  vecStart = vecEnd = null;
+  annullaVettore();
+  chiudiEditor();
   drag = null;
   misure = [];                       // le misure al volo sono temporanee
   document.querySelectorAll(".tb-btn[data-mode]").forEach(function (b) {
@@ -518,12 +530,18 @@ function hitZona(p) {
   return null;
 }
 function hitParete(s) {
+  // presa generosa (12 px): un muro è una linea sottile, va afferrato senza
+  // dover centrare il pixel esatto. Vince il più vicino, non il primo che
+  // capita, così due muri che si incrociano restano distinguibili.
+  let vicino = null, minima = 12;
   for (let i = pareti.length - 1; i >= 0; i--) {
-    if (distSeg(s, img2scr(pareti[i].p1), img2scr(pareti[i].p2)) < 8) {
-      return pareti[i];
+    const d = distSeg(s, img2scr(pareti[i].p1), img2scr(pareti[i].p2));
+    if (d < minima) {
+      minima = d;
+      vicino = pareti[i];
     }
   }
-  return null;
+  return vicino;
 }
 
 function iniziaDragEtichetta(q, s, p) {
@@ -581,6 +599,19 @@ function onDown(e) {
         }
       }
     }
+    // I MURI HANNO LA PRECEDENZA sulle aree: sono disegnati sopra e sono
+    // sottili, quindi vanno presi per primi — altrimenti l'area sottostante
+    // se li "mangia" e diventano quasi impossibili da selezionare.
+    const wHit = hitParete(s);
+    if (wHit) {
+      if (selParete !== wHit.id || selZona != null) {
+        selParete = wHit.id;
+        selZona = null;
+        inviaSelezione();
+      }
+      render();
+      return;
+    }
     const z = hitZona(p);
     if (z) {
       if (z.id === selZona) {
@@ -592,29 +623,24 @@ function onDown(e) {
         inviaSelezione();
       }
       render();
+    } else if (selZona != null || selParete != null) {
+      selZona = null;
+      selParete = null;
+      inviaSelezione();
+      render();
     } else {
-      const wHit = hitParete(s);
-      if (wHit) {
-        if (selParete !== wHit.id || selZona != null) {
-          selParete = wHit.id;
-          selZona = null;
-          inviaSelezione();
-        }
-        render();
-      } else {
-        if (selZona != null || selParete != null) {
-          selZona = null;
-          selParete = null;
-          inviaSelezione();
-        }
-        render();
-      }
+      render();
     }
 
   } else if (mode === "scala" || mode === "parete" || mode === "misura") {
-    vecStart = p;
-    vecEnd = null;
-    drag = { kind: "vector" };
+    if (vettoreAperto) {          // secondo clic: chiude il segmento
+      vecEnd = p;
+      completaVettore();
+    } else {
+      vecStart = p;
+      vecEnd = p;
+      drag = { kind: "vector" };
+    }
   }
 }
 
@@ -642,6 +668,9 @@ function onMove(e) {
       drag.moved = true;
     }
     render();
+  } else if (vettoreAperto && vecStart) {
+    vecEnd = cursorPos.slice();   // anteprima fino al secondo clic
+    render();
   } else if (mode === "disegna" && drawing.length) {
     render();
   }
@@ -660,16 +689,33 @@ function onUp() {
            pos: arrotonda([d.tgt.etichetta_pos])[0] });
   } else if (d.kind === "vector" && vecStart && vecEnd &&
              dist(img2scr(vecStart), img2scr(vecEnd)) > 8) {
-    const p1 = arrotonda([vecStart])[0];
-    const p2 = arrotonda([vecEnd])[0];
-    if (mode === "scala") send({ tipo: "scala", p1: p1, p2: p2 });
-    else if (mode === "parete") send({ tipo: "parete", p1: p1, p2: p2 });
-    else if (mode === "misura") misure.push({ p1: p1, p2: p2 });
-    vecStart = vecEnd = null;
+    completaVettore();          // trascinamento: si chiude al rilascio
   } else if (d.kind === "vector") {
-    vecStart = vecEnd = null;
+    // clic secco (senza trascinare): il primo punto resta fissato e si
+    // aspetta il secondo clic. Puntare due volte con calma è più preciso
+    // che tenere premuto, soprattutto a forte ingrandimento.
+    vettoreAperto = true;
   }
   render();
+}
+
+function completaVettore() {
+  if (vecStart && vecEnd) {
+    const p1 = arrotonda([vecStart])[0];
+    const p2 = arrotonda([vecEnd])[0];
+    if (dist(img2scr(p1), img2scr(p2)) > 4) {
+      if (mode === "scala") send({ tipo: "scala", p1: p1, p2: p2 });
+      else if (mode === "parete") send({ tipo: "parete", p1: p1, p2: p2 });
+      else if (mode === "misura") misure.push({ p1: p1, p2: p2 });
+    }
+  }
+  annullaVettore();
+  render();
+}
+
+function annullaVettore() {
+  vecStart = vecEnd = null;
+  vettoreAperto = false;
 }
 
 // Rinomina al volo: doppio clic sull'etichetta di un'area e si scrive il
@@ -717,7 +763,8 @@ function onDbl(e) {
 
 function onKey(e) {
   if (e.key === "Escape") {
-    if (drawing.length) drawing = [];
+    if (vettoreAperto) annullaVettore();   // prima si annulla il segmento
+    else if (drawing.length) drawing = [];
     else if (misure.length) misure = [];
     else if (selZona != null || selParete != null) {
       selZona = null;

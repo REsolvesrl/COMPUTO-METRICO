@@ -2007,8 +2007,10 @@ with tab_plan:
                            "↔️ per ricalibrare.")
             else:
                 st.warning("⚠️ Scala non impostata per questa planimetria: "
-                           "scegli **↔️ Scala** nella barra sul disegno e "
-                           "trascina lungo una misura nota (es. lato quotato).")
+                           "scegli **Scala** nella barra sul disegno, poi "
+                           "**clicca l'inizio e la fine** di una misura nota "
+                           "(es. un lato quotato). Zooma con la rotellina "
+                           "per essere preciso: lo zoom non altera le misure.")
 
             impostazioni = {"nome": st.session_state.et_nome,
                             "m2": st.session_state.et_m2,
