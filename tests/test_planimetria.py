@@ -331,3 +331,20 @@ def test_etichette_ignorano_le_zone_trasparenti():
     x, y = pos[1]
     # l'etichetta della stanza sta fuori dalla stanza (non sul baricentro)
     assert not punto_in_poligono((x, y), zone[0]["punti"])
+
+
+def test_superfici_escludono_le_interne_niente_doppio_conteggio():
+    # il perimetro commerciale (6x6=36) racchiude gia' la cucina (3x4=12):
+    # contarle entrambe gonfierebbe la superficie vendibile
+    perc = {"Superficie interna": 100.0, "Superficie commerciale": 100.0}
+    _, tot, comm, _ = riepilogo_superfici(PIANTE_COMMERCIALE, perc,
+                                          escludi=["Superficie interna"])
+    assert tot == pytest.approx(36.0)      # solo il perimetro
+    assert comm == pytest.approx(36.0)
+
+
+def test_superfici_escluse_non_compaiono_tra_le_righe():
+    righe, _, _, _ = riepilogo_superfici(
+        PIANTE_COMMERCIALE, {"Superficie interna": 100.0},
+        escludi=["Superficie interna"])
+    assert all(r["categoria"] != "Superficie interna" for r in righe)

@@ -173,6 +173,13 @@ CATEGORIE_DEFAULT = [
 # automatico delle stanze e non occupano spazio per le etichette.
 CATEGORIE_INVOLUCRO = ("Superficie commerciale",)
 
+# Categorie che servono SOLO al computo metrico: le stanze interne si
+# misurano per pavimenti, battiscopa e tinteggiature, ma la parte vendibile
+# si prende col perimetro «Superficie commerciale», che le racchiude già.
+# Contarle in entrambi i posti significherebbe contare due volte lo stesso
+# spazio, gonfiando la superficie commerciale.
+CATEGORIE_SOLO_COMPUTO = ("Superficie interna",)
+
 # Tipi di parete: colore sul disegno a seconda dell'intervento.
 # "esistente" resta solo per compatibilità con progetti già salvati; le nuove
 # pareti si scelgono tra demolire e costruire (TIPI_PARETE_SCELTA).
@@ -1953,7 +1960,8 @@ with tab_computo:
     })
 
     righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
-        st.session_state.piante, mappa_percentuali())
+        st.session_state.piante, mappa_percentuali(),
+        escludi=CATEGORIE_SOLO_COMPUTO)
     df_superfici_excel = None
     if righe_sup:
         df_superfici_excel = pd.DataFrame([{
@@ -2460,10 +2468,27 @@ with tab_plan:
         # ------------------------------------------- superfici commerciali
         st.subheader("🧮 Superfici commerciali (tutte le planimetrie)")
         righe_sup, tot_sup, tot_comm, senza_scala = (
-            planimetria.riepilogo_superfici(piante, mappa_percentuali()))
+            planimetria.riepilogo_superfici(piante, mappa_percentuali(),
+                                            escludi=CATEGORIE_SOLO_COMPUTO))
+        st.caption("Le **superfici interne** non compaiono qui: servono al "
+                   "computo metrico (pavimenti, battiscopa, tinteggiature). "
+                   "La parte vendibile si misura col perimetro **Superficie "
+                   "commerciale**, che le racchiude già — contarle entrambe "
+                   "vorrebbe dire contare due volte lo stesso spazio.")
         if senza_scala:
             st.warning("Escluse dal totale perché **senza scala**: "
                        + ", ".join(senza_scala))
+        # se ci sono stanze ma nessun perimetro, il totale sarebbe a zero
+        # senza che si capisca il perché
+        ha_interne = any(z["categoria"] in CATEGORIE_SOLO_COMPUTO
+                         for p in piante for z in p["zone"])
+        ha_perimetro = any(z["categoria"] in CATEGORIE_INVOLUCRO
+                           for p in piante for z in p["zone"])
+        if ha_interne and not ha_perimetro:
+            st.warning("Hai disegnato le superfici interne ma **nessun "
+                       "perimetro commerciale**: per la superficie vendibile "
+                       "traccia un'area della categoria **Superficie "
+                       "commerciale** attorno all'immobile.")
         if not righe_sup:
             st.info("Disegna le aree con ✏️ sulla planimetria: qui compare il "
                     "riepilogo per categoria con le percentuali applicate.")
@@ -2704,7 +2729,8 @@ with tab_bp:
     # valori automatici condivisi: superficie commerciale dalla planimetria
     # e costo di ristrutturazione dal computo (imprevisti inclusi)
     _, _, mq_da_planimetria, _ = planimetria.riepilogo_superfici(
-        st.session_state.piante, mappa_percentuali())
+        st.session_state.piante, mappa_percentuali(),
+        escludi=CATEGORIE_SOLO_COMPUTO)
     voci_bp = voci_dal_listino() + voci_da_df(st.session_state.df_voci)
     totale_computo_bp = calcoli.totale_generale(
         calcoli.calcola_computo(voci_bp))

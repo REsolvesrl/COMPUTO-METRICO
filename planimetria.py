@@ -235,12 +235,15 @@ def riepilogo_pareti(piante, altezza):
              for tipo, v in totali.items()}, senza_scala)
 
 
-def riepilogo_superfici(piante, percentuali):
+def riepilogo_superfici(piante, percentuali, escludi=()):
     """Riepilogo delle superfici di tutte le planimetrie di un progetto.
 
     piante: elenco di dizionari {"nome", "mpp", "zone": [{"categoria", "punti"}]}.
     percentuali: {nome_categoria: percento} — il peso "commerciale" di ogni
         categoria (es. balcone 30). Le categorie sconosciute valgono 100.
+    escludi: categorie che non fanno superficie commerciale (le stanze
+        interne, quando la parte vendibile si misura col perimetro esterno:
+        contarle entrambe significherebbe contare due volte lo stesso spazio).
 
     Ritorna (righe, totale_m2, totale_commerciale, senza_scala):
     - righe: aggregate per (pianta, categoria) con numero di zone, m² reali,
@@ -252,10 +255,12 @@ def riepilogo_superfici(piante, percentuali):
     totale_m2 = 0.0
     totale_comm = 0.0
     senza_scala = []
+    escludi = set(escludi)
     for pianta in piante:
         nome = pianta.get("nome") or "Planimetria"
         mpp = pianta.get("mpp")
-        zone = pianta.get("zone") or []
+        zone = [z for z in (pianta.get("zone") or [])
+                if (z.get("categoria") or "") not in escludi]
         if not zone:
             continue
         if not mpp:
