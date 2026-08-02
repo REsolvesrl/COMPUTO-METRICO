@@ -279,3 +279,55 @@ def test_riepilogo_pareti_senza_scala_esclusa():
 def test_riepilogo_pareti_senza_pareti():
     assert riepilogo_pareti([{"nome": "X", "mpp": 0.01, "pareti": []}], 2.7) \
         == ({}, [])
+
+
+# ------------------------------- perimetro commerciale (fuori dai computi)
+
+PIANTE_COMMERCIALE = [{
+    "nome": "Piano", "mpp": 0.01,
+    "zone": [
+        {"id": 1, "categoria": "Superficie interna", "nome": "Cucina",
+         "punti": [[0, 0], [300, 0], [300, 400], [0, 400]]},
+        # il contorno commerciale: grande, comprende tutto
+        {"id": 2, "categoria": "Superficie commerciale", "nome": None,
+         "punti": [[0, 0], [600, 0], [600, 600], [0, 600]]},
+    ],
+}]
+
+
+def test_riepilogo_locali_esclude_le_categorie_indicate():
+    righe, _ = riepilogo_locali(PIANTE_COMMERCIALE,
+                                escludi=["Superficie commerciale"])
+    assert len(righe) == 1
+    assert righe[0]["nome"] == "Cucina"
+
+
+def test_riepilogo_locali_senza_esclusioni_le_prende_tutte():
+    righe, _ = riepilogo_locali(PIANTE_COMMERCIALE)
+    assert len(righe) == 2
+
+
+def test_riepilogo_superfici_include_il_commerciale():
+    # nel calcolo della superficie commerciale ci deve essere (e' il suo scopo)
+    righe, tot, _, _ = riepilogo_superfici(
+        PIANTE_COMMERCIALE, {"Superficie interna": 100.0,
+                             "Superficie commerciale": 100.0})
+    categorie = {r["categoria"] for r in righe}
+    assert "Superficie commerciale" in categorie
+    assert tot == pytest.approx(12.0 + 36.0)     # 3x4 + 6x6 m2
+
+
+def test_etichette_ignorano_le_zone_trasparenti():
+    # il contorno commerciale copre tutta l'immagine: senza trattarlo come
+    # trasparente, nessuna etichetta troverebbe posto fuori dalle aree
+    zone = [
+        {"id": 1, "categoria": "Superficie interna",
+         "punti": [[300, 300], [500, 300], [500, 500], [300, 500]]},
+        {"id": 2, "categoria": "Superficie commerciale",
+         "punti": [[0, 0], [1000, 0], [1000, 800], [0, 800]]},
+    ]
+    pos = posiziona_etichette(zone, 1000, 800,
+                              trasparenti=["Superficie commerciale"])
+    x, y = pos[1]
+    # l'etichetta della stanza sta fuori dalla stanza (non sul baricentro)
+    assert not punto_in_poligono((x, y), zone[0]["punti"])

@@ -317,13 +317,25 @@ function render() {
   ctx.imageSmoothingEnabled = scale < 3;
   ctx.drawImage(img, 0, 0);
 
-  for (const z of (mostraAree ? zone : [])) {
+  // I perimetri commerciali (senza sfondo) si disegnano PRIMA: restano
+  // sotto le altre aree, così ci si può disegnare sopra liberamente.
+  for (const z of (mostraAree ? zoneOrdinate() : [])) {
     const sel = (z.id === selZona);
     ctx.beginPath();
     z.punti.forEach(function (p, i) {
       if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
     });
     ctx.closePath();
+    if (z.senza_sfondo) {
+      // solo il contorno, tratteggiato: si vede che è un ingombro e non
+      // un locale, e non copre quello che c'è sotto
+      ctx.setLineDash([12 / scale, 7 / scale]);
+      ctx.strokeStyle = sel ? "#FFFFFF" : z.colore;
+      ctx.lineWidth = (sel ? 3.6 : 2.6) / scale;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      continue;
+    }
     ctx.fillStyle = hexRgba(z.colore, sel ? 0.52 : 0.36);
     ctx.fill();
     ctx.strokeStyle = sel ? "#FFFFFF" : z.colore;
@@ -523,11 +535,37 @@ function hitVertice(z, s) {
   }
   return -1;
 }
+function distContorno(s, pts) {          // distanza (schermo) dal perimetro
+  let minima = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const a = img2scr(pts[i]), b = img2scr(pts[(i + 1) % pts.length]);
+    minima = Math.min(minima, distSeg(s, a, b));
+  }
+  return minima;
+}
+
 function hitZona(p) {
+  // Le aree vere hanno la precedenza; i perimetri commerciali si prendono
+  // solo cliccandone il bordo, altrimenti — grandi e sopra tutto il disegno —
+  // catturerebbero ogni clic e non si potrebbe più lavorare al loro interno.
   for (let i = zone.length - 1; i >= 0; i--) {
-    if (dentro(p, zone[i].punti)) return zone[i];
+    if (!zone[i].senza_sfondo && dentro(p, zone[i].punti)) return zone[i];
+  }
+  const s = img2scr(p);
+  for (let i = zone.length - 1; i >= 0; i--) {
+    if (zone[i].senza_sfondo && zone[i].punti.length >= 3 &&
+        distContorno(s, zone[i].punti) < 10) {
+      return zone[i];
+    }
   }
   return null;
+}
+
+function zoneOrdinate() {
+  // prima i perimetri senza sfondo (restano sotto), poi le aree piene
+  return zone.slice().sort(function (a, b) {
+    return (a.senza_sfondo ? 0 : 1) - (b.senza_sfondo ? 0 : 1);
+  });
 }
 function hitParete(s) {
   // presa generosa (12 px): un muro è una linea sottile, va afferrato senza

@@ -162,7 +162,16 @@ CATEGORIE_DEFAULT = [
     {"nome": "Giardino", "percento": 10.0},
     {"nome": "Garage / Box", "percento": 50.0},
     {"nome": "Cantina / Soffitta", "percento": 25.0},
+    {"nome": "Vano scale", "percento": 50.0},
+    {"nome": "Superficie commerciale", "percento": 100.0},
 ]
+
+# Categorie «involucro»: perimetri che servono SOLO a misurare la superficie
+# commerciale. Si disegnano senza sfondo e restano sotto le altre aree, così
+# ci si può disegnare sopra; non sono locali da lavorare, quindi non entrano
+# in pavimenti, battiscopa e tinteggiature, non ostacolano il rilevamento
+# automatico delle stanze e non occupano spazio per le etichette.
+CATEGORIE_INVOLUCRO = ("Superficie commerciale",)
 
 # Tipi di parete: colore sul disegno a seconda dell'intervento.
 # "esistente" resta solo per compatibilità con progetti già salvati; le nuove
@@ -2119,10 +2128,13 @@ with tab_plan:
                             "perimetro": st.session_state.et_perim}
             # etichette fuori dalle aree (se l'utente non le ha spostate)
             pos_default = planimetria.posiziona_etichette(
-                pianta["zone"], pianta["img"].width, pianta["img"].height)
+                pianta["zone"], pianta["img"].width, pianta["img"].height,
+                trasparenti=CATEGORIE_INVOLUCRO)
             zone_props = [{
                 "id": z["id"], "punti": z["punti"],
                 "colore": col_map.get(z["categoria"], "#9E9E9E"),
+                # perimetro commerciale: solo contorno, e sotto le altre aree
+                "senza_sfondo": z["categoria"] in CATEGORIE_INVOLUCRO,
                 "etichetta": etichetta_zona(z, pianta["mpp"], perc_map,
                                             impostazioni),
                 "etichetta_pos": (z.get("etichetta_pos")
@@ -2212,9 +2224,14 @@ with tab_plan:
                         zona_sel["punti"], pianta["mpp"])
                     st.caption(f"Superficie **{numero_it(area_sel, 2)} m²** · "
                                f"Perimetro **{numero_it(perim_sel, 2)} m**")
-                    if a_add.button("➕ Al computo",
-                                    help="Aggiunge questa superficie come "
-                                         "voce del computo"):
+                    if a_add.button(
+                            "➕ Al computo",
+                            disabled=zona_sel["categoria"] in
+                            CATEGORIE_INVOLUCRO,
+                            help="Aggiunge questa superficie come voce del "
+                                 "computo. Il perimetro commerciale ne resta "
+                                 "fuori: serve solo a misurare la superficie "
+                                 "vendibile."):
                         aggiungi_voce_computo(
                             "Superfici",
                             f"{zona_sel.get('nome') or zona_sel['categoria']}"
@@ -2354,8 +2371,12 @@ with tab_plan:
                     with st.spinner("Analizzo la planimetria…"):
                         proposte = rilevamento.rileva_stanze(
                             pianta["img"], pianta["mpp"],
-                            zone_esistenti=[z["punti"]
-                                            for z in pianta["zone"]])
+                            # il perimetro commerciale copre tutto il disegno:
+                            # se lo si contasse come «già occupato» non si
+                            # troverebbe più nessuna stanza
+                            zone_esistenti=[
+                                z["punti"] for z in pianta["zone"]
+                                if z["categoria"] not in CATEGORIE_INVOLUCRO])
                     if not proposte:
                         st.warning("Non ho riconosciuto stanze chiuse su "
                                    "questo disegno. Prova a impostare prima "
@@ -2472,7 +2493,8 @@ with tab_plan:
 
         # ------------------------- dalle superfici alle voci del computo
         st.subheader("📏 Dalle superfici al computo (locale per locale)")
-        righe_loc, senza_scala_loc = planimetria.riepilogo_locali(piante)
+        righe_loc, senza_scala_loc = planimetria.riepilogo_locali(
+            piante, escludi=CATEGORIE_INVOLUCRO)
         grandezze = {}
         # L'altezza serve sia ai locali (pareti da tinteggiare) sia ai muri
         # da demolire/costruire: vive in alt_locali (salvata nel progetto) e

@@ -88,7 +88,7 @@ def punto_in_poligono(punto, punti):
     return dentro
 
 
-def posiziona_etichette(zone, larghezza, altezza):
+def posiziona_etichette(zone, larghezza, altezza, trasparenti=()):
     """Posizioni predefinite delle etichette: FUORI dalle aree, ma vicine.
 
     zone: [{"id", "punti", "etichetta_pos" (opzionale)}, ...]. Per ogni zona
@@ -98,8 +98,15 @@ def posiziona_etichette(zone, larghezza, altezza):
     alle etichette già piazzate. Se nessun candidato va bene si ripiega sul
     baricentro (dentro l'area).
 
+    trasparenti: nomi di categoria che non «occupano» spazio (il perimetro
+    commerciale, che spesso copre tutto il disegno): un'etichetta può
+    starci sopra, altrimenti non troverebbe più un posto libero.
+
     Ritorna {id: [x, y]} solo per le zone senza posizione personalizzata.
     """
+    trasparenti = set(trasparenti)
+    piene = [z for z in zone
+             if (z.get("categoria") or "") not in trasparenti]
     piazzate = [tuple(z["etichetta_pos"]) for z in zone
                 if z.get("etichetta_pos")]
     distacco_x = larghezza * 0.05
@@ -131,7 +138,7 @@ def posiziona_etichette(zone, larghezza, altezza):
                     and margine <= py <= altezza - margine):
                 return False
             if any(punto_in_poligono((px, py), q.get("punti") or [])
-                   for q in zone if len(q.get("punti") or []) >= 3):
+                   for q in piene if len(q.get("punti") or []) >= 3):
                 return False
             if controlla_distanza and any(
                     abs(px - ox) < dx_min and abs(py - oy) < dy_min
@@ -154,11 +161,15 @@ def posiziona_etichette(zone, larghezza, altezza):
     return risultato
 
 
-def riepilogo_locali(piante):
+def riepilogo_locali(piante, escludi=()):
     """Elenco per-locale (zona) delle piante con scala: superficie e perimetro.
 
     Serve per battiscopa (metri lineari) e tinteggiature (perimetro × altezza
     per le pareti, superficie calpestabile per i soffitti).
+
+    escludi: nomi di categoria che NON sono locali da lavorare (es. il
+    perimetro commerciale, che serve solo a misurare la superficie vendibile):
+    restano fuori da questo elenco e quindi da tutte le quantità del computo.
 
     Ritorna (righe, senza_scala). Ogni riga: {"pianta", "uid", "id", "nome",
     "categoria", "m2", "perimetro"} — nome = nome della zona o, se assente,
@@ -166,8 +177,10 @@ def riepilogo_locali(piante):
     """
     righe = []
     senza_scala = []
+    escludi = set(escludi)
     for pianta in piante:
-        zone = pianta.get("zone") or []
+        zone = [z for z in (pianta.get("zone") or [])
+                if (z.get("categoria") or "") not in escludi]
         if not zone:
             continue
         mpp = pianta.get("mpp")
