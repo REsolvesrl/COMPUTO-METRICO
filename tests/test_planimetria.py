@@ -1,4 +1,4 @@
-import math
+﻿import math
 
 import pytest
 
@@ -15,6 +15,7 @@ from planimetria import (
     riepilogo_locali,
     riepilogo_pareti,
     riepilogo_superfici,
+    superficie_commerciale,
 )
 
 
@@ -348,3 +349,42 @@ def test_superfici_escluse_non_compaiono_tra_le_righe():
         PIANTE_COMMERCIALE, {"Superficie interna": 100.0},
         escludi=["Superficie interna"])
     assert all(r["categoria"] != "Superficie interna" for r in righe)
+
+
+# --------------------------- superfici di ornamento (scaglione dei giardini)
+
+def test_superficie_commerciale_senza_soglia():
+    # balcone: 40 m2 al 25% = 10 m2, nessuno scaglione
+    assert superficie_commerciale(40, 25) == pytest.approx(10.0)
+
+
+def test_superficie_commerciale_sotto_la_soglia():
+    # giardino di 20 m2 al 15%: tutto pieno
+    assert superficie_commerciale(20, 15, soglia=25, percento_oltre=5) \
+        == pytest.approx(3.0)
+
+
+def test_superficie_commerciale_con_eccedenza():
+    # giardino di appartamento 100 m2: 25 al 15% + 75 al 5%
+    assert superficie_commerciale(100, 15, soglia=25, percento_oltre=5) \
+        == pytest.approx(25 * 0.15 + 75 * 0.05)      # 3,75 + 3,75 = 7,5
+
+
+def test_superficie_commerciale_villa_eccedenza_al_due():
+    # giardino di villa 525 m2: 25 al 10% + 500 al 2%
+    assert superficie_commerciale(525, 10, soglia=25, percento_oltre=2) \
+        == pytest.approx(2.5 + 10.0)
+
+
+def test_riepilogo_superfici_applica_lo_scaglione():
+    piante = [{"nome": "P", "mpp": 0.1, "zone": [      # 1 px = 10 cm
+        # 100 m2 di giardino: 10 m x 10 m = 100 px x 100 px
+        {"id": 1, "categoria": "Giardino di appartamento",
+         "punti": [[0, 0], [100, 0], [100, 100], [0, 100]]},
+    ]}]
+    regole = {"Giardino di appartamento": {"percento": 15.0, "soglia": 25.0,
+                                           "oltre": 5.0}}
+    righe, tot, comm, _ = riepilogo_superfici(piante, regole)
+    assert tot == pytest.approx(100.0)
+    assert comm == pytest.approx(7.5)
+    assert righe[0]["m2_commerciale"] == pytest.approx(7.5)

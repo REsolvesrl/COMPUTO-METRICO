@@ -235,6 +235,40 @@ def riepilogo_pareti(piante, altezza):
              for tipo, v in totali.items()}, senza_scala)
 
 
+def superficie_commerciale(m2, percento, soglia=None, percento_oltre=None):
+    """Superficie commerciale di una superficie accessoria, a scaglioni.
+
+    Le superfici di ornamento (balconi, terrazzi, giardini…) valgono la loro
+    incidenza piena solo fino a una certa estensione: l'eccedenza pesa molto
+    meno. Es. 40 m² di terrazzo al 35% con soglia 25 e eccedenza al 10%:
+    25 × 35% + 15 × 10% = 10,25 m².
+
+    Senza soglia (o senza percentuale sull'eccedenza) si applica la sola
+    incidenza piena, come per le superfici principali.
+    """
+    m2 = float(m2 or 0.0)
+    piena = float(percento or 0.0) / 100.0
+    if not soglia or percento_oltre is None or m2 <= float(soglia):
+        return round(m2 * piena, 3)
+    soglia = float(soglia)
+    eccedenza = m2 - soglia
+    return round(soglia * piena
+                 + eccedenza * float(percento_oltre) / 100.0, 3)
+
+
+def _regola(percentuali, categoria):
+    """(percento, soglia, percento_oltre) per una categoria.
+
+    percentuali accetta sia {nome: 35.0} sia
+    {nome: {"percento": 35, "soglia": 25, "oltre": 10}}.
+    """
+    valore = percentuali.get(categoria, 100.0)
+    if isinstance(valore, dict):
+        return (float(valore.get("percento", 100.0)),
+                valore.get("soglia"), valore.get("oltre"))
+    return float(valore), None, None
+
+
 def riepilogo_superfici(piante, percentuali, escludi=()):
     """Riepilogo delle superfici di tutte le planimetrie di un progetto.
 
@@ -273,9 +307,12 @@ def riepilogo_superfici(piante, percentuali, escludi=()):
             gruppo["zone"] += 1
             gruppo["m2"] += area_reale_m2(zona.get("punti") or [], mpp)
         for categoria, gruppo in gruppi.items():
-            percento = float(percentuali.get(categoria, 100.0))
+            percento, soglia, oltre = _regola(percentuali, categoria)
             m2 = round(gruppo["m2"], 3)
-            m2_comm = round(m2 * percento / 100.0, 3)
+            # la soglia vale sul totale della categoria in quella pianta:
+            # è l'unità immobiliare ad avere diritto ai primi 25 m² pieni,
+            # non ogni singolo balcone
+            m2_comm = superficie_commerciale(m2, percento, soglia, oltre)
             righe.append({
                 "pianta": nome,
                 "categoria": categoria,

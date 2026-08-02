@@ -154,14 +154,24 @@ CANON_MAX = 2000
 PALETTE_ZONE = ["#E57373", "#F0A840", "#E8D44D", "#66BB6A", "#4DB6AC",
                 "#64B5F6", "#9575CD", "#F06292"]
 
+# Categorie di superficie con le incidenze delle «superfici di ornamento».
+# Solo i GIARDINI hanno lo scaglione: l'incidenza piena vale fino a `soglia`
+# m², l'eccedenza pesa `oltre` %. La soglia si applica al totale della
+# categoria in quella planimetria (è l'unità immobiliare ad avere diritto ai
+# primi 25 m² pieni, non il singolo giardino).
 CATEGORIE_DEFAULT = [
     {"nome": "Superficie commerciale", "percento": 100.0},
     {"nome": "Superficie interna", "percento": 100.0},
-    {"nome": "Balcone scoperto", "percento": 30.0},
-    {"nome": "Balcone coperto", "percento": 35.0},
+    {"nome": "Balcone / Lastrico solare", "percento": 25.0},
     {"nome": "Terrazzo", "percento": 35.0},
-    {"nome": "Loggia", "percento": 40.0},
-    {"nome": "Giardino", "percento": 10.0},
+    {"nome": "Loggia", "percento": 35.0},
+    {"nome": "Terrazzo di attico (a tasca)", "percento": 40.0},
+    {"nome": "Portico / Patio", "percento": 35.0},
+    {"nome": "Corte / Cortile", "percento": 10.0},
+    {"nome": "Giardino di appartamento", "percento": 15.0,
+     "soglia": 25.0, "oltre": 5.0},
+    {"nome": "Giardino di villa o villino", "percento": 10.0,
+     "soglia": 25.0, "oltre": 2.0},
     {"nome": "Garage / Box", "percento": 50.0},
     {"nome": "Cantina", "percento": 30.0},
     {"nome": "Vano scale", "percento": 50.0},
@@ -171,22 +181,30 @@ CATEGORIE_DEFAULT = [
 # elenco: così due categorie possono condividerlo (vano scale e garage) e
 # riordinare la lista non rimescola i colori del disegno.
 COLORE_CATEGORIA_SUP = {
-    "Superficie commerciale": "#7E57C2",   # viola — solo contorno
-    "Superficie interna": "#E57373",       # rosso
-    "Balcone scoperto": "#F0A840",         # arancio
-    "Balcone coperto": "#E8D44D",          # giallo
-    "Terrazzo": "#66BB6A",                 # verde
-    "Loggia": "#4DB6AC",                   # verde acqua
-    "Giardino": "#7CB342",                 # verde erba
-    "Garage / Box": "#64B5F6",             # azzurro
-    "Cantina": "#9575CD",                  # lilla
-    "Vano scale": "#64B5F6",               # azzurro, come il garage
+    "Superficie commerciale": "#7E57C2",           # viola — solo contorno
+    "Superficie interna": "#E57373",               # rosso
+    "Balcone / Lastrico solare": "#F0A840",        # arancio
+    "Terrazzo": "#66BB6A",                         # verde
+    "Loggia": "#4DB6AC",                           # verde acqua
+    "Terrazzo di attico (a tasca)": "#26A69A",     # verde acqua scuro
+    "Portico / Patio": "#E8D44D",                  # giallo
+    "Corte / Cortile": "#BCAAA4",                  # tortora
+    "Giardino di appartamento": "#7CB342",         # verde erba
+    "Giardino di villa o villino": "#558B2F",      # verde scuro
+    "Garage / Box": "#64B5F6",                     # azzurro
+    "Cantina": "#9575CD",                          # lilla
+    "Vano scale": "#64B5F6",                       # azzurro, come il garage
 }
 
 # Percentuali delle categorie di progetti già salvati che non esistono più
 # nell'elenco: restano valide dove sono state usate, senza cambiare i numeri
 # di un computo già fatto.
-PERCENTUALI_STORICHE = {"Cantina / Soffitta": 25.0}
+PERCENTUALI_STORICHE = {
+    "Cantina / Soffitta": 25.0,
+    "Balcone scoperto": 30.0,
+    "Balcone coperto": 35.0,
+    "Giardino": 10.0,
+}
 
 # Categorie «involucro»: perimetri che servono SOLO a misurare la superficie
 # commerciale. Si disegnano senza sfondo e restano sotto le altre aree, così
@@ -1127,7 +1145,17 @@ def nuovo_id(pianta):
 
 
 def mappa_percentuali():
-    return {c["nome"]: float(c["percento"]) for c in st.session_state.categorie}
+    """Regole di incidenza per categoria: percentuale piena e, dove previsto,
+    soglia oltre la quale l'eccedenza pesa meno."""
+    regole = {}
+    for c in st.session_state.categorie:
+        if c.get("soglia") and c.get("oltre") is not None:
+            regole[c["nome"]] = {"percento": float(c["percento"]),
+                                 "soglia": float(c["soglia"]),
+                                 "oltre": float(c["oltre"])}
+        else:
+            regole[c["nome"]] = float(c["percento"])
+    return regole
 
 
 def categorie_per_progetto(piante):
@@ -2466,9 +2494,16 @@ with tab_plan:
             f'<span style="display:inline-block;width:12px;height:12px;'
             f'border-radius:3px;background:{col_map.get(c["nome"], "#9E9E9E")};'
             f'margin-right:5px;vertical-align:-1px;"></span>'
-            f'{c["nome"]} · {numero_it(c["percento"], 0)}%</span>'
+            f'{c["nome"]} · {numero_it(c["percento"], 0)}%'
+            + (f' <span style="color:#A9B4C9;">(oltre '
+               f'{numero_it(c["soglia"], 0)} m²: '
+               f'{numero_it(c["oltre"], 0)}%)</span>'
+               if c.get("soglia") and c.get("oltre") is not None else "")
+            + '</span>'
             for c in st.session_state.categorie)
-        st.caption("Categorie di superficie (colore · peso commerciale):")
+        st.caption("Categorie di superficie (colore · peso commerciale). "
+                   "Per i **giardini** l'incidenza piena vale fino a 25 m²: "
+                   "l'eccedenza pesa la percentuale ridotta indicata.")
         st.markdown(legenda, unsafe_allow_html=True)
 
         with st.expander("🔤 Etichette sulle zone (layout)"):
