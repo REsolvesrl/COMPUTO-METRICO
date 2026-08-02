@@ -178,17 +178,29 @@ COLORE_CATEGORIA_SUP = {
     "Superficie commerciale": "#7E57C2",   # viola — solo contorno
     "Superficie interna": "#E57373",       # rosso
     "Balcone": "#F0A840",                  # arancio
-    "Terrazzo": "#66BB6A",                 # verde
+    "Terrazzo": "#E8D44D",                 # giallo
     "Loggia": "#4DB6AC",                   # verde acqua
-    "Giardino": "#7CB342",                 # verde erba
+    "Giardino": "#4CAF50",                 # verde: è il giardino
     "Garage / Box": "#64B5F6",             # azzurro
     "Cantina": "#9575CD",                  # lilla
     "Vano scale": "#64B5F6",               # azzurro, come il garage
+    # categorie di lavori precedenti: stesso colore dell'equivalente
+    # attuale, così un disegno vecchio non cambia aspetto
+    "Balcone scoperto": "#F0A840",
+    "Balcone coperto": "#F0A840",
+    "Balcone / Lastrico solare": "#F0A840",
+    "Terrazzo di attico (a tasca)": "#E8D44D",
+    "Portico / Patio": "#E8D44D",
+    "Corte / Cortile": "#BCAAA4",
+    "Giardino di appartamento": "#4CAF50",
+    "Giardino di villa o villino": "#558B2F",
+    "Cantina / Soffitta": "#9575CD",
 }
 
-# Percentuali delle categorie di progetti già salvati che non esistono più
-# nell'elenco: restano valide dove sono state usate, senza cambiare i numeri
-# di un computo già fatto.
+# Categorie di lavori precedenti che non sono più nell'elenco: restano
+# valide dove sono state usate, con la loro regola. I giardini portano lo
+# scaglione come quelli attuali, altrimenti una zona disegnata prima del
+# cambio conterebbe l'intera superficie all'incidenza piena.
 PERCENTUALI_STORICHE = {
     "Cantina / Soffitta": 25.0,
     "Balcone scoperto": 30.0,
@@ -197,8 +209,10 @@ PERCENTUALI_STORICHE = {
     "Terrazzo di attico (a tasca)": 40.0,
     "Portico / Patio": 35.0,
     "Corte / Cortile": 10.0,
-    "Giardino di appartamento": 15.0,
-    "Giardino di villa o villino": 10.0,
+    "Giardino di appartamento": {"percento": 15.0, "soglia": 25.0,
+                                 "oltre": 5.0},
+    "Giardino di villa o villino": {"percento": 10.0, "soglia": 25.0,
+                                    "oltre": 2.0},
 }
 
 # Categorie «involucro»: perimetri che servono SOLO a misurare la superficie
@@ -1139,6 +1153,15 @@ def nuovo_id(pianta):
     return pianta["prossimo_id"] - 1
 
 
+def percento_di(regole, categoria):
+    """L'incidenza piena di una categoria, sia che la regola sia un semplice
+    numero sia che preveda uno scaglione."""
+    valore = regole.get(categoria, 100.0)
+    if isinstance(valore, dict):
+        return float(valore.get("percento", 100.0))
+    return float(valore)
+
+
 def mappa_percentuali():
     """Regole di incidenza per categoria: percentuale piena e, dove previsto,
     soglia oltre la quale l'eccedenza pesa meno."""
@@ -1166,8 +1189,11 @@ def categorie_per_progetto(piante):
     noti = {c["nome"] for c in categorie}
     usate = {z.get("categoria") for p in piante for z in (p.get("zone") or [])}
     for nome in sorted(n for n in usate if n and n not in noti):
-        categorie.append({"nome": nome,
-                          "percento": PERCENTUALI_STORICHE.get(nome, 100.0)})
+        regola = PERCENTUALI_STORICHE.get(nome, 100.0)
+        if isinstance(regola, dict):
+            categorie.append({"nome": nome, **regola})
+        else:
+            categorie.append({"nome": nome, "percento": float(regola)})
     return categorie
 
 
@@ -1190,7 +1216,7 @@ def etichetta_zona(zona, mpp, perc_map, impostazioni):
         perim = planimetria.perimetro_reale_m(zona["punti"], mpp)
         righe.append(f"per. {numero_it(perim, 2)} m")
     if impostazioni["percento"]:
-        perc = perc_map.get(zona["categoria"], 100.0)
+        perc = percento_di(perc_map, zona["categoria"])
         righe.append(f"{numero_it(perc, 0)} %")
     return "\n".join(righe)
 
@@ -1667,6 +1693,12 @@ if "listino_pending" in st.session_state:
 for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
+
+# Le categorie si ricostruiscono a ogni giro dalle zone effettivamente
+# disegnate: così i pesi aggiornati valgono subito e una zona marcata con una
+# categoria di ieri (es. «Giardino di appartamento») porta con sé la sua
+# regola completa — scaglione compreso — invece di finire al 100%.
+st.session_state.categorie = categorie_per_progetto(st.session_state.piante)
 
 
 # ------------------------------------------------------------------ pagina
@@ -2636,7 +2668,7 @@ with tab_plan:
                 zona = zona_per_rif.get((r["uid"], r["id"]))
                 if zona is None:
                     continue
-                interna = perc_map.get(r["categoria"], 100.0) >= 100.0
+                interna = percento_di(perc_map, r["categoria"]) >= 100.0
                 bagno = any(parola in (r["nome"] + " " + r["categoria"]).lower()
                             for parola in ("bagno", "wc", "w.c"))
                 batt_def = zona.get("battiscopa")
