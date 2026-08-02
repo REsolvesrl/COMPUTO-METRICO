@@ -162,16 +162,10 @@ PALETTE_ZONE = ["#E57373", "#F0A840", "#E8D44D", "#66BB6A", "#4DB6AC",
 CATEGORIE_DEFAULT = [
     {"nome": "Superficie commerciale", "percento": 100.0},
     {"nome": "Superficie interna", "percento": 100.0},
-    {"nome": "Balcone / Lastrico solare", "percento": 25.0},
+    {"nome": "Balcone", "percento": 30.0},
     {"nome": "Terrazzo", "percento": 35.0},
-    {"nome": "Loggia", "percento": 35.0},
-    {"nome": "Terrazzo di attico (a tasca)", "percento": 40.0},
-    {"nome": "Portico / Patio", "percento": 35.0},
-    {"nome": "Corte / Cortile", "percento": 10.0},
-    {"nome": "Giardino di appartamento", "percento": 15.0,
-     "soglia": 25.0, "oltre": 5.0},
-    {"nome": "Giardino di villa o villino", "percento": 10.0,
-     "soglia": 25.0, "oltre": 2.0},
+    {"nome": "Loggia", "percento": 40.0},
+    {"nome": "Giardino", "percento": 15.0, "soglia": 25.0, "oltre": 5.0},
     {"nome": "Garage / Box", "percento": 50.0},
     {"nome": "Cantina", "percento": 30.0},
     {"nome": "Vano scale", "percento": 50.0},
@@ -181,19 +175,15 @@ CATEGORIE_DEFAULT = [
 # elenco: così due categorie possono condividerlo (vano scale e garage) e
 # riordinare la lista non rimescola i colori del disegno.
 COLORE_CATEGORIA_SUP = {
-    "Superficie commerciale": "#7E57C2",           # viola — solo contorno
-    "Superficie interna": "#E57373",               # rosso
-    "Balcone / Lastrico solare": "#F0A840",        # arancio
-    "Terrazzo": "#66BB6A",                         # verde
-    "Loggia": "#4DB6AC",                           # verde acqua
-    "Terrazzo di attico (a tasca)": "#26A69A",     # verde acqua scuro
-    "Portico / Patio": "#E8D44D",                  # giallo
-    "Corte / Cortile": "#BCAAA4",                  # tortora
-    "Giardino di appartamento": "#7CB342",         # verde erba
-    "Giardino di villa o villino": "#558B2F",      # verde scuro
-    "Garage / Box": "#64B5F6",                     # azzurro
-    "Cantina": "#9575CD",                          # lilla
-    "Vano scale": "#64B5F6",                       # azzurro, come il garage
+    "Superficie commerciale": "#7E57C2",   # viola — solo contorno
+    "Superficie interna": "#E57373",       # rosso
+    "Balcone": "#F0A840",                  # arancio
+    "Terrazzo": "#66BB6A",                 # verde
+    "Loggia": "#4DB6AC",                   # verde acqua
+    "Giardino": "#7CB342",                 # verde erba
+    "Garage / Box": "#64B5F6",             # azzurro
+    "Cantina": "#9575CD",                  # lilla
+    "Vano scale": "#64B5F6",               # azzurro, come il garage
 }
 
 # Percentuali delle categorie di progetti già salvati che non esistono più
@@ -203,7 +193,12 @@ PERCENTUALI_STORICHE = {
     "Cantina / Soffitta": 25.0,
     "Balcone scoperto": 30.0,
     "Balcone coperto": 35.0,
-    "Giardino": 10.0,
+    "Balcone / Lastrico solare": 25.0,
+    "Terrazzo di attico (a tasca)": 40.0,
+    "Portico / Patio": 35.0,
+    "Corte / Cortile": 10.0,
+    "Giardino di appartamento": 15.0,
+    "Giardino di villa o villino": 10.0,
 }
 
 # Categorie «involucro»: perimetri che servono SOLO a misurare la superficie
