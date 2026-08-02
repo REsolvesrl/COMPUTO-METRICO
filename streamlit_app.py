@@ -155,16 +155,38 @@ PALETTE_ZONE = ["#E57373", "#F0A840", "#E8D44D", "#66BB6A", "#4DB6AC",
                 "#64B5F6", "#9575CD", "#F06292"]
 
 CATEGORIE_DEFAULT = [
+    {"nome": "Superficie commerciale", "percento": 100.0},
     {"nome": "Superficie interna", "percento": 100.0},
     {"nome": "Balcone scoperto", "percento": 30.0},
     {"nome": "Balcone coperto", "percento": 35.0},
-    {"nome": "Terrazzo", "percento": 25.0},
+    {"nome": "Terrazzo", "percento": 35.0},
+    {"nome": "Loggia", "percento": 40.0},
     {"nome": "Giardino", "percento": 10.0},
     {"nome": "Garage / Box", "percento": 50.0},
-    {"nome": "Cantina / Soffitta", "percento": 25.0},
+    {"nome": "Cantina", "percento": 30.0},
     {"nome": "Vano scale", "percento": 50.0},
-    {"nome": "Superficie commerciale", "percento": 100.0},
 ]
+
+# Colore di ogni categoria. È esplicito e non più legato alla posizione in
+# elenco: così due categorie possono condividerlo (vano scale e garage) e
+# riordinare la lista non rimescola i colori del disegno.
+COLORE_CATEGORIA_SUP = {
+    "Superficie commerciale": "#7E57C2",   # viola — solo contorno
+    "Superficie interna": "#E57373",       # rosso
+    "Balcone scoperto": "#F0A840",         # arancio
+    "Balcone coperto": "#E8D44D",          # giallo
+    "Terrazzo": "#66BB6A",                 # verde
+    "Loggia": "#4DB6AC",                   # verde acqua
+    "Giardino": "#7CB342",                 # verde erba
+    "Garage / Box": "#64B5F6",             # azzurro
+    "Cantina": "#9575CD",                  # lilla
+    "Vano scale": "#64B5F6",               # azzurro, come il garage
+}
+
+# Percentuali delle categorie di progetti già salvati che non esistono più
+# nell'elenco: restano valide dove sono state usate, senza cambiare i numeri
+# di un computo già fatto.
+PERCENTUALI_STORICHE = {"Cantina / Soffitta": 25.0}
 
 # Categorie «involucro»: perimetri che servono SOLO a misurare la superficie
 # commerciale. Si disegnano senza sfondo e restano sotto le altre aree, così
@@ -1108,9 +1130,30 @@ def mappa_percentuali():
     return {c["nome"]: float(c["percento"]) for c in st.session_state.categorie}
 
 
+def categorie_per_progetto(piante):
+    """Elenco delle categorie: quelle predefinite, più quelle di un progetto
+    salvato che nel frattempo sono state tolte o rinominate.
+
+    Le percentuali predefinite sono quelle correnti (se cambiano, i progetti
+    aperti si aggiornano); le categorie non più previste restano in coda con
+    la loro percentuale storica, così le zone già disegnate non perdono il
+    loro peso commerciale.
+    """
+    categorie = [dict(c) for c in CATEGORIE_DEFAULT]
+    noti = {c["nome"] for c in categorie}
+    usate = {z.get("categoria") for p in piante for z in (p.get("zone") or [])}
+    for nome in sorted(n for n in usate if n and n not in noti):
+        categorie.append({"nome": nome,
+                          "percento": PERCENTUALI_STORICHE.get(nome, 100.0)})
+    return categorie
+
+
 def mappa_colori():
-    return {c["nome"]: PALETTE_ZONE[i % len(PALETTE_ZONE)]
-            for i, c in enumerate(st.session_state.categorie)}
+    """Colore di ogni categoria: quello assegnato, o uno dalla tavolozza per
+    le categorie di vecchi progetti che non sono più nell'elenco."""
+    return {c["nome"]: COLORE_CATEGORIA_SUP.get(
+        c["nome"], PALETTE_ZONE[i % len(PALETTE_ZONE)])
+        for i, c in enumerate(st.session_state.categorie)}
 
 
 def etichetta_zona(zona, mpp, perc_map, impostazioni):
@@ -1511,9 +1554,11 @@ if "da_caricare" in st.session_state:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     st.session_state.df_voci = df if len(df) else df_vuoto()
     st.session_state.versione_editor += 1
-    # planimetrie e impostazioni
-    st.session_state.categorie = (dati.get("categorie")
-                                  or [dict(c) for c in CATEGORIE_DEFAULT])
+    # planimetrie e impostazioni. Le categorie NON si riprendono dal file:
+    # si riparte sempre da quelle correnti (pesi aggiornati) tenendo in coda
+    # quelle usate dalle zone del progetto e non più in elenco.
+    st.session_state.categorie = categorie_per_progetto(
+        dati.get("piante") or [])
     etichette = dati.get("etichette") or {}
     st.session_state.et_font = int(etichette.get("font", 14))
     st.session_state.et_nome = bool(etichette.get("nome", True))
