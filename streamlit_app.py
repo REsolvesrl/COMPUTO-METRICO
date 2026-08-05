@@ -229,6 +229,10 @@ CATEGORIE_INVOLUCRO = ("Superficie commerciale",)
 # spazio, gonfiando la superficie commerciale.
 CATEGORIE_SOLO_COMPUTO = ("Superficie interna",)
 
+# Categoria delle stanze riconosciute dal rilevamento automatico: sono
+# locali, quindi superficie interna al 100%.
+CATEGORIA_STANZE = "Superficie interna"
+
 # Tipi di parete: colore sul disegno a seconda dell'intervento.
 # "esistente" resta solo per compatibilità con progetti già salvati; le nuove
 # pareti si scelgono tra demolire e costruire (TIPI_PARETE_SCELTA).
@@ -2466,7 +2470,7 @@ with tab_plan:
                 st.caption(
                     "Il programma prova a riconoscere le **stanze chiuse dai "
                     "muri** (ignorando scritte e quote) e le propone come "
-                    "aree della categoria scelta sopra: sono **proposte da "
+                    f"**{CATEGORIA_STANZE}**: sono **proposte da "
                     "rifinire** con ➤ Modifica (sposta i vertici, cambia "
                     "categoria, elimina con Canc). Le proposte **non si "
                     "sovrappongono** tra loro né alle zone già disegnate: "
@@ -2496,7 +2500,11 @@ with tab_plan:
                             zid = nuovo_id(pianta)
                             pianta["zone"].append({
                                 "id": zid,
-                                "categoria": cat_attiva_nome,
+                                # le stanze riconosciute sono locali: sempre
+                                # superficie interna, mai la categoria scelta
+                                # per il disegno a mano (che di norma è il
+                                # perimetro commerciale, primo dell'elenco)
+                                "categoria": CATEGORIA_STANZE,
                                 "nome": None,
                                 "punti": punti,
                             })
