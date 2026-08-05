@@ -12,6 +12,7 @@ from planimetria import (
     perimetro_reale_m,
     posiziona_etichette,
     punto_in_poligono,
+    quantita_finiture,
     riepilogo_locali,
     riepilogo_pareti,
     riepilogo_superfici,
@@ -388,3 +389,60 @@ def test_riepilogo_superfici_applica_lo_scaglione():
     assert tot == pytest.approx(100.0)
     assert comm == pytest.approx(7.5)
     assert righe[0]["m2_commerciale"] == pytest.approx(7.5)
+
+
+# ------------------------- detrazioni di porte e rivestimenti (finiture)
+
+# soggiorno 5,00x4,00 (20 m2, perim. 18) + bagno 3,00x2,00 (6 m2, perim. 10)
+LOCALI = [
+    {"m2": 20.0, "perimetro": 18.0, "pavimento": True, "battiscopa": True,
+     "pittura": True, "rivestito": False},
+    {"m2": 6.0, "perimetro": 10.0, "pavimento": True, "battiscopa": True,
+     "pittura": True, "rivestito": True},
+]
+
+
+def test_finiture_senza_detrazioni():
+    q = quantita_finiture(LOCALI, altezza=2.7)
+    assert q["pavimento"] == pytest.approx(26.0)
+    # il bagno e' rivestito: niente battiscopa nemmeno senza porte
+    assert q["battiscopa"] == pytest.approx(18.0)
+    # pareti lorde 28 m di perimetro x 2,7 = 75,6
+    assert q["pareti_lorde"] == pytest.approx(75.6)
+
+
+def test_finiture_bagno_rivestito_fuori_dal_battiscopa():
+    q = quantita_finiture(LOCALI, altezza=2.7)
+    assert q["battiscopa_lordo"] == pytest.approx(18.0)   # solo il soggiorno
+
+
+def test_finiture_detrae_la_fascia_rivestita():
+    q = quantita_finiture(LOCALI, altezza=2.7, altezza_rivestimento=1.2)
+    # bagno: 10 m di perimetro x 1,20 = 12 m2 che non si tinteggiano
+    assert q["detr_rivestimenti"] == pytest.approx(12.0)
+    assert q["pareti"] == pytest.approx(75.6 - 12.0)
+
+
+def test_finiture_detrae_le_porte():
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=5)
+    assert q["detr_porte_ml"] == pytest.approx(4.0)        # 0,8 x 5
+    assert q["detr_porte_m2"] == pytest.approx(8.4)        # 0,8 x 2,1 x 5
+    assert q["battiscopa"] == pytest.approx(18.0 - 4.0)
+    assert q["pareti"] == pytest.approx(75.6 - 8.4)
+
+
+def test_finiture_tutte_le_detrazioni_insieme():
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=5,
+                          altezza_rivestimento=1.2)
+    assert q["battiscopa"] == pytest.approx(14.0)          # 18 - 4
+    assert q["pareti"] == pytest.approx(75.6 - 12.0 - 8.4)  # 55,2
+    assert q["soffitti"] == pytest.approx(26.0)            # i soffitti restano
+
+
+def test_finiture_non_scendono_sotto_zero():
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.9,
+                          altezza_porta=2.1, n_porte=100)
+    assert q["battiscopa"] == 0.0
+    assert q["pareti"] == 0.0

@@ -1424,6 +1424,10 @@ def progetto_json_bytes():
                       "percento": st.session_state.et_pct,
                       "perimetro": st.session_state.et_perim},
         "altezza_locali": st.session_state.alt_locali,
+        "finiture": {"porta_larg": st.session_state.porta_larg,
+                     "porta_alt": st.session_state.porta_alt,
+                     "porta_n": st.session_state.porta_n,
+                     "riv_alt": st.session_state.riv_alt},
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
     return json.dumps(payload, ensure_ascii=False,
@@ -1570,6 +1574,11 @@ st.session_state.setdefault("et_m2", True)
 st.session_state.setdefault("et_pct", True)
 st.session_state.setdefault("et_perim", True)
 st.session_state.setdefault("alt_locali", 2.70)
+# detrazioni delle finiture: vani porta e fasce rivestite
+st.session_state.setdefault("porta_larg", 0.80)
+st.session_state.setdefault("porta_alt", 2.10)
+st.session_state.setdefault("porta_n", 0)
+st.session_state.setdefault("riv_alt", 1.20)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
 if "da_caricare" in st.session_state:
@@ -1619,6 +1628,13 @@ if "da_caricare" in st.session_state:
     st.session_state.et_pct = bool(etichette.get("percento", True))
     st.session_state.et_perim = bool(etichette.get("perimetro", True))
     st.session_state.alt_locali = float(dati.get("altezza_locali", 2.70))
+    finiture = dati.get("finiture") or {}
+    st.session_state.porta_larg = float(finiture.get("porta_larg", 0.80))
+    st.session_state.porta_alt = float(finiture.get("porta_alt", 2.10))
+    st.session_state.porta_n = int(finiture.get("porta_n", 0))
+    st.session_state.riv_alt = float(finiture.get("riv_alt", 1.20))
+    for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "riv_alt_w"):
+        st.session_state.pop(_k, None)
     try:
         st.session_state.piante = [pianta_da_json(p)
                                    for p in dati.get("piante") or []]
@@ -1694,7 +1710,8 @@ if "listino_pending" in st.session_state:
 # aggiornano al valore corrente dei widget, che Streamlit ha già applicato a
 # inizio giro; se un widget non esiste — perché lo script era ripartito a
 # metà — resta l'ultimo valore buono.
-for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim"):
+for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
+            "porta_larg", "porta_alt", "porta_n", "riv_alt"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
 
@@ -2661,13 +2678,12 @@ with tab_plan:
             st.info("Quando ci sono zone disegnate (su piante con scala), "
                     "qui trovi i perimetri per battiscopa e tinteggiature.")
         else:
-            st.caption("Spunta, locale per locale, che cosa si rifà (di "
-                       "solito **bagni e balconi si escludono** dal "
-                       "battiscopa). Pavimento = superficie calpestabile; "
+            st.caption("Spunta, locale per locale, che cosa si rifà. "
+                       "**Rivestito** (bagni, fascia della cucina): niente "
+                       "battiscopa, e la fascia piastrellata non si rasa né "
+                       "si tinteggia. Pavimento = superficie calpestabile; "
                        "pareti = perimetro × altezza; soffitti = superficie "
-                       "calpestabile. Le aperture (porte/finestre) non "
-                       "vengono detratte: affina tu le quantità nel computo "
-                       "se serve.")
+                       "calpestabile.")
             zona_per_rif = {(p["uid"], z["id"]): z
                             for p in piante for z in p["zone"]}
             righe_tab = []
@@ -2688,6 +2704,9 @@ with tab_plan:
                 pav_def = zona.get("pavimento")
                 if pav_def is None:
                     pav_def = interna
+                riv_def = zona.get("rivestito")
+                if riv_def is None:
+                    riv_def = bagno      # i bagni sono rivestiti quasi sempre
                 righe_tab.append({
                     "Pianta": r["pianta"],
                     "Locale": r["nome"],
@@ -2696,6 +2715,7 @@ with tab_plan:
                     "Pavimento": bool(pav_def),
                     "Battiscopa": bool(batt_def),
                     "Tinteggiatura": bool(pitt_def),
+                    "Rivestito": bool(riv_def),
                 })
                 riferimenti.append((r["uid"], r["id"]))
 
@@ -2721,12 +2741,14 @@ with tab_plan:
                     "Tinteggiatura": st.column_config.CheckboxColumn(
                         "Tinteggiatura",
                         help="Conta in pareti e soffitti da tinteggiare"),
+                    "Rivestito": st.column_config.CheckboxColumn(
+                        "Rivestito",
+                        help="Locale piastrellato (bagno, fascia cucina): "
+                             "niente battiscopa e la fascia rivestita non "
+                             "si rasa né si tinteggia"),
                 })
 
-            pav_m2 = 0.0
-            batt_m = 0.0
-            pareti_m2 = 0.0
-            soffitti_m2 = 0.0
+            locali_calcolo = []
             for (uid, zid), (_, riga) in zip(riferimenti, df_loc.iterrows()):
                 zona = zona_per_rif.get((uid, zid))
                 if zona is None:
@@ -2734,20 +2756,79 @@ with tab_plan:
                 zona["pavimento"] = bool(riga["Pavimento"])
                 zona["battiscopa"] = bool(riga["Battiscopa"])
                 zona["pittura"] = bool(riga["Tinteggiatura"])
-                if zona["pavimento"]:
-                    pav_m2 += float(riga["Superficie (m²)"])
-                if zona["battiscopa"]:
-                    batt_m += float(riga["Perimetro (m)"])
-                if zona["pittura"]:
-                    pareti_m2 += float(riga["Perimetro (m)"]) * altezza
-                    soffitti_m2 += float(riga["Superficie (m²)"])
+                zona["rivestito"] = bool(riga.get("Rivestito", False))
+                locali_calcolo.append({
+                    "m2": float(riga["Superficie (m²)"]),
+                    "perimetro": float(riga["Perimetro (m)"]),
+                    "pavimento": zona["pavimento"],
+                    "battiscopa": zona["battiscopa"],
+                    "pittura": zona["pittura"],
+                    "rivestito": zona["rivestito"],
+                })
+
+            # ---- vani porta e rivestimenti: quello che va detratto ----
+            st.markdown("**🚪 Porte e rivestimenti (detrazioni)**")
+            st.caption("Il vano di una porta non ha battiscopa e non si "
+                       "tinteggia; nei locali rivestiti la fascia "
+                       "piastrellata non si rasa né si tinteggia. Le "
+                       "quantità qui sotto sono già al netto.")
+            d1, d2, d3, d4 = st.columns(4)
+            larg_porta = d1.number_input(
+                "Larghezza porte (m)", min_value=0.0, max_value=3.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.porta_larg), key="porta_larg_w")
+            st.session_state.porta_larg = larg_porta
+            alt_porta = d2.number_input(
+                "Altezza porte (m)", min_value=0.0, max_value=4.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.porta_alt), key="porta_alt_w")
+            st.session_state.porta_alt = alt_porta
+            n_porte = d3.number_input(
+                "Numero di porte", min_value=0, max_value=200, step=1,
+                value=int(st.session_state.porta_n), key="porta_n_w",
+                help="Vani porta da scomputare: contali sulla planimetria "
+                     "(porte interne + portoncino d'ingresso).")
+            st.session_state.porta_n = n_porte
+            h_riv = d4.number_input(
+                "Altezza rivestimenti (m)", min_value=0.0, max_value=4.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.riv_alt), key="riv_alt_w",
+                help="Fascia piastrellata nei locali spuntati «Rivestito» "
+                     "(di norma 1,20 m; zona doccia anche 2,40).")
+            st.session_state.riv_alt = h_riv
+
+            q = planimetria.quantita_finiture(
+                locali_calcolo, altezza, larghezza_porta=larg_porta,
+                altezza_porta=alt_porta, n_porte=n_porte,
+                altezza_rivestimento=h_riv)
+            pav_m2 = q["pavimento"]
+            batt_m = q["battiscopa"]
+            pareti_m2 = q["pareti"]
+            soffitti_m2 = q["soffitti"]
 
             t1, t2, t3, t4 = st.columns(4)
             t1.metric("Pavimento", f"{numero_it(pav_m2, 2)} m²")
-            t2.metric("Battiscopa", f"{numero_it(batt_m, 2)} m")
+            t2.metric("Battiscopa", f"{numero_it(batt_m, 2)} m",
+                      delta=(f"−{numero_it(q['detr_porte_ml'], 2)} m porte"
+                             if q["detr_porte_ml"] else None),
+                      delta_color="off")
             t3.metric(f"Pareti (h {numero_it(altezza, 2)} m)",
-                      f"{numero_it(pareti_m2, 2)} m²")
+                      f"{numero_it(pareti_m2, 2)} m²",
+                      delta=(f"−{numero_it(q['detr_porte_m2'] + q['detr_rivestimenti'], 2)} m² "
+                             "porte e rivestimenti"
+                             if (q["detr_porte_m2"] or q["detr_rivestimenti"])
+                             else None),
+                      delta_color="off")
             t4.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
+            if q["detr_porte_ml"] or q["detr_rivestimenti"]:
+                st.caption(
+                    f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
+                    f"(i locali rivestiti sono già esclusi) − "
+                    f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta. "
+                    f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
+                    f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
+                    f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "
+                    f"vani porta.]")
 
             grandezze.update({
                 "pavimento": pav_m2,
