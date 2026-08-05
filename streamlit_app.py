@@ -1568,7 +1568,7 @@ st.session_state.setdefault("et_font", 14)
 st.session_state.setdefault("et_nome", True)
 st.session_state.setdefault("et_m2", True)
 st.session_state.setdefault("et_pct", True)
-st.session_state.setdefault("et_perim", False)
+st.session_state.setdefault("et_perim", True)
 st.session_state.setdefault("alt_locali", 2.70)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
@@ -1617,7 +1617,7 @@ if "da_caricare" in st.session_state:
     st.session_state.et_nome = bool(etichette.get("nome", True))
     st.session_state.et_m2 = bool(etichette.get("m2", True))
     st.session_state.et_pct = bool(etichette.get("percento", True))
-    st.session_state.et_perim = bool(etichette.get("perimetro", False))
+    st.session_state.et_perim = bool(etichette.get("perimetro", True))
     st.session_state.alt_locali = float(dati.get("altezza_locali", 2.70))
     try:
         st.session_state.piante = [pianta_da_json(p)
