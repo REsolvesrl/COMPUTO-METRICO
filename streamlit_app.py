@@ -1427,6 +1427,7 @@ def progetto_json_bytes():
         "finiture": {"porta_larg": st.session_state.porta_larg,
                      "porta_alt": st.session_state.porta_alt,
                      "porta_n": st.session_state.porta_n,
+                     "porta_n_est": st.session_state.porta_n_est,
                      "riv_alt": st.session_state.riv_alt},
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
@@ -1578,6 +1579,7 @@ st.session_state.setdefault("alt_locali", 2.70)
 st.session_state.setdefault("porta_larg", 0.80)
 st.session_state.setdefault("porta_alt", 2.10)
 st.session_state.setdefault("porta_n", 0)
+st.session_state.setdefault("porta_n_est", 0)
 st.session_state.setdefault("riv_alt", 1.20)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
@@ -1632,8 +1634,10 @@ if "da_caricare" in st.session_state:
     st.session_state.porta_larg = float(finiture.get("porta_larg", 0.80))
     st.session_state.porta_alt = float(finiture.get("porta_alt", 2.10))
     st.session_state.porta_n = int(finiture.get("porta_n", 0))
+    st.session_state.porta_n_est = int(finiture.get("porta_n_est", 0))
     st.session_state.riv_alt = float(finiture.get("riv_alt", 1.20))
-    for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "riv_alt_w"):
+    for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
+               "riv_alt_w"):
         st.session_state.pop(_k, None)
     try:
         st.session_state.piante = [pianta_da_json(p)
@@ -1711,7 +1715,7 @@ if "listino_pending" in st.session_state:
 # inizio giro; se un widget non esiste — perché lo script era ripartito a
 # metà — resta l'ultimo valore buono.
 for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
-            "porta_larg", "porta_alt", "porta_n", "riv_alt"):
+            "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
 
@@ -2770,9 +2774,11 @@ with tab_plan:
             st.markdown("**🚪 Porte e rivestimenti (detrazioni)**")
             st.caption("Il vano di una porta non ha battiscopa e non si "
                        "tinteggia; nei locali rivestiti la fascia "
-                       "piastrellata non si rasa né si tinteggia. Le "
+                       "piastrellata non si rasa né si tinteggia. Una porta "
+                       "**interna** affaccia su due locali, quindi vale "
+                       "**due lati**; il portoncino d'ingresso uno solo. Le "
                        "quantità qui sotto sono già al netto.")
-            d1, d2, d3, d4 = st.columns(4)
+            d1, d2, d3, d4, d5 = st.columns(5)
             larg_porta = d1.number_input(
                 "Larghezza porte (m)", min_value=0.0, max_value=3.0,
                 step=0.05, format="%.2f",
@@ -2784,12 +2790,19 @@ with tab_plan:
                 value=float(st.session_state.porta_alt), key="porta_alt_w")
             st.session_state.porta_alt = alt_porta
             n_porte = d3.number_input(
-                "Numero di porte", min_value=0, max_value=200, step=1,
+                "Porte interne", min_value=0, max_value=200, step=1,
                 value=int(st.session_state.porta_n), key="porta_n_w",
-                help="Vani porta da scomputare: contali sulla planimetria "
-                     "(porte interne + portoncino d'ingresso).")
+                help="Porte fra due locali: il vano vale due lati, perché "
+                     "interrompe il battiscopa (e toglie parete da "
+                     "tinteggiare) di qua e di là.")
             st.session_state.porta_n = n_porte
-            h_riv = d4.number_input(
+            n_porte_est = d4.number_input(
+                "Porte esterne", min_value=0, max_value=50, step=1,
+                value=int(st.session_state.porta_n_est), key="porta_n_est_w",
+                help="Portoncino d'ingresso e porte verso l'esterno o verso "
+                     "locali non computati: vale un lato solo.")
+            st.session_state.porta_n_est = n_porte_est
+            h_riv = d5.number_input(
                 "Altezza rivestimenti (m)", min_value=0.0, max_value=4.0,
                 step=0.05, format="%.2f",
                 value=float(st.session_state.riv_alt), key="riv_alt_w",
@@ -2800,7 +2813,7 @@ with tab_plan:
             q = planimetria.quantita_finiture(
                 locali_calcolo, altezza, larghezza_porta=larg_porta,
                 altezza_porta=alt_porta, n_porte=n_porte,
-                altezza_rivestimento=h_riv)
+                altezza_rivestimento=h_riv, n_porte_esterne=n_porte_est)
             pav_m2 = q["pavimento"]
             batt_m = q["battiscopa"]
             pareti_m2 = q["pareti"]
@@ -2824,7 +2837,8 @@ with tab_plan:
                 st.caption(
                     f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
                     f"(i locali rivestiti sono già esclusi) − "
-                    f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta. "
+                    f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta "
+                    f"({q['lati_porta']} lati). "
                     f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
                     f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
                     f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "

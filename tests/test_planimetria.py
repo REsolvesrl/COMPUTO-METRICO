@@ -423,21 +423,38 @@ def test_finiture_detrae_la_fascia_rivestita():
     assert q["pareti"] == pytest.approx(75.6 - 12.0)
 
 
-def test_finiture_detrae_le_porte():
+def test_finiture_porta_interna_conta_due_lati():
+    # 5 porte interne = 10 lati: il vano interrompe il battiscopa di qua e
+    # di la', e toglie superficie a due pareti
     q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
                           altezza_porta=2.1, n_porte=5)
-    assert q["detr_porte_ml"] == pytest.approx(4.0)        # 0,8 x 5
-    assert q["detr_porte_m2"] == pytest.approx(8.4)        # 0,8 x 2,1 x 5
-    assert q["battiscopa"] == pytest.approx(18.0 - 4.0)
-    assert q["pareti"] == pytest.approx(75.6 - 8.4)
+    assert q["lati_porta"] == 10
+    assert q["detr_porte_ml"] == pytest.approx(8.0)        # 0,8 x 10
+    assert q["detr_porte_m2"] == pytest.approx(16.8)       # 0,8 x 2,1 x 10
+    assert q["battiscopa"] == pytest.approx(18.0 - 8.0)
+    assert q["pareti"] == pytest.approx(75.6 - 16.8)
+
+
+def test_finiture_porta_esterna_conta_un_lato():
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.9,
+                          altezza_porta=2.1, n_porte=0, n_porte_esterne=1)
+    assert q["lati_porta"] == 1
+    assert q["detr_porte_ml"] == pytest.approx(0.9)
+
+
+def test_finiture_interne_ed_esterne_insieme():
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=1.0,
+                          altezza_porta=2.0, n_porte=3, n_porte_esterne=1)
+    assert q["lati_porta"] == 7                            # 3 x 2 + 1
+    assert q["detr_porte_ml"] == pytest.approx(7.0)
 
 
 def test_finiture_tutte_le_detrazioni_insieme():
     q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
                           altezza_porta=2.1, n_porte=5,
                           altezza_rivestimento=1.2)
-    assert q["battiscopa"] == pytest.approx(14.0)          # 18 - 4
-    assert q["pareti"] == pytest.approx(75.6 - 12.0 - 8.4)  # 55,2
+    assert q["battiscopa"] == pytest.approx(10.0)          # 18 - 8
+    assert q["pareti"] == pytest.approx(75.6 - 12.0 - 16.8)  # 46,8
     assert q["soffitti"] == pytest.approx(26.0)            # i soffitti restano
 
 

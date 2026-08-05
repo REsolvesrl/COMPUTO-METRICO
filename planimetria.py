@@ -203,7 +203,7 @@ def riepilogo_locali(piante, escludi=()):
 
 
 def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
-                      n_porte=0, altezza_rivestimento=0.0):
+                      n_porte=0, altezza_rivestimento=0.0, n_porte_esterne=0):
     """Quantità nette di pavimenti, battiscopa, pareti e soffitti.
 
     locali: [{"m2", "perimetro", "pavimento", "battiscopa", "pittura",
@@ -214,16 +214,18 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
       loro perimetro non entra nel conteggio;
     - nei locali rivestiti la fascia alta `altezza_rivestimento` non si rasa
       né si tinteggia: si toglie perimetro × altezza_rivestimento;
-    - i VANI PORTA non hanno battiscopa e non si tinteggiano: si toglie
-      larghezza × n_porte dai metri di battiscopa e larghezza × altezza ×
-      n_porte dalle pareti.
+    - i VANI PORTA non hanno battiscopa e non si tinteggiano. Una porta
+      INTERNA affaccia su due locali, quindi interrompe il battiscopa di
+      qua e di là e toglie superficie a due pareti: conta per DUE lati.
+      Il portoncino d'ingresso (n_porte_esterne) ne ha uno solo, perché
+      l'altra faccia è fuori dall'appartamento.
 
     Le detrazioni non possono portare sotto zero. Ritorna anche i valori
     lordi e le detrazioni, per poterli mostrare.
     """
     h = float(altezza or 0.0)
     h_riv = float(altezza_rivestimento or 0.0)
-    porte = max(0, int(n_porte or 0))
+    lati = 2 * max(0, int(n_porte or 0)) + max(0, int(n_porte_esterne or 0))
     larg_p = float(larghezza_porta or 0.0)
     alt_p = float(altezza_porta or 0.0)
 
@@ -243,9 +245,10 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
             if rivestito:
                 detr_rivestimenti += perimetro * h_riv
 
-    detr_porte_ml = larg_p * porte
-    detr_porte_m2 = larg_p * alt_p * porte
+    detr_porte_ml = larg_p * lati
+    detr_porte_m2 = larg_p * alt_p * lati
     return {
+        "lati_porta": lati,
         "pavimento": round(pavimento, 3),
         "battiscopa": round(max(0.0, battiscopa_lordo - detr_porte_ml), 3),
         "battiscopa_lordo": round(battiscopa_lordo, 3),
