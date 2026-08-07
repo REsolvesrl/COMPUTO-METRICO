@@ -600,9 +600,14 @@ def nome_file(estensione):
 # ------------------------------------------------------- checklist listino
 
 def quantita_prezzo_listino(voce):
-    """Quantità e prezzo correnti (dai widget) di una voce del listino."""
-    quantita = float(st.session_state.get(f"lq_{voce['codice']}") or 0.0)
-    prezzo = float(st.session_state.get(f"lp_{voce['codice']}")
+    """Quantità e prezzo correnti di una voce del listino.
+
+    Si leggono dalle chiavi «di verità», non dai widget: le righe delle
+    categorie chiuse non esistono a video, ma i loro valori devono continuare
+    a contare nei totali, nell'export e nel salvataggio.
+    """
+    quantita = float(st.session_state.get(f"q_{voce['codice']}") or 0.0)
+    prezzo = float(st.session_state.get(f"p_{voce['codice']}")
                    or voce["prezzo"])
     return quantita, prezzo
 
@@ -644,47 +649,90 @@ def css_schede_computo():
     resta identico e la tendina rimane aperta mentre si lavora.
     """
     regole = ["""
-[class*="st-key-card_"] [data-testid="stExpander"] details {
+/* «Voci aggiuntive»: è rimasta una tendina di Streamlit */
+.st-key-card_extra [data-testid="stExpander"] details {
     border-radius: 12px;
 }
-[class*="st-key-card_"] summary [data-testid="stMarkdownContainer"] {
+.st-key-card_extra summary [data-testid="stMarkdownContainer"] {
     width: 100%;
 }
-[class*="st-key-card_"] summary [data-testid="stMarkdownContainer"] p {
+.st-key-card_extra summary [data-testid="stMarkdownContainer"] p {
     display: flex;
     align-items: baseline;
     width: 100%;
     font-size: 1.25rem;
 }
-[class*="st-key-card_"] summary [data-testid="stMarkdownContainer"] p::after {
+.st-key-card_extra summary [data-testid="stMarkdownContainer"] p::after {
+    margin-left: auto;
+    font-weight: 700;
+    padding-left: 0.5rem;
+    white-space: nowrap;
+}
+/* Categorie: il titolo è un bottone (key «apri_N») travestito da
+   intestazione di tendina, così l'apertura passa dal server e possiamo
+   disegnare le righe della sola categoria aperta. */
+[class*="st-key-apri_"] button {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    text-align: left;
+    padding: 0.55rem 0.9rem;
+}
+[class*="st-key-apri_"] button p {
+    display: flex;
+    align-items: baseline;
+    width: 100%;
+    margin: 0;
+    font-size: 1.25rem;
+}
+[class*="st-key-apri_"] button p::after {
     margin-left: auto;
     font-weight: 700;
     padding-left: 0.5rem;
     white-space: nowrap;
 }
 """]
-    carte = [(f"card_{i}", COLORI_CATEGORIE[cat][0],
-              totale_categoria_listino(cat))
-             for i, cat in enumerate(listino.CATEGORIE, start=1)]
-    tot_extra = calcoli.totale_generale(
-        calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
-    carte.append(("card_extra", ORO, tot_extra))
-    for chiave, colore, totale in carte:
+    for indice, cat in enumerate(listino.CATEGORIE, start=1):
+        colore = COLORI_CATEGORIE[cat][0]
+        totale = totale_categoria_listino(cat)
         regole.append(f"""
-.st-key-{chiave} [data-testid="stExpander"] details {{
+.st-key-card_{indice} {{
     background: {colore}26;
     border: 1px solid {colore}99;
-}}
-.st-key-{chiave} [data-testid="stExpander"] summary:hover {{
-    background: {colore}33;
     border-radius: 12px;
+    margin-bottom: 0.55rem;
+    padding-bottom: 0.2rem;
 }}
-.st-key-{chiave} summary [data-testid="stMarkdownContainer"] p::after {{
+.st-key-apri_{indice} button:hover {{
+    background: {colore}33;
+}}
+.st-key-apri_{indice} button p::after {{
     content: "Totale: {euro(totale)}";
 }}
-.st-key-{chiave} hr {{
+.st-key-card_{indice} hr {{
     height: 2px;
     background-color: {colore}77;
+    border: none;
+    margin: 0.35rem 0 0.6rem;
+}}
+""")
+    tot_extra = calcoli.totale_generale(
+        calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
+    regole.append(f"""
+.st-key-card_extra [data-testid="stExpander"] details {{
+    background: {ORO}26;
+    border: 1px solid {ORO}99;
+}}
+.st-key-card_extra [data-testid="stExpander"] summary:hover {{
+    background: {ORO}33;
+    border-radius: 12px;
+}}
+.st-key-card_extra summary [data-testid="stMarkdownContainer"] p::after {{
+    content: "Totale: {euro(tot_extra)}";
+}}
+.st-key-card_extra hr {{
+    height: 2px;
+    background-color: {ORO}77;
     border: none;
     margin: 0.35rem 0 0.6rem;
 }}
@@ -710,14 +758,20 @@ def riga_voce_listino(voce):
         aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
     c_voce.markdown(f"**{codice}** {voce['descrizione']} · "
                     f":gray[{voce['um']}]", help=aiuto)
+    # I widget nascono dal valore «di verità» (value=…) perché la riga può
+    # essere stata cancellata e ricreata chiudendo e riaprendo la categoria.
     usa_misure = c_voce.checkbox(
         "📐 Libretto misure", key=f"usamis_{codice}",
+        value=bool(st.session_state.get(f"mis_{codice}")),
         help="Scomponi la quantità in più misure (parti × lung × larg × alt) "
              "che si sommano. Le detrazioni si scrivono con parti negative.")
+    st.session_state[f"mis_{codice}"] = usa_misure
 
     prezzo = c_prezzo.number_input(
         "Prezzo €", min_value=0.0, step=1.0, format="%.2f",
-        key=f"lp_{codice}", label_visibility="collapsed")
+        key=f"lp_{codice}", label_visibility="collapsed",
+        value=float(st.session_state.get(f"p_{codice}") or voce["prezzo"]))
+    st.session_state[f"p_{codice}"] = prezzo
 
     if usa_misure:
         # Tabella "di partenza" costante tra i run (finché non si carica/azzera
@@ -745,16 +799,21 @@ def riga_voce_listino(voce):
         righe = misure_da_df(editato)
         st.session_state.misure_correnti[codice] = righe
         quantita = calcoli.quantita_da_misure(righe)
-        # NON creo il number_input lq_ in questo ramo: scrivo la key come
-        # semplice valore di sessione (letto da riepilogo, export e JSON).
-        st.session_state[f"lq_{codice}"] = quantita
+        # In questo ramo la quantità non è digitabile: niente number_input, il
+        # valore va direttamente nella chiave di verità. Il widget va tolto,
+        # altrimenti al ritorno all'inserimento a mano rinascerebbe col
+        # vecchio valore invece che con la somma delle misure.
+        st.session_state[f"q_{codice}"] = quantita
+        st.session_state.pop(f"lq_{codice}", None)
         c_qta.markdown(f"**{numero_it(quantita, 2)}** :gray[{voce['um']}]")
     else:
         st.session_state.misure_base.pop(codice, None)
         st.session_state.misure_correnti.pop(codice, None)
         quantita = c_qta.number_input(
             "Quantità", min_value=0.0, step=1.0, format="%.2f",
-            key=f"lq_{codice}", label_visibility="collapsed")
+            key=f"lq_{codice}", label_visibility="collapsed",
+            value=float(st.session_state.get(f"q_{codice}") or 0.0))
+        st.session_state[f"q_{codice}"] = quantita
 
     if quantita > 0:
         c_parz.markdown(f"**{euro(quantita * prezzo)}**")
@@ -1480,19 +1539,19 @@ def progetto_json_bytes():
         "voci": voci_da_df(st.session_state.df_voci),
         "listino_stato": {
             v["codice"]: {
-                "q": float(st.session_state.get(f"lq_{v['codice']}") or 0.0),
-                "p": float(st.session_state.get(f"lp_{v['codice']}")
+                "q": float(st.session_state.get(f"q_{v['codice']}") or 0.0),
+                "p": float(st.session_state.get(f"p_{v['codice']}")
                            or v["prezzo"]),
             }
             for v in listino.VOCI
-            if (st.session_state.get(f"lq_{v['codice']}") or 0.0) > 0
-            or float(st.session_state.get(f"lp_{v['codice']}")
+            if (st.session_state.get(f"q_{v['codice']}") or 0.0) > 0
+            or float(st.session_state.get(f"p_{v['codice']}")
                      or v["prezzo"]) != v["prezzo"]
         },
         "misure_listino": {
             v["codice"]: st.session_state.misure_correnti[v["codice"]]
             for v in listino.VOCI
-            if st.session_state.get(f"usamis_{v['codice']}")
+            if st.session_state.get(f"mis_{v['codice']}")
             and st.session_state.misure_correnti.get(v["codice"])
         },
         "business_plan": {
@@ -1578,7 +1637,7 @@ def progetto_e_vuoto():
         return False
     if len(voci_da_df(st.session_state.df_voci)):
         return False
-    if any((st.session_state.get(f"lq_{v['codice']}") or 0.0) > 0
+    if any((st.session_state.get(f"q_{v['codice']}") or 0.0) > 0
            for v in listino.VOCI):
         return False
     if st.session_state.get("bp_acquisto") or st.session_state.get("bp_vendita"):
@@ -1621,9 +1680,15 @@ st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 10.0)   # 10%: aliquota tipica in edilizia
 st.session_state.setdefault("imprevisti", 5.0)
 for _voce in listino.VOCI:
-    st.session_state.setdefault(f"lq_{_voce['codice']}", 0.0)
-    st.session_state.setdefault(f"lp_{_voce['codice']}", float(_voce["prezzo"]))
-    st.session_state.setdefault(f"usamis_{_voce['codice']}", False)
+    # chiavi «di verità»: sopravvivono anche quando la categoria è chiusa e
+    # le sue righe non vengono disegnate (vedi il riallineamento più sotto)
+    st.session_state.setdefault(f"q_{_voce['codice']}", 0.0)
+    st.session_state.setdefault(f"p_{_voce['codice']}", float(_voce["prezzo"]))
+    st.session_state.setdefault(f"mis_{_voce['codice']}", False)
+# categorie del listino aperte in questo momento: solo le loro righe vengono
+# disegnate. Con tutte e 58 le voci a video una riesecuzione costava 390 ms su
+# 595 totali — due terzi del tempo speso per righe che l'utente non guarda.
+st.session_state.setdefault("cat_aperte", set())
 # libretto delle misure: tabella di partenza per voce e ultimo risultato letto
 st.session_state.setdefault("versione_misure", 0)
 st.session_state.setdefault("misure_base", {})       # {codice: DataFrame}
@@ -1687,11 +1752,15 @@ if "da_caricare" in st.session_state:
     for _voce in listino.VOCI:
         _cod = _voce["codice"]
         elemento = stato_listino.get(_cod) or {}
-        st.session_state[f"lq_{_cod}"] = float(elemento.get("q", 0.0))
-        st.session_state[f"lp_{_cod}"] = float(
+        st.session_state[f"q_{_cod}"] = float(elemento.get("q", 0.0))
+        st.session_state[f"p_{_cod}"] = float(
             elemento.get("p", _voce["prezzo"]))
         righe_mis = misure_salvate.get(_cod) or []
-        st.session_state[f"usamis_{_cod}"] = bool(righe_mis)
+        st.session_state[f"mis_{_cod}"] = bool(righe_mis)
+        # via i widget della sessione precedente: se restassero, le righe
+        # rinascerebbero coi valori del progetto vecchio invece che con questi
+        for _w in (f"lq_{_cod}", f"lp_{_cod}", f"usamis_{_cod}"):
+            st.session_state.pop(_w, None)
         if righe_mis:
             st.session_state.misure_correnti[_cod] = righe_mis
             st.session_state.misure_base[_cod] = df_misure(righe_mis)
@@ -1794,7 +1863,8 @@ if "bp_vendita_pending" in st.session_state:
 # applicano al giro successivo, prima che i widget nascano.
 if "listino_pending" in st.session_state:
     for _cod, _quantita in st.session_state.pop("listino_pending").items():
-        st.session_state[f"lq_{_cod}"] = _quantita
+        st.session_state[f"q_{_cod}"] = _quantita
+        st.session_state.pop(f"lq_{_cod}", None)   # rinasce col valore nuovo
 
 # I comandi delle etichette stanno SOTTO il disegno, ma il disegno legge i
 # loro valori PRIMA: senza questo riallineamento userebbe quelli del giro
@@ -1807,6 +1877,18 @@ for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
             "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
+
+# Stesso principio per le voci di listino, ma per un motivo in più: le righe
+# delle categorie CHIUSE non vengono disegnate (è ciò che rende l'app veloce),
+# e Streamlit cancella lo stato dei widget che non ridisegna. Le quantità e i
+# prezzi vivono quindi in chiavi «di verità» (q_/p_/mis_), che sopravvivono a
+# tutto; i widget (lq_/lp_/usamis_) nascono da quelle e ci riversano dentro il
+# valore appena l'utente lo cambia.
+for _voce in listino.VOCI:
+    _cod = _voce["codice"]
+    for _verita, _widget in (("q_", "lq_"), ("p_", "lp_"), ("mis_", "usamis_")):
+        if _widget + _cod in st.session_state:
+            st.session_state[_verita + _cod] = st.session_state[_widget + _cod]
 
 # Le categorie si ricostruiscono a ogni giro dalle zone effettivamente
 # disegnate: così i pesi aggiornati valgono subito e una zona marcata con una
@@ -1997,10 +2079,19 @@ with tab_computo:
     with col_sx:
         for indice, cat in enumerate(listino.CATEGORIE, start=1):
             colore_md = COLORI_CATEGORIE[cat][1]
-            # niente totale nel titolo: lo disegna il CSS (vedi
-            # css_schede_computo), così la tendina non si richiude
+            aperta = cat in st.session_state.cat_aperte
+            # Un bottone al posto della tendina di Streamlit: la tendina si
+            # apre e chiude nel browser SENZA avvisare il server, quindi non
+            # potremmo sapere quali voci disegnare. Il bottone invece ce lo
+            # dice, ed è ciò che permette di disegnare solo le righe aperte.
+            # Niente totale nell'etichetta: lo scrive il CSS (::after).
             with st.container(key=f"card_{indice}"):
-                with st.expander(f":{colore_md}[**{indice} · {cat}**]"):
+                if st.button(f"{'▾' if aperta else '▸'} "
+                             f":{colore_md}[**{indice} · {cat}**]",
+                             key=f"apri_{indice}", use_container_width=True):
+                    st.session_state.cat_aperte ^= {cat}   # apre o chiude
+                    st.rerun()
+                if aperta:
                     h_voce, h_qta, h_prezzo, h_parz = st.columns(
                         [3.4, 1, 1, 1])
                     h_voce.caption("Voce · unità")
@@ -2989,7 +3080,7 @@ with tab_plan:
                 quantita = round(grandezze.get(grandezza, 0.0), 2)
                 if voce is None or quantita <= 0:
                     continue
-                attuale = float(st.session_state.get(f"lq_{codice}") or 0.0)
+                attuale = float(st.session_state.get(f"q_{codice}") or 0.0)
                 etichetta = (f"**{codice}** · {voce['descrizione']} → "
                              f"**{numero_it(quantita, 2)} {voce['um']}**")
                 if attuale and abs(attuale - quantita) > 0.005:
