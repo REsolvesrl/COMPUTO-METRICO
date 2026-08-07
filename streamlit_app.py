@@ -13,8 +13,10 @@ il visualizzatore interattivo in cme_viewer/.
 import base64
 import copy
 import hashlib
+import hmac
 import io
 import json
+import os
 import tempfile
 import time
 from datetime import date, datetime
@@ -55,6 +57,59 @@ st.markdown("""
 [data-testid="stCaptionContainer"] { max-width: 82ch; }
 </style>
 """, unsafe_allow_html=True)
+
+# ==========================================================
+# 🔒 ACCESSO RISERVATO
+# Il cancello si attiva SOLO se la password è configurata (secrets di
+# Streamlit oppure variabile d'ambiente APP_PASSWORD). Se non c'è, l'app
+# resta ad accesso libero: così i deploy esistenti non cambiano comportamento.
+# ==========================================================
+
+LOGO_PATH = Path(__file__).parent / "assets" / "logo_resolve.png"
+
+
+def _password_attesa():
+    """Password di accesso, da st.secrets o da variabile d'ambiente."""
+    try:
+        if "APP_PASSWORD" in st.secrets:
+            return str(st.secrets["APP_PASSWORD"])
+    except Exception:
+        pass
+    return os.environ.get("APP_PASSWORD")
+
+
+def _accesso_consentito():
+    attesa = _password_attesa()
+    if not attesa:
+        return True                       # nessuna password impostata
+    if st.session_state.get("auth_ok"):
+        return True
+
+    _, centro, _ = st.columns([1, 2, 1])
+    with centro:
+        if LOGO_PATH.exists():
+            st.image(str(LOGO_PATH), width=200)
+        st.subheader("Accesso riservato")
+        st.caption(
+            "Strumento interno di Resolve S.r.l. "
+            "Inserisci la password per continuare."
+        )
+        pwd = st.text_input("Password", type="password", key="auth_pwd")
+        if st.button("Entra", type="primary"):
+            # confronto a tempo costante: non rivela la password carattere
+            # per carattere misurando i tempi di risposta
+            if hmac.compare_digest(pwd, attesa):
+                st.session_state["auth_ok"] = True
+                st.session_state.pop("auth_pwd", None)
+                st.rerun()
+            else:
+                st.error("⛔ Password errata.")
+    return False
+
+
+if not _accesso_consentito():
+    st.stop()
+
 
 COLONNE_TESTO = ["categoria", "codice", "descrizione", "um"]
 COLONNE_NUMERI = ["parti", "lunghezza", "larghezza", "altezza",

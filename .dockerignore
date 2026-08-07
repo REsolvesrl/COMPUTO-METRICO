@@ -1,0 +1,26 @@
+# Roba che non deve finire nell'immagine: la rende più pesante e lenta da
+# costruire, e in un caso (secrets.toml) sarebbe pure pericolosa.
+
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# I segreti su Render vivono nelle variabili d'ambiente, mai nell'immagine.
+.streamlit/secrets.toml
+
+tests/
+requirements-dev.txt
+pytest.ini
+
+# Strumenti locali di sviluppo e documentazione interna.
+.claude/
+.impeccable/
+graphify-out/
+CLAUDE.md
+PRODUCT.md
+*.png
+!assets/*.png

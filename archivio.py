@@ -1,17 +1,23 @@
 """Archivio dei progetti su Supabase Storage (salvataggio/apertura online).
 
 Ogni progetto è un file JSON dentro un bucket privato di Supabase Storage.
-Le credenziali stanno nei «secrets» di Streamlit (mai nel codice):
+Le credenziali stanno fuori dal codice, in uno di questi due posti.
+
+Su Streamlit Cloud, nei «secrets»:
 
     [supabase]
     url = "https://xxxx.supabase.co"
-    key = "…service_role…"
+    key = "…chiave segreta / service_role…"
     bucket = "progetti"
 
+Su host tipo Render, che non hanno il file secrets.toml, nelle variabili
+d'ambiente `SUPABASE_URL`, `SUPABASE_KEY` e `SUPABASE_BUCKET`.
+
 Il modulo non solleva mai in modo silenzioso all'import: `configurato()` dice
-se i secrets ci sono, e le funzioni di rete sollevano un'eccezione con un
+se le credenziali ci sono, e le funzioni di rete sollevano un'eccezione con un
 messaggio leggibile (gestita dalla UI) se qualcosa va storto.
 """
+import os
 import re
 from urllib.parse import quote
 
@@ -23,14 +29,22 @@ ESTENSIONE = ".json"
 
 
 def _cfg():
-    """(base_storage_url, key, bucket) dai secrets, oppure None se mancano."""
+    """(base_storage_url, key, bucket), oppure None se le credenziali mancano.
+
+    Prima i secrets di Streamlit, poi le variabili d'ambiente: così le stesse
+    funzioni valgono sia su Streamlit Cloud sia su Render.
+    """
+    url = key = bucket = ""
     try:
         s = st.secrets["supabase"]
-        url = str(s["url"]).rstrip("/")
+        url = str(s["url"])
         key = str(s["key"])
-        bucket = str(s["bucket"]) if "bucket" in s else "progetti"
+        bucket = str(s["bucket"]) if "bucket" in s else ""
     except Exception:
-        return None
+        pass                       # nessun secrets.toml: si prova l'ambiente
+    url = (url or os.environ.get("SUPABASE_URL", "")).rstrip("/")
+    key = key or os.environ.get("SUPABASE_KEY", "")
+    bucket = bucket or os.environ.get("SUPABASE_BUCKET", "") or "progetti"
     if not url or not key:
         return None
     return f"{url}/storage/v1", key, bucket

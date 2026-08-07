@@ -1,0 +1,28 @@
+# Blueprint Render: descrive il servizio web dell'app CME.
+# Render lo legge quando colleghi il repository e crea tutto da solo.
+#
+# Dopo il primo deploy vanno impostate a mano (dashboard Render → Environment)
+# le variabili marcate "sync: false": sono segrete e NON stanno nel repository.
+
+services:
+  - type: web
+    name: cme-resolve
+    runtime: docker
+    region: frankfurt          # datacenter europeo: più vicino all'Italia
+    plan: free                 # → passa a "starter" per togliere lo spegnimento
+    branch: main               # ogni push su main ridistribuisce l'app
+    autoDeploy: true
+    healthCheckPath: /_stcore/health   # endpoint di salute di Streamlit
+    envVars:
+      # Password unica di accesso all'app. Se NON la imposti, l'app resta
+      # ad accesso libero (comportamento storico).
+      - key: APP_PASSWORD
+        sync: false
+      # Archivio online dei progetti (Supabase Storage). Le stesse tre voci
+      # che su Streamlit Cloud stanno nei Secrets sotto [supabase].
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: progetti

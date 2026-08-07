@@ -51,10 +51,21 @@ def test_chiave_vuota_ha_ripiego():
     assert _chiave("   ") == "progetto.json"
 
 
-def test_non_configurato_senza_secrets():
-    # senza secrets di Supabase, l'archivio si dichiara non configurato
-    # (non solleva) così l'app funziona lo stesso
+def test_non_configurato_senza_secrets(monkeypatch):
+    # senza secrets di Supabase né variabili d'ambiente, l'archivio si dichiara
+    # non configurato (non solleva) così l'app funziona lo stesso
+    for v in ("SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_BUCKET"):
+        monkeypatch.delenv(v, raising=False)
     assert configurato() is False
+
+
+def test_configurato_da_variabili_ambiente(monkeypatch):
+    # su Render non esiste secrets.toml: le credenziali arrivano dall'ambiente
+    monkeypatch.setenv("SUPABASE_URL", "https://demo.supabase.co/")
+    monkeypatch.setenv("SUPABASE_KEY", "chiave-x")
+    monkeypatch.delenv("SUPABASE_BUCKET", raising=False)
+    assert archivio._cfg() == (
+        "https://demo.supabase.co/storage/v1", "chiave-x", "progetti")
 
 
 CFG_FINTA = ("https://demo.supabase.co/storage/v1", "chiave-x", "progetti")

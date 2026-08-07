@@ -22,12 +22,20 @@ CME/
 ├── streamlit_app.py           # interfaccia (Streamlit)
 ├── calcoli.py                 # logica del computo (funzioni pure, testabili)
 ├── planimetria.py             # geometria e superfici commerciali (pure)
+├── rilevamento.py             # rilevamento automatico delle stanze (OpenCV)
+├── listino.py                 # listino guida delle voci di lavorazione
+├── fattibilita.py             # business plan: fattibilità, spese, MCA
+├── fattura.py                 # lettura fatture PDF/XML (FatturaPA)
+├── archivio.py                # archivio dei progetti su Supabase Storage
 ├── cme_viewer/                # componente visualizzatore planimetrie
 │   ├── __init__.py            #   lato Python
 │   └── frontend/              #   lato browser (canvas + barra strumenti)
-├── tests/                     # test pytest su calcoli.py e planimetria.py
+├── assets/                    # logo Resolve (schermata di accesso)
+├── tests/                     # test pytest sui moduli di logica
 ├── requirements.txt           # librerie necessarie all'app
 ├── requirements-dev.txt       # come sopra + pytest (per lo sviluppo)
+├── Dockerfile                 # immagine per il deploy su Render
+├── render.yaml                # ricetta del servizio su Render
 └── pytest.ini
 ```
 
@@ -60,6 +68,81 @@ computo **e planimetrie** (immagini incluse, con zone, pareti e scala). Per
 riprendere il lavoro si ricarica quel file dal pannello **📋 Dati del
 progetto · Apri / Nuovo** in cima alla scheda Computo metrico. Con le
 immagini incorporate il file può pesare qualche MB.
+
+## Archivio online dei progetti (Supabase)
+
+Per non scaricare e ricaricare il JSON a ogni sessione, l'app può tenere i
+progetti in un **bucket privato di Supabase Storage**: dallo stesso pannello
+si apre un progetto da un menu a tendina, lo si salva con un nome e lo si
+elimina. Se le credenziali non ci sono, l'app funziona lo stesso e mostra un
+avviso: l'archivio è un di più, non un requisito.
+
+Perché serve un archivio esterno: gli host di app (Streamlit Cloud, Render)
+hanno un disco **effimero**, che si azzera a ogni riavvio. I progetti devono
+vivere fuori dall'app.
+
+Configurazione (una volta sola):
+
+1. Crea un progetto su [supabase.com](https://supabase.com) → **Storage** →
+   nuovo bucket **privato** chiamato `progetti`.
+2. **Project Settings → API**: copia il *Project URL* e la **chiave segreta**
+   lato server (`service_role`, oppure `sb_secret_…` nelle chiavi nuove).
+   ⚠️ Non la chiave *anon/publishable*, e mai dentro il codice.
+3. Incolla le credenziali dove gira l'app:
+
+   - **Streamlit Cloud** → *Manage app → Settings → Secrets*:
+     ```toml
+     [supabase]
+     url = "https://xxxx.supabase.co"
+     key = "…chiave segreta…"
+     bucket = "progetti"
+     ```
+   - **Render** → *Environment*: `SUPABASE_URL`, `SUPABASE_KEY`,
+     `SUPABASE_BUCKET`.
+   - **In locale**: le stesse righe TOML in `.streamlit/secrets.toml`
+     (già escluso da git).
+
+## Accesso protetto
+
+L'app può stare dietro una **password unica**, impostata in `APP_PASSWORD`
+(secrets di Streamlit o variabile d'ambiente). Il cancello si attiva **solo
+se la password è configurata**: senza, l'accesso resta libero e i deploy
+esistenti non cambiano comportamento. Il confronto usa
+`hmac.compare_digest`, a tempo costante.
+
+## Deploy su dominio proprio (es. `cme.resolve.srl`)
+
+Due vincoli, verificati:
+
+- **Streamlit Community Cloud non supporta i domini personalizzati**: solo
+  sottodomini `*.streamlit.app`.
+- **L'hosting condiviso non fa girare Streamlit**: non è un sito di file, è
+  un processo Python che deve restare acceso. Vale per Aruba come per
+  Hostinger; servirebbe un VPS da amministrare.
+
+Soluzione: l'app gira su **Render** (che legge `render.yaml` e `Dockerfile`),
+il dominio resta dov'è e si aggiunge **un solo record DNS**.
+
+1. **Render** → *New +* → **Blueprint** → repo `REsolvesrl/COMPUTO-METRICO`,
+   branch `main` → *Apply*. Nasce il servizio `cme-resolve`.
+2. *Environment* → aggiungi `APP_PASSWORD` e le tre variabili `SUPABASE_*`.
+3. *Settings → Custom Domains* → aggiungi `cme.resolve.srl`: Render mostra il
+   valore CNAME da usare.
+4. **Aruba** (il dominio `resolve.srl` è lì) → *Gestione DNS* → **Aggiungi
+   record** → tipo `CNAME`, nome host `cme`, destinazione il valore dato da
+   Render → *Aggiungi* → *Prosegui* → **Salva configurazione** → *Conferma*.
+5. Torna su Render e clicca **Verify**. Il certificato HTTPS lo genera Render.
+
+⚠️ Su Aruba **non** creare `cme` come "sottodominio/sito web": creerebbe un
+record verso l'hosting Aruba in conflitto con il CNAME. Serve solo il record
+nella zona DNS. I record del sito (`resolve.srl`) e della posta (`MX`) non si
+toccano.
+
+**Memoria richiesta**: misurata in locale, l'app sta sui ~180 MB a riposo con
+picchi di ~270 MB durante il rilevamento stanze su una planimetria da
+2000×1500 px. I piani Render *Free* e *Starter* (512 MB) reggono una o due
+sessioni per volta; per un uso contemporaneo di più persone serve il piano da
+2 GB.
 
 ## Misura da planimetria
 
@@ -98,3 +181,6 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [ ] Listino personale riutilizzabile delle voci più usate.
 - [ ] Import da prezzari regionali (Excel/CSV).
 - [x] Pubblicazione su Streamlit Community Cloud.
+- [x] Archivio dei progetti online (Supabase Storage).
+- [x] Accesso protetto da password.
+- [ ] Pubblicazione su `cme.resolve.srl` (Render + CNAME su Aruba).
