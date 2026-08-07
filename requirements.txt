@@ -7,3 +7,10 @@ Pillow==12.2.0
 PyMuPDF==1.28.0
 opencv-python-headless==5.0.0.93
 requests==2.34.2
+
+# pyarrow non lo usiamo direttamente: se lo tira dietro Streamlit, che ci
+# converte le tabelle (st.dataframe / st.data_editor). Va fissato lo stesso.
+# Il 2026-08-07 il server ha preso da solo la 25.0.0 ed e' morto di
+# segmentation fault mentre disegnava una pagina; in locale, con la 24.0.0,
+# non e' mai successo. Era l'unica libreria diversa fra i due ambienti.
+pyarrow==24.0.0
