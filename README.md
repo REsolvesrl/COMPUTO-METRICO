@@ -110,7 +110,7 @@ se la password è configurata**: senza, l'accesso resta libero e i deploy
 esistenti non cambiano comportamento. Il confronto usa
 `hmac.compare_digest`, a tempo costante.
 
-## Deploy su dominio proprio (`cme.resolvesrl.com`)
+## Deploy su dominio proprio (`computo.resolvesrl.com`)
 
 Due vincoli, verificati:
 
@@ -126,17 +126,24 @@ il dominio resta dov'è e si aggiunge **un solo record DNS**.
 1. **Render** → *New +* → **Blueprint** → repo `REsolvesrl/COMPUTO-METRICO`,
    branch `main` → *Apply*. Nasce il servizio `cme-resolve`.
 2. *Environment* → aggiungi `APP_PASSWORD` e le tre variabili `SUPABASE_*`.
-3. *Settings → Custom Domains* → aggiungi `cme.resolvesrl.com`: Render mostra
-   il valore CNAME da usare.
-4. **Hostinger** — `resolvesrl.com` è registrato lì e usa i nameserver
-   `ns1/ns2.dns-parking.com` → *hPanel → Domini → resolvesrl.com → DNS /
-   Nameserver → Gestisci i record DNS* → **Aggiungi record**: tipo `CNAME`,
-   nome `cme`, destinazione il valore dato da Render, TTL default.
-5. Torna su Render e clicca **Verify**. Il certificato HTTPS lo genera Render.
+3. **Prima il DNS.** `resolvesrl.com` è registrato su Hostinger e usa i
+   nameserver `ns1/ns2.dns-parking.com` → *hPanel → Domini → resolvesrl.com →
+   DNS / Nameserver → Gestisci i record DNS* → **Aggiungi record**: tipo
+   `CNAME`, nome `computo`, destinazione `<nome-servizio>.onrender.com`,
+   TTL default.
+4. **Poi Render**: *Settings → Custom Domains → Add Custom Domain* →
+   `computo.resolvesrl.com`.
+5. Il certificato HTTPS lo genera Render da sé quando la verifica passa.
 
-⚠️ Nel pannello **non** creare `cme` come "sottodominio/sito web": creerebbe
-un record verso l'hosting in conflitto con il CNAME. Serve solo il record
-nella zona DNS. I record del sito e della posta (`MX` verso
+⚠️ **L'ordine conta.** Se aggiungi il dominio su Render *prima* che il record
+esista, il controllo riceve un «non esiste» che resta in cache per il TTL
+negativo del dominio (600 s), e l'emissione del certificato fallisce anche
+dopo che il record c'è. Creando prima il record, la verifica passa al primo
+colpo.
+
+⚠️ Nel pannello **non** creare `computo` come "sottodominio/sito web":
+creerebbe un record verso l'hosting in conflitto con il CNAME. Serve solo il
+record nella zona DNS. I record del sito e della posta (`MX` verso
 `mx1/mx2.hostinger.com`) non si toccano.
 
 > Nota: esiste anche il dominio `resolve.srl`, registrato su **Aruba** e già
@@ -188,4 +195,4 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [x] Pubblicazione su Streamlit Community Cloud.
 - [x] Archivio dei progetti online (Supabase Storage).
 - [x] Accesso protetto da password.
-- [ ] Pubblicazione su `cme.resolvesrl.com` (Render + CNAME su Hostinger).
+- [ ] Pubblicazione su `computo.resolvesrl.com` (Render + CNAME su Hostinger).
