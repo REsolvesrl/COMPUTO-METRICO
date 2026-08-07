@@ -195,4 +195,5 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [x] Pubblicazione su Streamlit Community Cloud.
 - [x] Archivio dei progetti online (Supabase Storage).
 - [x] Accesso protetto da password.
-- [ ] Pubblicazione su `computo.resolvesrl.com` (Render + CNAME su Hostinger).
+- [x] Pubblicazione su `computo.resolvesrl.com` (Render, regione Frankfurt,
+      CNAME su Hostinger, HTTPS automatico).

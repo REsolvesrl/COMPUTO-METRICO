@@ -46,6 +46,31 @@ import planimetria
 import rilevamento
 from cme_viewer import image_viewer, pil_a_src
 
+
+def _versioni_native():
+    """Versioni delle librerie in C, scritte nei log a ogni avvio.
+
+    requirements.txt non fissa le dipendenze indirette (pyarrow, protobuf…):
+    ogni ambiente se le sceglie da sé, quindi il server può avere versioni
+    diverse da quelle collaudate in locale. Quando l'app muore di
+    segmentation fault, questa riga dice contro quali versioni è successo.
+    """
+    import sys
+
+    voci = [f"python {sys.version.split()[0]}"]
+    for nome, modulo in (("numpy", "numpy"), ("pandas", "pandas"),
+                         ("pyarrow", "pyarrow"), ("streamlit", "streamlit"),
+                         ("opencv", "cv2"), ("pillow", "PIL"),
+                         ("pymupdf", "pymupdf")):
+        try:
+            voci.append(f"{nome} {__import__(modulo).__version__}")
+        except Exception:
+            voci.append(f"{nome} ?")
+    return " · ".join(voci)
+
+
+print("CME versioni native:", _versioni_native(), flush=True)
+
 st.set_page_config(
     page_title="CME — Computo Metrico",
     page_icon="🏗️",
