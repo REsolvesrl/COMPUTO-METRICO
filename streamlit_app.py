@@ -10,6 +10,15 @@ La logica di calcolo vive in calcoli.py; la geometria in planimetria.py;
 il visualizzatore interattivo in cme_viewer/.
 """
 
+# «Scatola nera» per i crash nativi: un segmentation fault dentro una libreria
+# in C (OpenCV, PyMuPDF, pyarrow…) uccide l'interprete senza traceback, e nei
+# log resta solo «Segmentation fault». Con faulthandler attivo Python stampa
+# comunque lo stack, quindi si vede in quale riga e in quale libreria è morto.
+# Va abilitato prima delle librerie pesanti, per coprirne anche l'import.
+import faulthandler
+
+faulthandler.enable()
+
 import base64
 import copy
 import hashlib
