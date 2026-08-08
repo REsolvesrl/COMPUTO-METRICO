@@ -1,8 +1,9 @@
-# Tema Resolve S.r.l. — DARK navy + oro (dal logo). Uguale a MORA.
+# Mondo «Campionario» (vedi DESIGN.md): i materiali del campionario edile.
+# Ardesia e ottone vengono dal logo Resolve — qui sono la pietra e il metallo.
 [theme]
 base = "dark"
-primaryColor = "#C9A96A"                 # oro champagne: accenti, bottoni, tab attiva
-backgroundColor = "#1A2744"              # navy del brand (si fonde col logo)
-secondaryBackgroundColor = "#243459"     # navy più chiaro: sidebar e card
-textColor = "#ECE7DA"                    # crema calda per il testo
+primaryColor = "#C9A96A"                 # ottone: azioni e accenti
+backgroundColor = "#1A2744"              # ardesia: il banco di lavoro
+secondaryBackgroundColor = "#243352"     # ardesia chiara: il campione rialzato
+textColor = "#ECE7DA"                    # travertino: il testo
 font = "sans serif"

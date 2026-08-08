@@ -8,6 +8,22 @@ Interfaccia Streamlit a due schede:
 
 La logica di calcolo vive in calcoli.py; la geometria in planimetria.py;
 il visualizzatore interattivo in cme_viewer/.
+
+CONTRATTO DI DIREZIONE — mondo «Campionario» (regole complete in DESIGN.md)
+
+TESI: un campionario di materiali edili, non un gestionale. Rifiuta sia la
+scheda bianca arrotondata con accento blu, sia lo scuro con i neon.
+MONDO: ardesia come banco di lavoro, ottone per le azioni, travertino per il
+testo; cotto, cemento e gres verde come materia. Tinte piene che occupano
+superfici, mai texture; etichette in maiuscoletto spaziato con il loro codice,
+come su un campione vero; cifre incolonnate.
+STORIA: chi apre capisce in un attimo che è uno strumento di mestiere, e che
+il pezzo da guardare è il disegno, non la cornice.
+PRIMO COLPO D'OCCHIO: testata bassa col nome del progetto come etichetta di
+campione; le tre schede come linguette di una cartella; sotto, il lavoro a
+piena larghezza.
+FORMA: settima della lista ordinata, assegnata dal sorteggio (chiave
+bc421ec2), scelta dall'utente contro le alternative Mirino e Griglia.
 """
 
 # «Scatola nera» per i crash nativi: un segmentation fault dentro una libreria
@@ -78,20 +94,181 @@ st.set_page_config(
     layout="wide",
 )
 
-# Ritocchi al tema di Streamlit che il file .streamlit/config.toml non copre.
-st.markdown("""
+# --------------------------------------------------------- mondo «Campionario»
+# I materiali del campionario. Sono variabili CSS così che una sola riga qui
+# cambi tutta l'app, e sono gli stessi valori scritti in DESIGN.md.
+ARDESIA = "#1A2744"
+ARDESIA_CHIARA = "#243352"
+OTTONE = "#C9A96A"
+TRAVERTINO = "#ECE7DA"
+COTTO = "#C1502E"
+CEMENTO = "#6E7377"
+GRES = "#4E7A5E"
+
+
+def css_mondo():
+    """Il foglio di stile del mondo: materia, etichette, cifre, linguette."""
+    return f"""
 <style>
-/* Il testo dei riquadri «info» usciva a 2,7:1 sul fondo navy: sotto qualsiasi
-   soglia, proprio dove l'app spiega cosa fare. */
-[data-testid="stAlertContentInfo"], [data-testid="stAlertContentInfo"] p {
+:root {{
+    --ardesia: {ARDESIA};
+    --ardesia-chiara: {ARDESIA_CHIARA};
+    --ottone: {OTTONE};
+    --travertino: {TRAVERTINO};
+    --cotto: {COTTO};
+    --cemento: {CEMENTO};
+    --gres: {GRES};
+    /* Pila di sistema: nessun carattere scaricato dalla rete, perché il
+       programma deve funzionare con la connessione staccata. */
+    --testo: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}}
+
+/* Le cifre si confrontano di continuo (quantità, prezzi, superfici): vanno
+   incolonnate, altrimenti l'occhio non le può sommare a vista. */
+.stApp, .stApp p, .stApp span, .stApp div, .stApp td, .stApp th,
+.stApp input, .stApp label {{
+    font-family: var(--testo);
+    font-variant-numeric: tabular-nums;
+}}
+
+/* ---------------------------------------------------------- testata */
+/* La cartiglio: nome dello strumento e, accanto, il progetto aperto scritto
+   come l'etichetta di un campione. Bassa, perché il lavoro viene prima. */
+.cme-testata {{
+    display: flex;
+    align-items: baseline;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+    padding: .1rem 0 .55rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ottone) 38%, transparent);
+    margin-bottom: 1.1rem;
+}}
+.cme-testata h1 {{
+    font-size: 1.45rem;
+    font-weight: 650;
+    letter-spacing: -.01em;
+    margin: 0;
+    color: var(--travertino);
+}}
+.cme-testata .sigla {{
+    color: var(--ottone);
+    font-weight: 700;
+}}
+/* L'etichetta di campione: la voce del sistema. Nomina, non racconta. */
+.cme-etichetta {{
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--cemento);
+    font-weight: 600;
+}}
+.cme-testata .progetto {{
+    color: var(--travertino);
+    font-size: .82rem;
+    letter-spacing: .02em;
+    padding: .12rem .5rem;
+    border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+    background: color-mix(in srgb, var(--ottone) 12%, transparent);
+}}
+
+/* ------------------------------------------------------- linguette */
+/* Le tre schede sono le linguette di una cartella di campioni: quella aperta
+   è piena d'ottone, le altre restano pietra. */
+.stTabs [data-baseweb="tab-list"] {{
+    gap: .35rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ottone) 25%, transparent);
+}}
+.stTabs [data-baseweb="tab"] {{
+    background: color-mix(in srgb, var(--travertino) 6%, transparent);
+    border: 1px solid transparent;
+    border-bottom: none;
+    padding: .5rem 1.1rem;
+    color: color-mix(in srgb, var(--travertino) 72%, transparent);
+    font-weight: 600;
+}}
+.stTabs [data-baseweb="tab"]:hover {{
+    background: color-mix(in srgb, var(--ottone) 14%, transparent);
+    color: var(--travertino);
+}}
+.stTabs [aria-selected="true"] {{
+    background: color-mix(in srgb, var(--ottone) 22%, transparent);
+    border-color: color-mix(in srgb, var(--ottone) 55%, transparent);
+    color: var(--travertino) !important;
+}}
+.stTabs [data-baseweb="tab-highlight"] {{ background: var(--ottone); }}
+
+/* --------------------------------------------------------- azioni */
+/* Ottone pieno per l'azione principale, contorno per le altre: due azioni
+   piene affiancate si contendono lo sguardo e nessuna delle due vince. */
+.stButton > button[kind="secondary"] {{
+    border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+    background: transparent;
+    color: var(--travertino);
+}}
+.stButton > button[kind="secondary"]:hover {{
+    border-color: var(--ottone);
+    background: color-mix(in srgb, var(--ottone) 14%, transparent);
+    color: var(--travertino);
+}}
+.stButton > button:focus-visible,
+.stDownloadButton > button:focus-visible {{
+    outline: 2px solid var(--ottone);
+    outline-offset: 2px;
+}}
+
+/* ---------------------------------------------------- stato vuoto */
+/* Una cartella di campioni aperta, non un riquadro grigio con una frase:
+   dice cosa succede dopo e mette l'azione a portata. */
+.cme-vuoto {{
+    border: 1px solid color-mix(in srgb, var(--ottone) 30%, transparent);
+    background: var(--ardesia-chiara);
+    padding: 1.6rem 1.7rem 1.4rem;
+    margin-bottom: .9rem;
+}}
+.cme-vuoto .campioni {{
+    display: flex;
+    gap: .4rem;
+    margin-bottom: 1.1rem;
+}}
+.cme-vuoto .campioni i {{
+    display: block;
+    width: 46px;
+    height: 30px;
+}}
+.cme-vuoto h3 {{
+    margin: 0 0 .4rem;
+    font-size: 1.15rem;
+    font-weight: 650;
+    color: var(--travertino);
+}}
+.cme-vuoto p {{
+    margin: 0;
+    max-width: 62ch;
+    color: color-mix(in srgb, var(--travertino) 82%, transparent);
+    line-height: 1.55;
+}}
+
+/* Il testo dei riquadri «info» usciva a 2,7:1 sul fondo ardesia: sotto
+   qualsiasi soglia, proprio dove l'app spiega cosa fare. */
+[data-testid="stAlertContentInfo"], [data-testid="stAlertContentInfo"] p {{
     color: #D7DEEA;
-}
+}}
 /* Le didascalie occupavano tutta la larghezza della pagina: righe da 200
    caratteri, ben oltre la misura in cui l'occhio ritrova l'inizio della riga
    dopo. Il limite non allarga nulla, taglia solo le righe troppo lunghe. */
-[data-testid="stCaptionContainer"] { max-width: 82ch; }
+[data-testid="stCaptionContainer"] {{ max-width: 82ch; }}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+
+def campione_vuoto(titolo, testo, tinte=(COTTO, OTTONE, GRES, CEMENTO)):
+    """Stato vuoto: la cartella di campioni aperta, con la sua spiegazione."""
+    pastiglie = "".join(f'<i style="background:{t}"></i>' for t in tinte)
+    return (f'<div class="cme-vuoto"><div class="campioni">{pastiglie}</div>'
+            f'<h3>{titolo}</h3><p>{testo}</p></div>')
+
+
+st.markdown(css_mondo(), unsafe_allow_html=True)
 
 # ==========================================================
 # 🔒 ACCESSO RISERVATO
@@ -1908,9 +2085,18 @@ st.session_state.categorie = categorie_per_progetto(st.session_state.piante)
 
 # ------------------------------------------------------------------ pagina
 
-st.title("🏗️ Computo Metrico Estimativo")
-if st.session_state.prg_nome:
-    st.caption(st.session_state.prg_nome)
+# Testata: il cartiglio. Il nome del progetto sta accanto al titolo come
+# l'etichetta di un campione, non sotto come una didascalia — è l'unica cosa
+# che cambia da un progetto all'altro, e va vista subito.
+_progetto_aperto = (st.session_state.prg_nome or "").strip()
+st.markdown(
+    '<div class="cme-testata">'
+    '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
+    + (f'<span class="cme-etichetta">progetto</span>'
+       f'<span class="progetto">{_progetto_aperto}</span>'
+       if _progetto_aperto else
+       '<span class="cme-etichetta">nessun progetto aperto</span>')
+    + '</div>', unsafe_allow_html=True)
 
 tab_computo, tab_plan, tab_bp = st.tabs(
     ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"])
@@ -2334,8 +2520,13 @@ with tab_plan:
     piante = st.session_state.piante
 
     if not piante:
-        st.info("Carica la prima planimetria per iniziare (puoi aggiungerne "
-                "altre in seguito, per esempio un piano per pagina).")
+        st.markdown(campione_vuoto(
+            "Il banco è sgombro",
+            "Porta qui la planimetria — una foto, una scansione o il PDF del "
+            "progetto — e da lì si misurano le superfici, si contano i muri e "
+            "le quantità passano nel computo. Un PDF di più pagine diventa "
+            "una planimetria per foglio: piano terra, piano primo, e così via."),
+            unsafe_allow_html=True)
         file_plan = st.file_uploader(
             "Carica una planimetria (PNG, JPG o PDF)",
             type=["png", "jpg", "jpeg", "pdf"],
