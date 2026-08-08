@@ -1,0 +1,42 @@
+CME - Computo Metrico Estimativo
+Resolve S.r.l.
+================================================================
+
+COME SI USA
+-----------
+Doppio clic su CME.exe
+
+Il programma si apre in una finestra sua. Il primo avvio richiede
+qualche secondo in piu' degli altri: e' normale.
+
+
+COME SI INSTALLA SU UN ALTRO COMPUTER
+-------------------------------------
+Copia TUTTA questa cartella (non solo CME.exe: senza la cartella
+_internal che gli sta accanto, il programma non parte).
+
+Va bene una chiavetta USB, una cartella condivisa o OneDrive.
+Non serve installare Python ne' nient'altro.
+
+Funziona su Windows 10 e 11.
+
+
+DOVE FINISCONO I PROGETTI
+-------------------------
+In una cartella dell'utente che usa il programma:
+
+    C:\Users\<nome utente>\CME\progetti
+
+Un file .json per progetto. Sono file normali: si copiano, si
+salvano nei backup e si mandano per email come qualsiasi altro
+documento.
+
+Il programma NON manda niente su internet: funziona anche con la
+connessione staccata.
+
+
+SE QUALCOSA NON VA
+------------------
+Se all'avvio compare una finestra con un messaggio d'errore,
+copialo e mandalo: contiene gia' tutto il necessario per capire
+cos'e' successo.

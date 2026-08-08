@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# pacchetto CME.exe: mezzo giga di roba ricostruibile in 10 minuti,
+# non deve finire nel repository
+build/
+dist/
 .venv/
 venv/
 .streamlit/secrets.toml
