@@ -38,6 +38,7 @@ import streamlit as st
 from PIL import Image
 
 import archivio
+import archivio_locale
 import calcoli
 import fattibilita
 import fattura
@@ -1227,7 +1228,15 @@ def bp_pct_da_euro_ag_out():
             st.session_state.bp_ag_out_eur / (prezzo * iva) * 100, 3)
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
 def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
+    """Il file Excel da scaricare.
+
+    Il bottone di scaricamento vuole i byte già pronti, quindi il file veniva
+    ricostruito a OGNI interazione con l'app — 70 millisecondi buttati per un
+    bottone che magari non premi mai. Con la cache si ricostruisce solo quando
+    cambiano davvero le tabelle.
+    """
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_computo.to_excel(writer, sheet_name="Computo", index=False)
@@ -1974,84 +1983,88 @@ with tab_computo:
                 st.error("Il file non sembra un progetto salvato da "
                          "questa app.")
 
-        # -------------------------------------------- archivio online
+        # ------------------------------------------------------- archivio
+        # Due depositi, stessa interfaccia: la cartella sul computer quando
+        # l'app gira in locale, Supabase quando c'è la configurazione online
+        # (su Streamlit Cloud il disco si azzera a ogni riavvio, quindi lì la
+        # cartella non servirebbe a niente). Il titolo dice sempre quale dei
+        # due è in uso: sapere dove finiscono i propri progetti non è un
+        # dettaglio da nascondere.
         st.divider()
-        st.markdown("**☁️ Progetti online**")
-        if not archivio.configurato():
-            st.info("L'archivio online non è collegato: per ora usa il "
-                    "salvataggio in file qui sopra. Per attivarlo servono "
-                    "un progetto su supabase.com, un bucket **privato** per "
-                    "i file e le sue credenziali nei «secrets» di Streamlit "
-                    "sotto la voce `[supabase]` (url, key, bucket) — le "
-                    "istruzioni per esteso sono in `archivio.py`.")
+        in_rete = archivio.configurato()
+        deposito = archivio if in_rete else archivio_locale
+        if in_rete:
+            st.markdown("**☁️ Progetti in archivio** :gray[— online]")
         else:
-            try:
-                progetti_online = archivio.elenco_progetti()
-            except Exception as errore:
-                progetti_online = []
-                st.error(f"Non riesco a leggere l'archivio online: {errore}")
+            st.markdown("**💾 Progetti in archivio** :gray[— sul tuo computer]")
+            st.caption(f"Cartella: `{archivio_locale.cartella()}`")
+        try:
+            progetti_arch = deposito.elenco_progetti()
+        except Exception as errore:
+            progetti_arch = []
+            st.error(f"Non riesco a leggere l'archivio: {errore}")
 
-            o_sel, o_apri, o_del = st.columns([3, 1, 1],
-                                              vertical_alignment="bottom")
-            if progetti_online:
-                scelto = o_sel.selectbox("Apri un progetto salvato online",
-                                         progetti_online, key="prog_online_sel")
-                if o_apri.button("📂 Apri", key="apri_online",
-                                 use_container_width=True):
-                    try:
-                        st.session_state.da_caricare = \
-                            archivio.carica_progetto(scelto)
-                        st.rerun()
-                    except Exception as errore:
-                        st.error(f"Errore nell'apertura: {errore}")
-                conferma_del = o_del.checkbox("elimina", key="conf_del_online",
-                                              help="Spunta e premi Elimina per "
-                                                   "rimuovere definitivamente "
-                                                   "il progetto selezionato")
-                if conferma_del and o_del.button("🗑️", key="del_online",
-                                                 use_container_width=True):
-                    try:
-                        archivio.elimina_progetto(scelto)
-                        st.session_state.conf_del_online = False
-                        st.rerun()
-                    except Exception as errore:
-                        st.error(f"Errore nell'eliminazione: {errore}")
-            else:
-                o_sel.caption("Nessun progetto online ancora salvato.")
+        o_sel, o_apri, o_del = st.columns([3, 1, 1],
+                                          vertical_alignment="bottom")
+        if progetti_arch:
+            scelto = o_sel.selectbox("Apri un progetto archiviato",
+                                     progetti_arch, key="prog_online_sel")
+            if o_apri.button("📂 Apri", key="apri_online",
+                             use_container_width=True):
+                try:
+                    st.session_state.da_caricare = \
+                        deposito.carica_progetto(scelto)
+                    st.rerun()
+                except Exception as errore:
+                    st.error(f"Errore nell'apertura: {errore}")
+            conferma_del = o_del.checkbox("elimina", key="conf_del_online",
+                                          help="Spunta e premi Elimina per "
+                                               "rimuovere definitivamente "
+                                               "il progetto selezionato")
+            if conferma_del and o_del.button("🗑️", key="del_online",
+                                             use_container_width=True):
+                try:
+                    deposito.elimina_progetto(scelto)
+                    st.session_state.conf_del_online = False
+                    st.rerun()
+                except Exception as errore:
+                    st.error(f"Errore nell'eliminazione: {errore}")
+        else:
+            o_sel.caption("Nessun progetto ancora archiviato.")
 
-            s_nome, s_btn = st.columns([3, 1], vertical_alignment="bottom")
-            nome_online = s_nome.text_input(
-                "Nome con cui salvare online",
-                value=st.session_state.prg_nome or "",
-                key="nome_salva_online",
-                placeholder="Es. Ristrutturazione Via Roma 1")
-            nome_pulito = (nome_online or "").strip()
-            # salvare su un nome già in archivio sostituiva la versione online
-            # senza dire niente (l'upload è in upsert): ora lo si conferma
-            esiste_gia = nome_pulito in progetti_online
-            if esiste_gia:
-                conferma_sovra = st.checkbox(
-                    f"Sovrascrivi «{nome_pulito}», già presente in archivio",
-                    key="conf_sovrascrivi_online",
-                    help="Senza la spunta il salvataggio non parte: la "
-                         "versione online resta quella di prima.")
+        s_nome, s_btn = st.columns([3, 1], vertical_alignment="bottom")
+        nome_archivio = s_nome.text_input(
+            "Nome con cui archiviare",
+            value=st.session_state.prg_nome or "",
+            key="nome_salva_online",
+            placeholder="Es. Ristrutturazione Via Roma 1")
+        nome_pulito = (nome_archivio or "").strip()
+        # salvare su un nome già in archivio sostituiva la versione
+        # precedente senza dire niente: ora lo si conferma
+        esiste_gia = nome_pulito in progetti_arch
+        if esiste_gia:
+            conferma_sovra = st.checkbox(
+                f"Sovrascrivi «{nome_pulito}», già presente in archivio",
+                key="conf_sovrascrivi_online",
+                help="Senza la spunta il salvataggio non parte: la "
+                     "versione archiviata resta quella di prima.")
+        else:
+            conferma_sovra = True
+        if s_btn.button("💾 Archivia", key="salva_online",
+                        use_container_width=True):
+            if not nome_pulito:
+                st.warning("Dai un nome al progetto prima di archiviarlo.")
+            elif not conferma_sovra:
+                st.warning(f"«{nome_pulito}» esiste già in archivio: spunta "
+                           "la conferma qui sopra, oppure cambia nome.")
             else:
-                conferma_sovra = True
-            if s_btn.button("☁️ Salva online", key="salva_online",
-                            use_container_width=True):
-                if not nome_pulito:
-                    st.warning("Dai un nome al progetto prima di salvarlo.")
-                elif not conferma_sovra:
-                    st.warning(f"«{nome_pulito}» esiste già online: spunta la "
-                               "conferma qui sopra, oppure cambia nome.")
-                else:
-                    try:
-                        archivio.salva_progetto(nome_pulito,
-                                                progetto_json_bytes())
-                        segna_salvato()
-                        st.success(f"Progetto «{nome_pulito}» salvato online.")
-                    except Exception as errore:
-                        st.error(f"Errore nel salvataggio: {errore}")
+                try:
+                    deposito.salva_progetto(nome_pulito,
+                                            progetto_json_bytes())
+                    segna_salvato()
+                    st.success(f"Progetto «{nome_pulito}» archiviato.")
+                except Exception as errore:
+                    st.error(f"Errore nel salvataggio: {errore}")
 
         # ------------------------------------------------- zona pericolosa
         # Stava accanto al riquadro «apri un progetto», a un solo click e

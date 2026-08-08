@@ -41,6 +41,15 @@ CME/
 
 ## Come avviare l'app sul proprio PC
 
+**Doppio clic su `Avvia CME.bat`.** Si apre una finestra nera — è il motore,
+va lasciata aperta — e dopo qualche secondo il browser con l'app. Per chiudere
+il programma si chiude la finestra nera.
+
+`Aggiorna CME.bat` scarica l'ultima versione del codice da GitHub; i progetti
+non vengono toccati, vivono in un'altra cartella.
+
+Da terminale, in alternativa:
+
 1. Apri la cartella `CME` in Esplora File, clic destro → **Apri nel terminale**.
 2. La prima volta, installa le librerie:
    ```
@@ -52,6 +61,13 @@ CME/
    ```
 4. Si apre il browser su `http://localhost:8501`. Per fermare l'app torna
    nel terminale e premi `Ctrl+C`.
+
+## Rami: lavoro e versione pubblicata
+
+- `sviluppo` — dove si lavora ogni giorno.
+- `main` — la versione **pubblicata**: Streamlit Community Cloud ripubblica
+  in automatico tutto ciò che vi arriva. Ci si porta il lavoro solo quando il
+  proprietario dell'app lo chiede esplicitamente.
 
 ## Come eseguire i test
 
@@ -69,17 +85,26 @@ riprendere il lavoro si ricarica quel file dal pannello **📋 Dati del
 progetto · Apri / Nuovo** in cima alla scheda Computo metrico. Con le
 immagini incorporate il file può pesare qualche MB.
 
-## Archivio online dei progetti (Supabase)
+## Archivio dei progetti
 
-Per non scaricare e ricaricare il JSON a ogni sessione, l'app può tenere i
-progetti in un **bucket privato di Supabase Storage**: dallo stesso pannello
-si apre un progetto da un menu a tendina, lo si salva con un nome e lo si
-elimina. Se le credenziali non ci sono, l'app funziona lo stesso e mostra un
-avviso: l'archivio è un di più, non un requisito.
+Dal pannello **📋 Dati del progetto** si apre un progetto da un menu a
+tendina, lo si archivia con un nome e lo si elimina — senza scaricare e
+ricaricare file a mano. L'app sceglie da sola **dove** archiviare, e lo scrive
+sempre in chiaro sopra il menu:
 
-Perché serve un archivio esterno: gli host di app (Streamlit Cloud, Render)
-hanno un disco **effimero**, che si azzera a ogni riavvio. I progetti devono
-vivere fuori dall'app.
+| Dove gira l'app | Dove finiscono i progetti |
+|---|---|
+| Sul tuo computer | **una cartella del computer**: `~/CME/progetti`, oppure il percorso in `CME_ARCHIVIO` (`archivio_locale.py`) |
+| Su Streamlit Cloud / Render, con credenziali Supabase | **bucket privato Supabase** (`archivio.py`) |
+
+La cartella locale non ha niente da configurare e funziona senza connessione.
+Il salvataggio è atomico (file temporaneo e poi rinomina): un'interruzione a
+metà non lascia un progetto troncato.
+
+### Archivio online (solo se l'app gira su un server)
+
+Serve perché gli host di app hanno un disco **effimero**, che si azzera a ogni
+riavvio: lì i progetti devono vivere fuori dall'app.
 
 Configurazione (una volta sola):
 
