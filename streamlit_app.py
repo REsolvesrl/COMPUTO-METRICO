@@ -1885,6 +1885,29 @@ def segna_salvato():
     st.session_state.firma_salvata = firma_progetto()
 
 
+def azzera_progetto():
+    """Svuota il progetto. Da usare come on_click, mai nel corpo dello script.
+
+    Rimettere a zero la spunta di conferma è legittimo solo dentro una
+    callback: fatto dopo che la spunta è stata disegnata, Streamlit solleva
+    «cannot be modified after the widget is instantiated» e l'app si pianta.
+    """
+    st.session_state.da_caricare = {}
+    st.session_state.conf_nuovo_progetto = False
+
+
+def elimina_dallarchivio(deposito, nome):
+    """Elimina un progetto archiviato (anche questa è una callback)."""
+    try:
+        deposito.elimina_progetto(nome)
+        st.session_state.conf_del_online = False
+        st.session_state._esito_archivio = (
+            "ok", f"Progetto «{nome}» eliminato dall'archivio.")
+    except Exception as errore:                              # noqa: BLE001
+        st.session_state._esito_archivio = (
+            "errore", f"Non riesco a eliminarlo: {errore}")
+
+
 def bottone_salva_json(contenitore, chiave, firma,
                        etichetta="💾 Salva progetto (.json)", primario=False):
     """Salvataggio in file, costruito SOLO quando lo si chiede.
@@ -2282,14 +2305,17 @@ with tab_computo:
                                           help="Spunta e premi Elimina per "
                                                "rimuovere definitivamente "
                                                "il progetto selezionato")
-            if conferma_del and o_del.button("🗑️", key="del_online",
-                                             use_container_width=True):
-                try:
-                    deposito.elimina_progetto(scelto)
-                    st.session_state.conf_del_online = False
-                    st.rerun()
-                except Exception as errore:
-                    st.error(f"Errore nell'eliminazione: {errore}")
+            # L'eliminazione vive in una funzione richiamata da on_click, non
+            # nel corpo dello script: lì si può rimettere a zero la spunta di
+            # conferma, mentre farlo dopo che la spunta è stata disegnata fa
+            # sollevare a Streamlit un'eccezione che pianta l'app.
+            o_del.button("🗑️", key="del_online", width="stretch",
+                         disabled=not conferma_del,
+                         on_click=elimina_dallarchivio,
+                         args=(deposito, scelto))
+            if st.session_state.get("_esito_archivio"):
+                tipo, testo = st.session_state.pop("_esito_archivio")
+                (st.error if tipo == "errore" else st.success)(testo)
         else:
             o_sel.caption("Nessun progetto ancora archiviato.")
 
@@ -2338,12 +2364,8 @@ with tab_computo:
         conferma_nuovo = n_conf.checkbox(
             "Ho capito: svuota computo, planimetrie, business plan e spese",
             key="conf_nuovo_progetto")
-        if n_btn.button("🗑️ Svuota tutto", key="nuovo_progetto",
-                        use_container_width=True,
-                        disabled=not conferma_nuovo):
-            st.session_state.da_caricare = {}
-            st.session_state.conf_nuovo_progetto = False
-            st.rerun()
+        n_btn.button("🗑️ Svuota tutto", key="nuovo_progetto", width="stretch",
+                     disabled=not conferma_nuovo, on_click=azzera_progetto)
 
     # ------------------------------------------------------ listino guida
     # -------------------------------------- categorie (sx) e riepilogo (dx)
