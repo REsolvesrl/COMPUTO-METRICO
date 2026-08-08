@@ -123,12 +123,29 @@ def css_mondo():
     --testo: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }}
 
+/* Il carattere si dichiara UNA volta sulla radice e scende per eredità.
+   ⚠️ Non allargare questa regola a span/div: le icone di Streamlit sono
+   legature di un carattere apposito (la parola «upload» diventa il disegno
+   di una freccia). Imporre lì il carattere del testo fa comparire la parola
+   al posto dell'icona, sovrapposta all'etichetta. Successo il 2026-08-08. */
+.stApp {{ font-family: var(--testo); }}
+
 /* Le cifre si confrontano di continuo (quantità, prezzi, superfici): vanno
-   incolonnate, altrimenti l'occhio non le può sommare a vista. */
+   incolonnate, altrimenti l'occhio non le può sommare a vista. Questa invece
+   può essere larga: è una funzione del carattere, non il carattere. */
 .stApp, .stApp p, .stApp span, .stApp div, .stApp td, .stApp th,
 .stApp input, .stApp label {{
-    font-family: var(--testo);
     font-variant-numeric: tabular-nums;
+}}
+
+/* Cintura e bretelle: qualunque cosa Streamlit consideri un'icona tiene il
+   proprio carattere, qualsiasi altra regola dica il contrario. */
+.stApp [class*="material-symbols"],
+.stApp [data-testid="stIconMaterial"],
+.stApp .material-icons, .stApp span[translate="no"] {{
+    font-family: "Material Symbols Rounded", "Material Symbols Outlined",
+                 "Material Icons" !important;
+    font-variant-numeric: normal;
 }}
 
 /* ---------------------------------------------------------- testata */
@@ -1711,8 +1728,8 @@ def pianta_da_json(dati):
     return pianta
 
 
-def progetto_json_bytes():
-    """L'intero progetto (computo + planimetrie) come JSON scaricabile."""
+def _payload_progetto():
+    """Il progetto come dizionario: la fonte sia del file sia della firma."""
     payload = {
         "progetto": {
             "nome": st.session_state.prg_nome,
@@ -1765,8 +1782,33 @@ def progetto_json_bytes():
                      "riv_alt": st.session_state.riv_alt},
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
-    return json.dumps(payload, ensure_ascii=False,
+    return payload
+
+
+def progetto_json_bytes():
+    """L'intero progetto (computo + planimetrie) come JSON scaricabile."""
+    return json.dumps(_payload_progetto(), ensure_ascii=False,
                       separators=(",", ":")).encode("utf-8")
+
+
+def firma_progetto():
+    """Firma del progetto SENZA le immagini: dice se qualcosa è cambiato.
+
+    Serializzare tutto per accorgersi di una modifica costa quanto salvare:
+    con sei planimetrie sono quasi 9 MB di base64 a ogni riesecuzione. Qui le
+    immagini si riducono alla loro lunghezza — cambiano solo se la planimetria
+    cambia davvero — e il resto del progetto viaggia intero, perché è la parte
+    che si modifica di continuo e leggera.
+    """
+    payload = _payload_progetto()
+    # ⚠️ La chiave dell'immagine è «immagine» (vedi pianta_a_json), non «src»:
+    # sbagliarla non dà errore, lascia semplicemente il base64 dentro il
+    # calcolo e la firma torna a costare quanto un salvataggio.
+    payload["piante"] = [{**p, "immagine": len(p.get("immagine") or "")}
+                         for p in payload["piante"]]
+    return hashlib.md5(json.dumps(payload, ensure_ascii=False, default=str,
+                                  separators=(",", ":"))
+                       .encode("utf-8")).hexdigest()
 
 
 # ------------------------------------------------------ rete di sicurezza
@@ -1786,8 +1828,12 @@ def impronta(dati):
     return hashlib.md5(dati or b"").hexdigest()
 
 
-def autosalva(dati):
+def autosalva(firma):
     """Aggiorna il file di ripristino, non più spesso del necessario.
+
+    Riceve la FIRMA, non i dati: così il progetto viene serializzato solo nel
+    momento in cui si scrive davvero (al più ogni AUTOSALVA_SECONDI e solo se
+    è cambiato), invece che a ogni riesecuzione dell'app.
 
     La scrittura passa da un file temporaneo e poi rinomina: un'interruzione
     a metà lascia intatto il ripristino precedente invece di troncarlo.
@@ -1800,9 +1846,9 @@ def autosalva(dati):
     adesso = time.time()
     if adesso - st.session_state.get("_autosalva_ora", 0.0) < AUTOSALVA_SECONDI:
         return
-    firma = impronta(dati)
     if firma == st.session_state.get("_autosalva_firma"):
         return
+    dati = progetto_json_bytes()
     try:
         provvisorio = AUTOSALVA_FILE.with_suffix(".tmp")
         provvisorio.write_bytes(dati)
@@ -1836,14 +1882,43 @@ def progetto_e_vuoto():
 def segna_salvato():
     """Registra che il progetto attuale è stato messo al sicuro."""
     st.session_state.ultimo_salvataggio = datetime.now()
-    st.session_state.firma_salvata = impronta(
-        st.session_state.get("_json_progetto"))
+    st.session_state.firma_salvata = firma_progetto()
 
 
-def stato_salvataggio(dati):
+def bottone_salva_json(contenitore, chiave, firma,
+                       etichetta="💾 Salva progetto (.json)", primario=False):
+    """Salvataggio in file, costruito SOLO quando lo si chiede.
+
+    Il bottone di scaricamento di Streamlit vuole i byte già pronti, e li
+    rispedisce al browser a ogni riesecuzione: con sei planimetrie erano quasi
+    9 MB per clic — moltiplicati per due, perché un bottone uguale stava anche
+    nella scheda planimetria. Da lì l'app che sembrava bloccata dopo un
+    salvataggio. Ora il file si costruisce al primo clic e resta pronto finché
+    il progetto non cambia; poi il bottone torna a proporre di prepararlo.
+    """
+    pronto = (st.session_state.get("_json_pronto_firma") == firma
+              and st.session_state.get("_json_pronto"))
+    tipo = "primary" if primario else "secondary"
+    if pronto:
+        contenitore.download_button(
+            etichetta, data=st.session_state._json_pronto,
+            file_name=nome_file("json"), mime="application/json",
+            key=f"scarica_{chiave}", type=tipo, width="stretch",
+            on_click=segna_salvato)
+    elif contenitore.button(
+            "📦 Prepara il file (.json)", key=f"prepara_{chiave}", type=tipo,
+            width="stretch",
+            help="Il file contiene anche le planimetrie e pesa qualche MB: "
+                 "si costruisce quando serve, non a ogni clic."):
+        st.session_state._json_pronto = progetto_json_bytes()
+        st.session_state._json_pronto_firma = firma
+        st.rerun()
+
+
+def stato_salvataggio(firma):
     """Riga di stato: quando si è salvato e se ci sono modifiche successive."""
     ultimo = st.session_state.get("ultimo_salvataggio")
-    modificato = impronta(dati) != st.session_state.get("firma_salvata")
+    modificato = firma != st.session_state.get("firma_salvata")
     if ultimo is None:
         return (":orange[**Mai salvato in questa sessione.**] Il file .json "
                 "è l'unico salvataggio completo: senza, un aggiornamento "
@@ -2480,23 +2555,16 @@ with tab_computo:
                            "%": None, "m² commerciali": tot_comm}]),
         ], ignore_index=True)
 
-    # generato una sola volta per run e riusato anche nella scheda
-    # planimetria (evita di serializzare due volte l'intero progetto,
-    # immagini incluse, a ogni interazione)
-    st.session_state._json_progetto = progetto_json_bytes()
-    autosalva(st.session_state._json_progetto)
+    # La firma costa millesimi di secondo; il file intero costa secondi e
+    # attraversa il collegamento col browser. Qui gira solo la firma.
+    st.session_state._firma_progetto = firma_progetto()
+    autosalva(st.session_state._firma_progetto)
     # Tre bottoni grigi identici non dicevano che solo il primo mette al
     # sicuro il lavoro: quello resta in evidenza, con accanto il suo stato.
-    st.markdown(stato_salvataggio(st.session_state._json_progetto))
+    st.markdown(stato_salvataggio(st.session_state._firma_progetto))
     col_json, col_xlsx, col_csv = st.columns(3)
-    col_json.download_button(
-        "💾 Salva progetto (.json)",
-        data=st.session_state._json_progetto,
-        file_name=nome_file("json"),
-        mime="application/json",
-        type="primary",
-        on_click=segna_salvato,
-    )
+    bottone_salva_json(col_json, "computo", st.session_state._firma_progetto,
+                       primario=True)
     col_xlsx.download_button(
         "📊 Esporta Excel (.xlsx)",
         data=excel_bytes(df_calcolato, df_riepilogo_excel,
@@ -3302,15 +3370,10 @@ with tab_plan:
                 st.rerun()
 
         st.divider()
-        st.download_button(
-            "💾 Salva progetto (.json) — computo e planimetrie",
-            # riusa il JSON già generato nella scheda Computo (stesso run),
-            # con ripiego se per qualche motivo non fosse pronto
-            data=(st.session_state.get("_json_progetto")
-                  or progetto_json_bytes()),
-            file_name=nome_file("json"),
-            mime="application/json",
-        )
+        bottone_salva_json(
+            st, "planimetria",
+            st.session_state.get("_firma_progetto") or firma_progetto(),
+            etichetta="💾 Salva progetto (.json) — computo e planimetrie")
 
 
 # ======================================================= SCHEDA BUSINESS PLAN
