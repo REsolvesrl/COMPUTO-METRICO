@@ -17,6 +17,15 @@ echo   NON CHIUDERE questa finestra mentre lavori:
 echo   e' il motore del programma. Per uscire, chiudila.
 echo.
 
+rem Al primo avvio Streamlit chiede un indirizzo email per la sua newsletter e
+rem resta li' ad aspettare, con l'app ferma. Questo file di configurazione
+rem risponde "nessuna email" una volta per tutte.
+if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
+    if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"
+    > "%USERPROFILE%\.streamlit\credentials.toml" echo [general]
+    >> "%USERPROFILE%\.streamlit\credentials.toml" echo email = ""
+)
+
 rem Streamlit su questa macchina si lancia con "python -m": la cartella degli
 rem eseguibili installati da pip non e' nel PATH.
 python -m streamlit run streamlit_app.py ^
