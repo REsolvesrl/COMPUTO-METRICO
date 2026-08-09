@@ -467,8 +467,10 @@ IMPOSTAZIONI_BP = {
 }
 
 # Palette del brand Resolve (dark navy + oro), come MORA.
-ORO = "#C9A96A"           # oro champagne — barre del grafico
-CREMA = "#ECE7DA"         # testo
+# Nomi con cui i grafici Plotly chiamano gli stessi due materiali: lì serve
+# un colore vero, non una variabile CSS. Un solo valore, due nomi.
+ORO = OTTONE
+CREMA = TRAVERTINO
 GRIGLIA = "#3C4C6E"       # linee griglia su fondo navy
 ETICHETTE = "#A9B4C9"     # etichette assi
 
@@ -1226,8 +1228,9 @@ def tabella_riepilogo_spese_html(riepilogo, totale, iva_totale):
     return (
         '<table style="width:100%;border-collapse:collapse;'
         'font-size:0.9rem;margin-bottom:10px;">'
-        '<thead><tr style="color:#A9B4C9;font-size:0.78rem;'
-        'text-align:left;">'
+        # intestazioni come etichette campione: nominano le colonne
+        '<thead><tr style="color:#C3C8CE;font-size:0.7rem;text-align:left;'
+        'text-transform:uppercase;letter-spacing:.12em;font-weight:600;">'
         '<th style="padding:4px 8px;">Categoria</th>'
         '<th style="padding:4px 8px;text-align:right;">€</th>'
         '<th style="padding:4px 8px;text-align:right;">IVA</th>'
@@ -1355,7 +1358,7 @@ def legenda_heatmap(metrica):
     buono degli altri»: dirlo evita di dover ricordare com'è tarata la scala.
     """
     pareggio = "1,00x" if metrica == "multiplo" else "0 €"
-    chip = ("display:inline-block;width:11px;height:11px;border-radius:2px;"
+    chip = ("display:inline-block;width:11px;height:11px;"
             "margin-right:5px;vertical-align:-1px;border:1px solid #3C4C6E;")
     return (
         '<div style="font-size:0.72rem;color:#A9B4C9;margin:-6px 0 10px;">'
@@ -1364,6 +1367,21 @@ def legenda_heatmap(metrica):
         f'<span style="{chip}background:#FFFFFF;"></span>pareggio '
         f'({pareggio})&nbsp;&nbsp;·&nbsp;&nbsp;'
         f'<span style="{chip}background:#63BE7B;"></span>in utile</div>')
+
+
+def intestazione_bp(testo):
+    """Testata di colonna dello studio di fattibilità.
+
+    È un'etichetta campione a piena larghezza: nomina la colonna e basta.
+    ⚠️ Il testo inglese («ESTIMATED») è il vocabolario con cui l'utente
+    legge quei numeri dal suo foglio Excel: si veste, non si traduce.
+    """
+    return (
+        f'<div style="background:{ARDESIA_CHIARA};'
+        f'border:1px solid {OTTONE}73;padding:5px 10px;margin:8px 0 6px;'
+        f'text-align:center;font-size:.7rem;font-weight:700;'
+        f'text-transform:uppercase;letter-spacing:.12em;'
+        f'color:{TRAVERTINO};">{testo}</div>')
 
 
 def righe_bp(righe):
@@ -1401,10 +1419,10 @@ def nota_base_calcolo(acquisto, vendita):
                 else '<span style="color:#F0A840;">non inserito</span>')
 
     return (
-        '<div style="font-size:0.72rem;color:#A9B4C9;margin:10px 0 2px;'
-        'padding:5px 8px;border-left:2px solid #3C4C6E;line-height:1.5;">'
-        'Risultati calcolati su<br>acquisto <b style="color:#ECE7DA;">'
-        f'{cifra(acquisto)}</b> · vendita <b style="color:#ECE7DA;">'
+        f'<div style="font-size:0.72rem;color:#A9B4C9;margin:10px 0 2px;'
+        f'padding:6px 9px;border:1px solid {CEMENTO}66;line-height:1.5;">'
+        f'Risultati calcolati su<br>acquisto <b style="color:{TRAVERTINO};">'
+        f'{cifra(acquisto)}</b> · vendita <b style="color:{TRAVERTINO};">'
         f'{cifra(vendita)}</b></div>')
 
 
@@ -3218,7 +3236,7 @@ with tab_plan:
         legenda = " ".join(
             f'<span style="display:inline-block;margin:2px 12px 2px 0;">'
             f'<span style="display:inline-block;width:12px;height:12px;'
-            f'border-radius:3px;background:{col_map.get(c["nome"], "#9E9E9E")};'
+            f'background:{col_map.get(c["nome"], "#9E9E9E")};'
             f'margin-right:5px;vertical-align:-1px;"></span>'
             f'{c["nome"]} · {numero_it(c["percento"], 0)}%'
             + (f' <span style="color:#A9B4C9;">(oltre '
@@ -3906,22 +3924,28 @@ with tab_bp:
                 quota_cantiere = round(sum(
                     r["importo"] for r in righe_spese + righe_prev
                     if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
+                # Il numero che comanda la scheda, come il totale finale del
+                # computo: ottone su tutta la superficie, non una scheda con
+                # la sfumatura. Le righe di dettaglio stanno in ardesia
+                # sull'ottone, che le tiene leggibili senza farle gridare.
                 st.markdown(
-                    '<div style="background:linear-gradient(135deg,#243459,'
-                    '#1A2744);border:1px solid #C9A96A;border-radius:12px;'
-                    'padding:12px 14px;margin:6px 0 10px;">'
-                    '<div style="font-size:0.72rem;color:#C9A96A;'
-                    'letter-spacing:.05em;">💠 COSTI TOTALI DELL\'OPERAZIONE'
-                    '</div>'
-                    '<div style="font-size:1.45rem;font-weight:700;'
-                    f'color:#ECE7DA;">{euro(costi_totali)}</div>'
-                    '<div style="font-size:0.72rem;color:#A9B4C9;">'
+                    f'<div style="background:{OTTONE};padding:13px 15px;'
+                    'margin:6px 0 10px;">'
+                    f'<div style="font-size:.7rem;color:{ARDESIA};'
+                    'font-weight:700;text-transform:uppercase;'
+                    'letter-spacing:.12em;opacity:.85;">'
+                    'Costi totali dell\'operazione</div>'
+                    f'<div style="font-size:1.8rem;font-weight:700;'
+                    f'color:{ARDESIA};line-height:1.2;">'
+                    f'{euro(costi_totali)}</div>'
+                    f'<div style="font-size:0.74rem;color:{ARDESIA};'
+                    'opacity:.8;">'
                     f'sostenute {euro(tot_sostenute)} + da sostenere '
                     f'{euro(tot_prev)}</div>'
-                    '<div style="font-size:0.72rem;color:#A9B4C9;'
-                    'margin-top:5px;padding-top:5px;'
-                    'border-top:1px solid #3C4C6E;">di cui cantiere '
-                    f'<b style="color:#ECE7DA;">{euro(quota_cantiere)}</b>'
+                    f'<div style="font-size:0.74rem;color:{ARDESIA};'
+                    'margin-top:6px;padding-top:6px;'
+                    f'border-top:1px solid {ARDESIA}40;">di cui cantiere '
+                    f'<b>{euro(quota_cantiere)}</b>'
                     ' — riportabile nello studio di fattibilità</div></div>',
                     unsafe_allow_html=True)
 
@@ -3994,7 +4018,6 @@ with tab_bp:
     display: block;
     margin: 3px 0 0;
     padding: 2px 8px;
-    border-radius: 4px;
     background: #C9A96A;
     color: #1A2744;
     font-size: 0.72rem;
@@ -4044,12 +4067,11 @@ with tab_bp:
                                 step=1000.0, key="bp_passo")
                 st.number_input("Durata operazione (mesi)", min_value=1,
                                 max_value=120, step=1, key="bp_durata")
-                st.markdown(
-                    '<div style="background:#F0A84033;border:1px solid '
-                    '#F0A840;padding:4px 10px;border-radius:6px;'
-                    'text-align:center;font-weight:700;letter-spacing:.04em;'
-                    'margin:8px 0 6px;">ESTIMATED</div>',
-                    unsafe_allow_html=True)
+                # Testata di colonna: etichetta campione, non un bottone
+                # arrotondato. Le due colonne (qui e «spese acquisto») sono
+                # sorelle e si vestono uguale.
+                st.markdown(intestazione_bp("ESTIMATED"),
+                            unsafe_allow_html=True)
                 with st.container(key="bp_in_acq"):
                     st.number_input("Prezzo base (acquisto, €)",
                                     min_value=0.0, step=5000.0,
@@ -4141,10 +4163,7 @@ with tab_bp:
             # ------------------------------------------- dettaglio costi
             with col_costi:
                 st.markdown(
-                    '<div style="background:#24345988;border:1px solid '
-                    '#3C4C6E;padding:4px 10px;border-radius:6px;'
-                    'text-align:center;font-weight:700;margin-bottom:6px;">'
-                    'SPESE ACQUISTO — dettaglio</div>',
+                    intestazione_bp("Spese acquisto — dettaglio"),
                     unsafe_allow_html=True)
                 e1, e2, e3 = st.columns([1.7, 0.95, 1.35])
                 e1.caption("Voce")

@@ -74,11 +74,20 @@ pagina che si ridisegna sotto gli occhi.
   riga di testo, e dev'essere un unico nodo — la freccia va dentro la
   marcatura di colore, altrimenti diventa un secondo elemento della griglia
   e finisce a capo.
+- **Metrica**: ogni `st.metric` è un campione — etichetta in maiuscoletto
+  sopra, numero grande sotto, fondo rialzato e squadrato. Vale in tutta
+  l'app: planimetria, riepilogo del computo, business plan.
+- **Il numero che comanda una scheda è ottone pieno**, tinta su tutta la
+  superficie e cifra in ardesia: il totale finale del computo, i costi
+  totali dell'operazione. Uno per scheda, altrimenti non comanda più.
 - **Azioni**: ottone pieno per l'azione principale, contorno ottone per le
   secondarie, mai due azioni piene affiancate.
 - **Il disegno comanda**: nella scheda planimetria la tela ha la larghezza
-  intera e il contrasto più alto della pagina. Pannelli e comandi stanno
-  attorno in cemento, mai in competizione.
+  intera e il contrasto più alto della pagina — sta su un piano da lavoro
+  (`st.container(key="tela")`: fondo rialzato, contorno d'ottone). Pannelli
+  e comandi stanno attorno in cemento, mai in competizione: i gruppi di
+  campi vivono in contenitori `pan_*` col contorno di cemento, che
+  raggruppano invece di allineare una fila indistinta di caselle.
 - **Stati vuoti**: sono una cartella di campioni aperta, non un riquadro
   grigio con una frase. Dicono cosa succede dopo, con l'azione a portata.
 
