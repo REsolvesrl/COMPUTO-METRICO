@@ -32,8 +32,11 @@ CME/
 │   └── frontend/              #   lato browser (canvas + barra strumenti)
 ├── assets/                    # logo Resolve (schermata di accesso)
 ├── tests/                     # test pytest sui moduli di logica
+├── archivio_locale.py         # archivio dei progetti in una cartella del PC
 ├── requirements.txt           # librerie necessarie all'app
 ├── requirements-dev.txt       # come sopra + pytest (per lo sviluppo)
+├── Avvia CME.bat              # avvio quotidiano (doppio clic)
+├── Aggiorna CME.bat           # scarica l'ultima versione da GitHub
 ├── Dockerfile                 # immagine per il deploy su Render
 ├── render.yaml                # ricetta del servizio su Render
 └── pytest.ini
@@ -41,20 +44,27 @@ CME/
 
 ## Come avviare l'app sul proprio PC
 
-**Doppio clic su `Avvia CME.bat`.** L'app si apre in una **finestra sua**,
-senza schede né barra degli indirizzi; chiudendola si spegne anche il motore.
-
-La finestra è Edge (o Chrome) in *modalità applicazione*. La prima versione
-usava pywebview, cioè WebView2: lì il componente della planimetria si
-inceppava al secondo «annulla» mentre nel browser, **con lo stesso identico
-codice Python**, funzionava. Il motore di rendering era l'unica variabile, e
-si è scelto quello che funziona.
-
-`Avvia CME (nel browser).bat` resta come riserva diagnostica: apre nel browser
-predefinito e lascia visibile la finestra nera con i messaggi del motore.
+**Doppio clic su `Avvia CME.bat`.** Si apre una finestra nera — è il motore,
+va lasciata aperta — e il browser con l'app. Per chiudere CME si chiude la
+finestra nera.
 
 `Aggiorna CME.bat` scarica l'ultima versione del codice da GitHub; i progetti
 non vengono toccati, vivono in un'altra cartella.
+
+### Perché nel browser e non in una finestra dedicata
+
+C'è stata (2026-08-08/09) una versione che apriva l'app in una finestra
+propria, prima con pywebview/WebView2 e poi con Edge in modalità
+applicazione, impacchettata anche come `CME.exe` autonomo. **È stata
+rimossa**: in quella finestra il componente della planimetria si bloccava
+dopo un paio di annullamenti o cancellazioni, mentre nel browser — con lo
+stesso identico codice Python, gli stessi log, nessuna eccezione — non è mai
+successo.
+
+La causa non è stata isolata; la decisione è stata di non spendere altro
+tempo su un guscio che non porta funzioni, quando il browser fa lo stesso
+lavoro in modo affidabile. Il codice sta nella storia di git (fino al commit
+`7a91afa`) se un giorno servisse riprenderlo.
 
 Da terminale, in alternativa:
 
