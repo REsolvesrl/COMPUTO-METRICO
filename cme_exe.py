@@ -20,6 +20,8 @@ import sys
 import time
 from pathlib import Path
 
+from finestra import apri_finestra, mostra_errore, porta_libera
+
 TITOLO = "CME — Computo Metrico Estimativo"
 ATTESA_MASSIMA = 120        # il primo avvio del pacchetto è il più lento
 
@@ -53,12 +55,6 @@ def fai_il_motore(porta):
 
 # ---------------------------------------------------------------- finestra
 
-def porta_libera():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def accendi_motore(porta):
     senza_finestra = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     return subprocess.Popen(
@@ -90,25 +86,20 @@ def ultime_parole(processo):
 
 
 def fai_la_finestra():
-    import webview
     porta = porta_libera()
     motore = accendi_motore(porta)
     if not attendi_motore(porta, motore):
-        dettaglio = ultime_parole(motore)
-        webview.create_window(
-            TITOLO + " — avvio non riuscito",
-            html="<h2 style='font-family:sans-serif'>CME non è riuscito ad "
-                 "avviarsi</h2><p style='font-family:sans-serif'>Copia questo "
-                 "messaggio e mandalo a Claude:</p><pre style='white-space:"
-                 f"pre-wrap;background:#f4f4f4;padding:12px'>{dettaglio}</pre>",
-            width=900, height=600)
-        webview.start()
+        mostra_errore(ultime_parole(motore))
         return 1
 
-    webview.create_window(TITOLO, f"http://127.0.0.1:{porta}",
-                          width=1500, height=950, min_size=(1000, 650))
     try:
-        webview.start()
+        finestra = apri_finestra(f"http://127.0.0.1:{porta}")
+        if finestra is not None:
+            finestra.wait()
+        else:
+            import webbrowser
+            webbrowser.open(f"http://127.0.0.1:{porta}")
+            input()
     finally:
         motore.terminate()
         try:

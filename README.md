@@ -41,9 +41,17 @@ CME/
 
 ## Come avviare l'app sul proprio PC
 
-**Doppio clic su `Avvia CME.bat`.** Si apre una finestra nera — è il motore,
-va lasciata aperta — e dopo qualche secondo il browser con l'app. Per chiudere
-il programma si chiude la finestra nera.
+**Doppio clic su `Avvia CME.bat`.** L'app si apre in una **finestra sua**,
+senza schede né barra degli indirizzi; chiudendola si spegne anche il motore.
+
+La finestra è Edge (o Chrome) in *modalità applicazione*. La prima versione
+usava pywebview, cioè WebView2: lì il componente della planimetria si
+inceppava al secondo «annulla» mentre nel browser, **con lo stesso identico
+codice Python**, funzionava. Il motore di rendering era l'unica variabile, e
+si è scelto quello che funziona.
+
+`Avvia CME (nel browser).bat` resta come riserva diagnostica: apre nel browser
+predefinito e lascia visibile la finestra nera con i messaggi del motore.
 
 `Aggiorna CME.bat` scarica l'ultima versione del codice da GitHub; i progetti
 non vengono toccati, vivono in un'altra cartella.

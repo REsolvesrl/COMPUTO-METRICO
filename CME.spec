@@ -22,7 +22,7 @@ hiddenimports = []
 # Librerie che si portano dietro file propri, non solo codice.
 for pacchetto in ("streamlit", "plotly", "pyarrow", "altair", "pandas",
                   "numpy", "cv2", "pymupdf", "fitz", "PIL", "openpyxl",
-                  "requests", "webview"):
+                  "requests"):
     try:
         d, b, h = collect_all(pacchetto)
         datas += d
@@ -57,6 +57,7 @@ datas += [
     ("fattura.py", "."),
     ("archivio.py", "."),
     ("archivio_locale.py", "."),
+    ("finestra.py", "."),
     ("cme_viewer", "cme_viewer"),
     (".streamlit/config.toml", ".streamlit"),
     ("assets", "assets"),

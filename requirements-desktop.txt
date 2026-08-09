@@ -1,6 +1,0 @@
-# Librerie in più per usare CME come programma con una finestra sua
-# (avvia_finestra.py). NON vanno in requirements.txt: su un server Linux
-# sarebbero inutili e l'installazione fallirebbe per mancanza di interfaccia
-# grafica.
--r requirements.txt
-pywebview==6.2.1

@@ -15,23 +15,12 @@ import sys
 import time
 from pathlib import Path
 
-import webview
+from finestra import apri_finestra, mostra_errore, porta_libera
 
 CARTELLA = Path(__file__).resolve().parent
 APP = CARTELLA / "streamlit_app.py"
 TITOLO = "CME — Computo Metrico Estimativo"
 ATTESA_MASSIMA = 90          # secondi concessi al primo avvio, che è il lento
-
-
-def porta_libera():
-    """Una porta di sicuro libera, scelta dal sistema operativo.
-
-    Fissarne una (es. 8501) darebbe errore se fosse già occupata da un'altra
-    app — o da una copia di CME rimasta aperta.
-    """
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def avvia_server(porta):
@@ -80,22 +69,20 @@ def main():
 
     if not attendi_server(porta, server):
         # Niente finestra vuota che lascia l'utente a indovinare: si mostra
-        # l'errore vero del server dentro una finestra leggibile.
-        dettaglio = messaggio_errore(server)
-        webview.create_window(
-            TITOLO + " — avvio non riuscito",
-            html="<h2 style='font-family:sans-serif'>CME non è riuscito ad "
-                 "avviarsi</h2><p style='font-family:sans-serif'>Copia questo "
-                 "messaggio e mandalo a Claude:</p><pre style='white-space:"
-                 f"pre-wrap;background:#f4f4f4;padding:12px'>{dettaglio}</pre>",
-            width=900, height=600)
-        webview.start()
+        # l'errore vero del server, in una pagina leggibile e copiabile.
+        mostra_errore(messaggio_errore(server))
         return 1
 
-    webview.create_window(TITOLO, f"http://127.0.0.1:{porta}",
-                          width=1500, height=950, min_size=(1000, 650))
     try:
-        webview.start()          # si blocca finché l'utente chiude la finestra
+        finestra = apri_finestra(f"http://127.0.0.1:{porta}")
+        if finestra is not None:
+            finestra.wait()      # si blocca finché l'utente chiude la finestra
+        else:
+            # Nessun Edge né Chrome: si apre nel browser predefinito. Meno
+            # elegante di una finestra dedicata, ma funziona sempre.
+            import webbrowser
+            webbrowser.open(f"http://127.0.0.1:{porta}")
+            input()              # tiene vivo il motore finché non si chiude
     finally:
         server.terminate()       # chiusa la finestra, si spegne anche il motore
         try:
