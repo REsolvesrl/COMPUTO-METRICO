@@ -162,3 +162,35 @@ def test_riepilogo_per_categoria_ordine_e_default():
     # ACQUISTO viene prima di LAVORI (ordine di CATEGORIE_SPESE)
     assert chiavi.index("ACQUISTO") < chiavi.index("LAVORI")
     assert "ALTRO" in chiavi
+
+# --------------------------- il costo dei lavori al metro (calpestabile)
+
+def test_eur_mq_ristrutturazione_sui_calpestabili():
+    esito = studio_fattibilita({
+        "prezzo_acquisto": 145000.0, "prezzo_vendita": 300000.0,
+        "ristrutturazione": 66000.0,
+        "mq": 132.0,             # commerciale: comprende balconi e vano scale
+        "mq_calpestabile": 110.0,
+    })
+    # 66.000 / 110 = 600 euro al metro; sulla commerciale sarebbero 500,
+    # cioe' un quinto in meno di quanto costa davvero
+    assert esito["eur_mq_ristrutturazione"] == 600.0
+    assert esito["mq_calpestabile"] == 110.0
+
+
+def test_senza_calpestabili_non_si_ripiega_sulla_commerciale():
+    """Meglio non dire niente che dire un numero ottimista."""
+    esito = studio_fattibilita({
+        "prezzo_acquisto": 145000.0, "prezzo_vendita": 300000.0,
+        "ristrutturazione": 66000.0, "mq": 132.0,
+    })
+    assert esito["eur_mq_ristrutturazione"] is None
+    assert esito["eur_mq_acquisto"] is not None      # questo resta
+
+
+def test_senza_lavori_niente_costo_al_metro():
+    esito = studio_fattibilita({
+        "prezzo_acquisto": 145000.0, "prezzo_vendita": 300000.0,
+        "ristrutturazione": 0.0, "mq_calpestabile": 110.0,
+    })
+    assert esito["eur_mq_ristrutturazione"] is None

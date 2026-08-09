@@ -457,6 +457,9 @@ UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo",
 
 # Colori delle categorie del listino: (pallino/hex, colore markdown titolo).
 COLORI_CATEGORIE = {
+    # travertino: è l'unico capitolo che non è materia da cantiere ma carta,
+    # e nel campionario la carta ha il colore della carta
+    "Pratiche e oneri": ("#ECE7DA", "gray"),
     "Demolizioni": ("#E57373", "red"),
     "Ricostruzioni e ripristini": ("#66BB6A", "green"),
     "Idraulico": ("#64B5F6", "blue"),
@@ -4065,6 +4068,12 @@ with tab_bp:
     _, _, mq_da_planimetria, _ = planimetria.riepilogo_superfici(
         st.session_state.piante, mappa_percentuali(),
         escludi=CATEGORIE_SOLO_COMPUTO)
+    # I mq su cui si divide il costo dei LAVORI sono un'altra cosa: le stanze
+    # vere, non la commerciale (che comprende balconi e vano scale, superfici
+    # che si vendono ma non si ristrutturano).
+    mq_calpestabili, _senza_scala_calp = planimetria.superficie_calpestabile(
+        st.session_state.piante, mappa_percentuali(),
+        escludi=CATEGORIE_INVOLUCRO)
     voci_bp = voci_dal_listino() + voci_da_df(st.session_state.df_voci)
     totale_computo_bp = calcoli.totale_generale(
         calcoli.calcola_computo(voci_bp))
@@ -4333,6 +4342,7 @@ with tab_bp:
             "spese_mutuo": st.session_state.bp_mutuo,
             "ristrutturazione": ristr_eff,
             "mq": mq_eff,
+            "mq_calpestabile": mq_calpestabili,
             "durata_mesi": st.session_state.bp_durata,
         }
         esito = fattibilita.studio_fattibilita(parametri_bp)
@@ -4515,6 +4525,36 @@ with tab_bp:
                            + f" · mq: {numero_it(mq_eff, 0)} "
                            + ("(a mano)" if st.session_state.bp_mq
                               else "(dalla planimetria)"))
+                # Il parametro con cui si ragiona davvero in questo mestiere:
+                # «quella la rifai con 600 al metro». Diviso per i mq
+                # CALPESTABILI — sulla commerciale uscirebbe più basso del
+                # vero, perché comprende superfici che non si ristrutturano.
+                if esito["eur_mq_ristrutturazione"]:
+                    st.markdown(
+                        f'<div style="background:{ARDESIA_CHIARA};'
+                        f'border:1px solid {OTTONE}73;padding:8px 11px;'
+                        'margin:2px 0 8px;display:flex;'
+                        'justify-content:space-between;align-items:baseline;'
+                        'gap:.6rem;">'
+                        f'<span style="font-size:.7rem;font-weight:600;'
+                        'text-transform:uppercase;letter-spacing:.12em;'
+                        f'color:{OTTONE};">Ristrutturazione al mq</span>'
+                        f'<span style="font-size:1.35rem;font-weight:700;'
+                        f'color:{TRAVERTINO};white-space:nowrap;">'
+                        f'{numero_it(esito["eur_mq_ristrutturazione"], 0)}'
+                        ' €/mq</span></div>', unsafe_allow_html=True)
+                    st.caption(
+                        f":gray[Su **{numero_it(mq_calpestabili, 2)} mq "
+                        "calpestabili** — le stanze disegnate in "
+                        "planimetria, non la superficie commerciale: "
+                        "balconi, vano scale e perimetro si vendono ma non "
+                        "si ristrutturano.]")
+                elif mq_calpestabili <= 0 and ristr_eff:
+                    st.caption(
+                        ":orange[Per avere il costo al mq disegna le stanze "
+                        "in planimetria: servono i **mq calpestabili**, e "
+                        "la superficie commerciale non va bene come "
+                        "ripiego.]")
                 st.markdown(righe_bp([
                     ("TOTALE SPESE ACQUISTO", euro(acq["totale"]), "bold"),
                 ]), unsafe_allow_html=True)

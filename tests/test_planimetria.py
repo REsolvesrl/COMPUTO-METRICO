@@ -17,6 +17,7 @@ from planimetria import (
     muri_al_netto,
     riepilogo_pareti,
     superficie_aperture,
+    superficie_calpestabile,
     voci_da_riscrivere,
     riepilogo_superfici,
     superficie_commerciale,
@@ -598,3 +599,59 @@ def test_muri_al_netto_senza_aperture():
 def test_muri_al_netto_non_scende_sotto_zero():
     """Apertura piu' grande del muro: errore di battitura, non un negativo."""
     assert muri_al_netto(10.0, 50.0) == 0.0
+
+
+# ------------------- i mq su cui si divide il costo dei lavori (calpestabili)
+
+PIANTE_CALPESTABILE = [{
+    "nome": "Piano", "mpp": 0.01,
+    "zone": [
+        # soggiorno 5,00 x 4,00 = 20 m2 (interna, 100%)
+        {"categoria": "Superficie interna",
+         "punti": [[0, 0], [500, 0], [500, 400], [0, 400]]},
+        # camera 3,00 x 3,00 = 9 m2 (interna, 100%)
+        {"categoria": "Superficie interna",
+         "punti": [[600, 0], [900, 0], [900, 300], [600, 300]]},
+        # balcone 2,00 x 2,00 = 4 m2 (30%: si vende, non si ristruttura)
+        {"categoria": "Balcone",
+         "punti": [[0, 500], [200, 500], [200, 700], [0, 700]]},
+        # perimetro commerciale: involucro, non un locale
+        {"categoria": "Superficie commerciale",
+         "punti": [[0, 0], [1000, 0], [1000, 800], [0, 800]]},
+    ],
+}]
+
+PERCENTUALI_CALP = {"Superficie interna": 100.0, "Balcone": 30.0,
+                    "Superficie commerciale": 100.0}
+
+
+def test_calpestabile_somma_solo_le_stanze():
+    m2, senza = superficie_calpestabile(
+        PIANTE_CALPESTABILE, PERCENTUALI_CALP,
+        escludi=("Superficie commerciale",))
+    assert m2 == pytest.approx(29.0)          # 20 + 9, niente balcone
+    assert senza == []
+
+
+def test_calpestabile_esclude_le_superfici_che_non_si_ristrutturano():
+    """Il balcone vale il 30% proprio perche' non e' pavimento da rifare."""
+    m2, _ = superficie_calpestabile(
+        PIANTE_CALPESTABILE, PERCENTUALI_CALP,
+        escludi=("Superficie commerciale",))
+    commerciale = riepilogo_superfici(
+        PIANTE_CALPESTABILE, PERCENTUALI_CALP,
+        escludi=("Superficie interna",))[2]
+    assert m2 < commerciale         # dividere per la commerciale abbassa
+
+
+def test_calpestabile_senza_scala_e_segnalato():
+    piante = [{"nome": "Senza scala", "mpp": None,
+               "zone": [{"categoria": "Superficie interna",
+                         "punti": [[0, 0], [100, 0], [100, 100], [0, 100]]}]}]
+    m2, senza = superficie_calpestabile(piante, PERCENTUALI_CALP)
+    assert m2 == 0.0
+    assert senza == ["Senza scala"]
+
+
+def test_calpestabile_senza_zone():
+    assert superficie_calpestabile([], PERCENTUALI_CALP) == (0.0, [])

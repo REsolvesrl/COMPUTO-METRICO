@@ -375,6 +375,42 @@ def voci_da_riscrivere(mappa, grandezze, attuali, escluse=(), tolleranza=0.005):
     return da_scrivere
 
 
+def superficie_calpestabile(piante, percentuali, escludi=()):
+    """I metri quadri che si calpestano davvero: le stanze, e basta.
+
+    È il denominatore giusto del **costo di ristrutturazione al metro**. La
+    superficie commerciale non lo è: comprende i balconi al 30%, il vano
+    scale al 50% e il perimetro d'ingombro, cioè superfici che si vendono
+    ma che non si ristrutturano. Dividere il costo dei lavori per la
+    commerciale fa uscire un €/mq **più basso del vero** — e su quel numero
+    si decide se comprare.
+
+    Sono calpestabili le zone la cui categoria vale il 100% (le stanze
+    interne); le altre pesano meno proprio perché non sono pavimento su cui
+    si cammina. `escludi` toglie le categorie d'involucro, che non sono
+    locali ma il contorno del fabbricato.
+
+    Ritorna (m2, senza_scala): le planimetrie non calibrate non sono
+    misurabili e si segnalano invece di sparire in silenzio.
+    """
+    totale = 0.0
+    senza_scala = []
+    escludi = set(escludi)
+    for pianta in piante:
+        zone = [z for z in (pianta.get("zone") or [])
+                if (z.get("categoria") or "") not in escludi
+                and _regola(percentuali, z.get("categoria") or "")[0] >= 100.0]
+        if not zone:
+            continue
+        mpp = pianta.get("mpp")
+        if not mpp:
+            senza_scala.append(pianta.get("nome") or "Planimetria")
+            continue
+        for zona in zone:
+            totale += area_reale_m2(zona.get("punti") or [], mpp)
+    return round(totale, 2), senza_scala
+
+
 def superficie_commerciale(m2, percento, soglia=None, percento_oltre=None):
     """Superficie commerciale di una superficie accessoria, a scaglioni.
 

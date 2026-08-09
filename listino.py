@@ -11,6 +11,7 @@ pratiche per stimare le quantità.
 """
 
 CATEGORIE = [
+    "Pratiche e oneri",
     "Demolizioni",
     "Ricostruzioni e ripristini",
     "Idraulico",
@@ -20,6 +21,76 @@ CATEGORIE = [
 ]
 
 VOCI = [
+    # -------------------------------------------------- 0 · Pratiche e oneri
+    # Sta in testa perché è la prima spesa in ordine di tempo — si paga prima
+    # che il cantiere apra — ed è quella che si dimentica: non si vede in
+    # planimetria, non la propone nessuna impresa, e su una ristrutturazione
+    # pesante vale quanto un capitolo di lavorazioni.
+    {"codice": "0.01", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 1500.0,
+     "descrizione": "Rilievo e progetto architettonico",
+     "nota": "Rilievo dello stato di fatto, elaborati di progetto e "
+             "raffronto. Su un appartamento standard 1.200-2.000 €."},
+    {"codice": "0.02", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 800.0,
+     "descrizione": "CILA — pratica edilizia, asseverazione e deposito",
+     "nota": "Manutenzione straordinaria senza interventi strutturali né "
+             "cambio di destinazione. Alternativa alla SCIA (0.03): "
+             "servono l'una o l'altra, non entrambe."},
+    {"codice": "0.03", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 1500.0,
+     "descrizione": "SCIA — pratica edilizia, asseverazione e deposito",
+     "nota": "Quando si toccano strutture, prospetti o la destinazione "
+             "d'uso. Alternativa alla CILA (0.02)."},
+    {"codice": "0.04", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 2500.0,
+     "descrizione": "Direzione lavori",
+     "nota": "Di prassi si tratta a percentuale sull'importo dei lavori: "
+             "indicativamente 3-5% su una ristrutturazione completa. "
+             "Rifai il conto quando il computo è chiuso."},
+    {"codice": "0.05", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 1800.0,
+     "descrizione": "Coordinamento della sicurezza (CSP e CSE)",
+     "nota": "Obbligatorio quando in cantiere opera più di un'impresa, "
+             "anche non contemporaneamente: nelle ristrutturazioni "
+             "complete è quasi sempre il caso. Comprende il piano di "
+             "sicurezza e coordinamento e la notifica preliminare."},
+    {"codice": "0.06", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 500.0,
+     "descrizione": "Oneri comunali, diritti di segreteria e bolli",
+     "nota": "Variano da comune a comune: verificali sul portale del "
+             "comune prima di fissare il numero."},
+    {"codice": "0.07", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 600.0,
+     "descrizione": "Relazioni tecniche e asseverazioni (termica, "
+                    "acustica, statica)",
+     "nota": "Quali servano dipende dall'intervento e dal comune: la "
+             "relazione L.10 con la sostituzione dei serramenti o della "
+             "caldaia, quella acustica e strutturale se si toccano "
+             "tramezzi portanti o solai."},
+    {"codice": "0.08", "categoria": "Pratiche e oneri", "um": "cad",
+     "prezzo": 250.0,
+     "descrizione": "APE — attestato di prestazione energetica",
+     "nota": "Obbligatorio per la vendita. Uno per unità immobiliare: "
+             "se ne rifai uno post-lavori, contane due."},
+    {"codice": "0.09", "categoria": "Pratiche e oneri", "um": "cad",
+     "prezzo": 450.0,
+     "descrizione": "Variazione catastale (DOCFA)",
+     "nota": "Serve quando cambiano la distribuzione interna, la "
+             "consistenza o la categoria. Una per unità immobiliare."},
+    {"codice": "0.10", "categoria": "Pratiche e oneri", "um": "utenza",
+     "prezzo": 150.0,
+     "descrizione": "Allacci, volture e attivazione utenze",
+     "nota": "Luce, acqua e gas: contratti, volture e attivazioni. Una "
+             "per utenza. Non è l'impianto (vedi capitolo Idraulico), è "
+             "la pratica."},
+    {"codice": "0.11", "categoria": "Pratiche e oneri", "um": "a corpo",
+     "prezzo": 300.0,
+     "descrizione": "Occupazione di suolo pubblico (cassone, ponteggio, "
+                    "autoscala)",
+     "nota": "Concessione comunale a giornata o a metro quadro. Serve "
+             "quasi sempre per il cassone delle macerie se non c'è cortile."},
+
     # ------------------------------------------------------- 1 · Demolizioni
     {"codice": "1.01", "categoria": "Demolizioni", "um": "m²", "prezzo": 100.0,
      "descrizione": "Demolizione pavimenti (compresi discesa macerie, "

@@ -122,6 +122,13 @@ def studio_fattibilita(parametri):
     if durata > 0 and multiplo > 0:
         roi_annuo = round(multiplo ** (12.0 / durata) - 1.0, 6)
     mq = float(parametri.get("mq") or 0.0)
+    # ⚠️ Il costo dei lavori si divide per i mq CALPESTABILI, non per la
+    # commerciale: balconi, vano scale e perimetro d'ingombro si vendono ma
+    # non si ristrutturano, e metterli al denominatore fa uscire un €/mq più
+    # basso del vero. Se non è indicata, non si ripiega sulla commerciale: si
+    # preferisce non dire niente piuttosto che dire un numero ottimista.
+    mq_calp = float(parametri.get("mq_calpestabile") or 0.0)
+    ristrutturazione = float(parametri.get("ristrutturazione") or 0.0)
     return {
         "costi_acquisto": acq,
         "costi_vendita": ven,
@@ -133,6 +140,9 @@ def studio_fattibilita(parametri):
         "roi_annuo": roi_annuo,
         "eur_mq_acquisto": round(acquisto / mq, 2) if mq else None,
         "eur_mq_vendita": round(vendita / mq, 2) if mq else None,
+        "mq_calpestabile": mq_calp or None,
+        "eur_mq_ristrutturazione": (round(ristrutturazione / mq_calp, 2)
+                                    if mq_calp and ristrutturazione else None),
     }
 
 

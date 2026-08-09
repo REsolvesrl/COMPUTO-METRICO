@@ -3,6 +3,7 @@ import listino
 
 def test_categorie_attese():
     assert listino.CATEGORIE == [
+        "Pratiche e oneri",
         "Demolizioni",
         "Ricostruzioni e ripristini",
         "Idraulico",
