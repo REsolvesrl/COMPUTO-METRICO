@@ -161,7 +161,7 @@ def css_mondo():
     margin-bottom: 1.1rem;
 }}
 .cme-testata h1 {{
-    font-size: 1.45rem;
+    font-size: 2.05rem;
     font-weight: 650;
     letter-spacing: -.01em;
     margin: 0;
@@ -909,33 +909,26 @@ def css_schede_computo():
     gap: 0.85rem;
 }
 .st-key-card_extra summary::before {
-    content: "";
+    content: "+";
     flex: 0 0 44px;
     align-self: stretch;
     min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
 }
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] {
     width: 100%;
-}
-.st-key-card_extra summary [data-testid="stMarkdownContainer"]::before {
-    content: "CAMPIONE LIBERO · FUORI LISTINO";
-    display: block;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-weight: 600;
-    /* Cemento pieno su ardesia sta a 3,1:1: sotto la soglia proprio nella
-       riga che nomina le cose. Resta la voce del cemento, schiarita col
-       travertino fino a leggersi. */
-    color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
-    margin-bottom: 0.05rem;
 }
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] p {
     display: flex;
     align-items: baseline;
     width: 100%;
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1.35rem;
+    font-weight: 650;
 }
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] p::after {
     margin-left: auto;
@@ -961,28 +954,30 @@ def css_schede_computo():
     padding: 0.6rem 0.9rem;
     width: 100%;
 }
-/* la pastiglia: tinta piena, alta quanto l'intestazione */
+/* La pastiglia: tinta piena, alta quanto l'intestazione, col numero della
+   categoria stampato sopra come il codice su un campione vero. Il numero sta
+   lì e non accanto al nome: serve a ritrovare la categoria, non a leggerla. */
 [class*="st-key-apri_"] button::before {
-    content: "";
     align-self: stretch;
     min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
 }
-[class*="st-key-apri_"] button [data-testid="stMarkdownContainer"]::before {
-    display: block;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-weight: 600;
-    /* Cemento pieno su ardesia sta a 3,1:1: sotto la soglia proprio nella
-       riga che nomina le cose. Resta la voce del cemento, schiarita col
-       travertino fino a leggersi. */
-    color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
-    margin-bottom: 0.05rem;
+/* il nome della categoria è la cosa che si legge: niente lo sovrasta */
+[class*="st-key-apri_"] button [data-testid="stMarkdownContainer"] {
+    text-align: left;
+    width: 100%;
 }
 [class*="st-key-apri_"] button p {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1.35rem;
+    font-weight: 650;
     line-height: 1.25;
+    text-align: left;
 }
 /* il numero è il protagonista: più grande del nome che lo intesta */
 [class*="st-key-apri_"] button::after {
@@ -996,7 +991,6 @@ def css_schede_computo():
     for indice, cat in enumerate(listino.CATEGORIE, start=1):
         colore = COLORI_CATEGORIE[cat][0]
         totale = totale_categoria_listino(cat)
-        n_voci = len(listino.voci_della_categoria(cat))
         aperta = cat in st.session_state.get("cat_aperte", set())
         # aperta: il contorno del materiale si fa più netto, come il campione
         # tirato fuori dalla cartella
@@ -1010,16 +1004,15 @@ def css_schede_computo():
     padding-bottom: 0.2rem;
 }}
 .st-key-apri_{indice} button::before {{
+    content: "{indice:02d}";
     background: {colore};
+    color: {testo_su(colore)};
 }}
 .st-key-apri_{indice} button:hover {{
     background: {colore}1F;
 }}
 .st-key-apri_{indice} button::after {{
     content: "{euro(totale)}";
-}}
-.st-key-apri_{indice} button [data-testid="stMarkdownContainer"]::before {{
-    content: "CATEGORIA {indice:02d} · {n_voci} VOCI";
 }}
 .st-key-card_{indice} hr {{
     height: 1px;
@@ -1037,6 +1030,7 @@ def css_schede_computo():
 }}
 .st-key-card_extra summary::before {{
     background: {OTTONE};
+    color: {testo_su(OTTONE)};
 }}
 .st-key-card_extra [data-testid="stExpander"] summary:hover {{
     background: {OTTONE}1F;
@@ -2376,15 +2370,22 @@ st.session_state.categorie = categorie_per_progetto(st.session_state.piante)
 # Testata: il cartiglio. Il nome del progetto sta accanto al titolo come
 # l'etichetta di un campione, non sotto come una didascalia — è l'unica cosa
 # che cambia da un progetto all'altro, e va vista subito.
+# «Nessun progetto aperto» vale solo a sessione VUOTA: dirlo mentre ci sono
+# voci compilate o planimetrie caricate è semplicemente falso — il progetto
+# c'è, gli manca il nome.
 _progetto_aperto = (st.session_state.prg_nome or "").strip()
+if _progetto_aperto:
+    _cartiglio = (f'<span class="cme-etichetta">progetto</span>'
+                  f'<span class="progetto">{_progetto_aperto}</span>')
+elif not progetto_e_vuoto():
+    _cartiglio = ('<span class="cme-etichetta">progetto</span>'
+                  '<span class="progetto">senza nome</span>')
+else:
+    _cartiglio = '<span class="cme-etichetta">nessun progetto aperto</span>'
 st.markdown(
     '<div class="cme-testata">'
     '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
-    + (f'<span class="cme-etichetta">progetto</span>'
-       f'<span class="progetto">{_progetto_aperto}</span>'
-       if _progetto_aperto else
-       '<span class="cme-etichetta">nessun progetto aperto</span>')
-    + '</div>', unsafe_allow_html=True)
+    + _cartiglio + '</div>', unsafe_allow_html=True)
 
 tab_computo, tab_plan, tab_bp = st.tabs(
     ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"])
