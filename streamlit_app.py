@@ -59,6 +59,8 @@ import calcoli
 import fattibilita
 import fattura
 import listino
+import stampa
+from formato import colore_testo_su, euro, numero_it
 import planimetria
 import rilevamento
 from cme_viewer import image_viewer, pil_a_src
@@ -575,30 +577,6 @@ TIPI_PARETE_SCELTA = ["demolire", "costruire"]
 
 # ------------------------------------------------------------------ utilità
 
-def euro(valore):
-    """Formato italiano: 1.234,56 €"""
-    if valore is None or pd.isna(valore):
-        return ""
-    testo = f"{valore:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"{testo} €"
-
-
-def testo_su(colore_hex):
-    """Colore di testo leggibile su uno sfondo dato: navy scuro sui colori
-    chiari, crema su quelli scuri (in base alla luminosità percepita)."""
-    h = colore_hex.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    luminanza = 0.299 * r + 0.587 * g + 0.114 * b
-    return "#1A2744" if luminanza > 140 else "#ECE7DA"
-
-
-def numero_it(valore, decimali=3):
-    if valore is None or pd.isna(valore):
-        return ""
-    testo = f"{valore:,.{decimali}f}"
-    return testo.replace(",", "X").replace(".", ",").replace("X", ".")
-
-
 def df_vuoto():
     colonne = {}
     for col in COLONNE:
@@ -1006,7 +984,7 @@ def css_schede_computo():
 .st-key-apri_{indice} button::before {{
     content: "{indice:02d}";
     background: {colore};
-    color: {testo_su(colore)};
+    color: {colore_testo_su(colore)};
 }}
 .st-key-apri_{indice} button:hover {{
     background: {colore}1F;
@@ -1030,7 +1008,7 @@ def css_schede_computo():
 }}
 .st-key-card_extra summary::before {{
     background: {OTTONE};
-    color: {testo_su(OTTONE)};
+    color: {colore_testo_su(OTTONE)};
 }}
 .st-key-card_extra [data-testid="stExpander"] summary:hover {{
     background: {OTTONE}1F;
@@ -1171,7 +1149,7 @@ def grafico_torta_spese(riepilogo):
         marker=dict(colors=colori, line=dict(color="#1A2744", width=1)),
         textinfo="percent",
         # testo della % leggibile su ogni fetta (scuro sui chiari, crema sugli scuri)
-        textfont=dict(color=[testo_su(c) for c in colori], size=11),
+        textfont=dict(color=[colore_testo_su(c) for c in colori], size=11),
         hovertemplate="%{label}: %{value:.2f} € (%{percent})<extra></extra>",
         sort=False,
     ))
@@ -1204,7 +1182,7 @@ def tabella_riepilogo_spese_html(riepilogo, totale, iva_totale):
         righe.append(
             '<tr>'
             f'<td style="padding:5px 8px;background:{colore};'
-            f'color:{testo_su(colore)};'
+            f'color:{colore_testo_su(colore)};'
             f'font-weight:700;white-space:nowrap;">{cat}</td>'
             '<td style="padding:5px 8px;text-align:right;color:#ECE7DA;'
             f'white-space:nowrap;">{euro(v["importo"])}</td>'
@@ -1573,6 +1551,20 @@ def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None,
             df_superfici.to_excel(writer, sheet_name="Superfici", index=False)
         df_progetto.to_excel(writer, sheet_name="Dati progetto", index=False)
     return buffer.getvalue()
+
+
+def libretto_per_stampa():
+    """{codice: (righe con quantità, totale)} per l'appendice del PDF."""
+    dettagli = {}
+    for voce in listino.VOCI:
+        codice = voce["codice"]
+        if not st.session_state.get(f"mis_{codice}"):
+            continue
+        righe, totale = calcoli.dettaglio_misure(
+            st.session_state.misure_correnti.get(codice))
+        if righe:
+            dettagli[codice] = (righe, totale)
+    return dettagli
 
 
 def libretto_per_excel():
@@ -2787,8 +2779,8 @@ with tab_computo:
     st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
                "planimetrie): conservalo e ricaricalo dal pannello "
                "**📋 Dati del progetto · Apri / Nuovo** in cima alla "
-               "pagina. Excel e CSV servono per consegnare o rielaborare "
-               "il computo.")
+               "pagina. Il **PDF** è il documento da consegnare all'impresa; "
+               "Excel e CSV servono a rielaborare i numeri.")
 
     progetto = {
         "nome": st.session_state.prg_nome,
@@ -2850,9 +2842,26 @@ with tab_computo:
     # Tre bottoni grigi identici non dicevano che solo il primo mette al
     # sicuro il lavoro: quello resta in evidenza, con accanto il suo stato.
     st.markdown(stato_salvataggio(st.session_state._firma_progetto))
-    col_json, col_xlsx, col_csv = st.columns(3)
+    col_json, col_pdf, col_xlsx, col_csv = st.columns(4)
     bottone_salva_json(col_json, "computo", st.session_state._firma_progetto,
                        primario=True)
+    col_pdf.download_button(
+        "🖨️ Stampa PDF",
+        data=stampa.pdf_computo(
+            progetto, voci_calcolate,
+            {"somma": totale, "imprevisti_pct": st.session_state.imprevisti,
+             "imprevisti": imp_importo, "totale_lavori": totale_imprevisti,
+             "iva_pct": st.session_state.iva, "iva": iva_importo,
+             "totale": totale_ivato},
+            libretto=libretto_per_stampa(),
+            tinte={cat: COLORI_CATEGORIE[cat][0] for cat in COLORI_CATEGORIE},
+            descrizioni={v["codice"]: v["descrizione"] for v in listino.VOCI}),
+        help="Il computo come documento da consegnare: voci per categoria, "
+             "totali e — in fondo — il libretto delle misure, che rende le "
+             "quantità verificabili da chi lo riceve.",
+        file_name=nome_file("pdf"),
+        mime="application/pdf",
+    )
     col_xlsx.download_button(
         "📊 Esporta Excel (.xlsx)",
         data=excel_bytes(df_calcolato, df_riepilogo_excel,
