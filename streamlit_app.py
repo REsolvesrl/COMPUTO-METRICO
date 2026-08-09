@@ -233,6 +233,49 @@ def css_mondo():
     outline-offset: 2px;
 }}
 
+/* ------------------------------------------------ campioni di misura */
+/* Ogni metrica è un campione: l'etichetta piccola in maiuscoletto nomina,
+   il numero grande sotto è il protagonista. Fondo rialzato e squadrato,
+   perché la profondità viene dal materiale e non da un'ombra. */
+[data-testid="stMetric"] {{
+    background: var(--ardesia-chiara);
+    border: 1px solid color-mix(in srgb, var(--ottone) 26%, transparent);
+    padding: .55rem .7rem .6rem;
+}}
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p {{
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
+}}
+[data-testid="stMetricValue"] {{
+    color: var(--travertino);
+    font-weight: 700;
+    line-height: 1.15;
+}}
+[data-testid="stMetricDelta"] {{ font-size: .78rem; }}
+
+/* -------------------------------------------- il disegno comanda */
+/* La tela è il pezzo vero appoggiato sul piano da lavoro: fondo rialzato e
+   contorno d'ottone, il contrasto più alto della scheda. */
+.st-key-tela {{
+    background: var(--ardesia-chiara);
+    border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+    padding: .5rem;
+    margin-bottom: .85rem;
+}}
+/* I pannelli dei comandi stanno attorno in cemento, mai in competizione col
+   disegno: raggruppano i campi che altrimenti sarebbero una fila indistinta
+   di caselle. */
+[class*="st-key-pan_"] {{
+    border: 1px solid color-mix(in srgb, var(--cemento) 55%, transparent);
+    background: color-mix(in srgb, var(--cemento) 9%, transparent);
+    padding: .75rem .9rem .35rem;
+    margin-bottom: .75rem;
+}}
+
 /* ---------------------------------------------------- stato vuoto */
 /* Una cartella di campioni aperta, non un riquadro grigio con una frase:
    dice cosa succede dopo e mette l'azione a portata. */
@@ -2909,18 +2952,21 @@ with tab_plan:
                 "etichetta_pos": p.get("etichetta_pos"),
             } for p in pianta["pareti"]]
 
-            valore = image_viewer(
-                pianta["src"],
-                zone=zone_props,
-                pareti=pareti_props,
-                scala_temp=st.session_state.scala_temp,
-                colore_attivo=colore_attivo,
-                mpp=pianta["mpp"] or 0.0,
-                font_px=st.session_state.et_font,
-                tipo_parete=st.session_state.get("tipo_parete_codice",
-                                                 "demolire"),
-                key=f"viewer_{pianta['uid']}",
-            )
+            # La tela sul piano da lavoro: è il pezzo vero, e nella scheda
+            # deve avere il contrasto più alto: tutto il resto le sta attorno.
+            with st.container(key="tela"):
+                valore = image_viewer(
+                    pianta["src"],
+                    zone=zone_props,
+                    pareti=pareti_props,
+                    scala_temp=st.session_state.scala_temp,
+                    colore_attivo=colore_attivo,
+                    mpp=pianta["mpp"] or 0.0,
+                    font_px=st.session_state.et_font,
+                    tipo_parete=st.session_state.get("tipo_parete_codice",
+                                                     "demolire"),
+                    key=f"viewer_{pianta['uid']}",
+                )
             ev = evento_viewer(valore)
             if ev:
                 gestisci_evento(ev, pianta)
@@ -3395,86 +3441,92 @@ with tab_plan:
                 })
 
             # ---- vani porta e rivestimenti: quello che va detratto ----
-            st.markdown("**🚪 Porte e rivestimenti (detrazioni)**")
-            st.caption("Il vano di una porta non ha battiscopa e non si "
-                       "tinteggia; nei locali rivestiti la fascia "
-                       "piastrellata non si rasa né si tinteggia. Una porta "
-                       "**interna** affaccia su due locali, quindi vale "
-                       "**due lati**; il portoncino d'ingresso uno solo. Le "
-                       "quantità qui sotto sono già al netto.")
-            d1, d2, d3, d4, d5 = st.columns(5)
-            larg_porta = d1.number_input(
-                "Larghezza porte (m)", min_value=0.0, max_value=3.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.porta_larg), key="porta_larg_w")
-            st.session_state.porta_larg = larg_porta
-            alt_porta = d2.number_input(
-                "Altezza porte (m)", min_value=0.0, max_value=4.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.porta_alt), key="porta_alt_w")
-            st.session_state.porta_alt = alt_porta
-            n_porte = d3.number_input(
-                "Porte interne", min_value=0, max_value=200, step=1,
-                value=int(st.session_state.porta_n), key="porta_n_w",
-                help="Porte fra due locali: il vano vale due lati, perché "
-                     "interrompe il battiscopa (e toglie parete da "
-                     "tinteggiare) di qua e di là.")
-            st.session_state.porta_n = n_porte
-            n_porte_est = d4.number_input(
-                "Porte esterne", min_value=0, max_value=50, step=1,
-                value=int(st.session_state.porta_n_est), key="porta_n_est_w",
-                help="Portoncino d'ingresso e porte verso l'esterno o verso "
-                     "locali non computati: vale un lato solo.")
-            st.session_state.porta_n_est = n_porte_est
-            h_riv = d5.number_input(
-                "Altezza rivestimenti (m)", min_value=0.0, max_value=4.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.riv_alt), key="riv_alt_w",
-                help="Fascia piastrellata nei locali spuntati «Rivestito» "
-                     "(di norma 1,20 m; zona doccia anche 2,40).")
-            st.session_state.riv_alt = h_riv
+            with st.container(key="pan_porte"):
+                st.markdown("**🚪 Porte e rivestimenti (detrazioni)**")
+                st.caption("Il vano di una porta non ha battiscopa e non si "
+                           "tinteggia; nei locali rivestiti la fascia "
+                           "piastrellata non si rasa né si tinteggia. Una "
+                           "porta **interna** affaccia su due locali, quindi "
+                           "vale **due lati**; il portoncino d'ingresso uno "
+                           "solo. Le quantità qui sotto sono già al netto.")
+                d1, d2, d3, d4, d5 = st.columns(5)
+                larg_porta = d1.number_input(
+                    "Larghezza porte (m)", min_value=0.0, max_value=3.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.porta_larg),
+                    key="porta_larg_w")
+                st.session_state.porta_larg = larg_porta
+                alt_porta = d2.number_input(
+                    "Altezza porte (m)", min_value=0.0, max_value=4.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.porta_alt),
+                    key="porta_alt_w")
+                st.session_state.porta_alt = alt_porta
+                n_porte = d3.number_input(
+                    "Porte interne", min_value=0, max_value=200, step=1,
+                    value=int(st.session_state.porta_n), key="porta_n_w",
+                    help="Porte fra due locali: il vano vale due lati, "
+                         "perché interrompe il battiscopa (e toglie parete "
+                         "da tinteggiare) di qua e di là.")
+                st.session_state.porta_n = n_porte
+                n_porte_est = d4.number_input(
+                    "Porte esterne", min_value=0, max_value=50, step=1,
+                    value=int(st.session_state.porta_n_est),
+                    key="porta_n_est_w",
+                    help="Portoncino d'ingresso e porte verso l'esterno o "
+                         "verso locali non computati: vale un lato solo.")
+                st.session_state.porta_n_est = n_porte_est
+                h_riv = d5.number_input(
+                    "Altezza rivestimenti (m)", min_value=0.0, max_value=4.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.riv_alt), key="riv_alt_w",
+                    help="Fascia piastrellata nei locali spuntati «Rivestito» "
+                         "(di norma 1,20 m; zona doccia anche 2,40).")
+                st.session_state.riv_alt = h_riv
 
             # ---- finestre e porte finestra ----
-            st.markdown("**🪟 Finestre e porte finestra (detrazioni)**")
-            st.caption("Stanno su un muro perimetrale, quindi affacciano su "
-                       "**un solo locale**: valgono un lato. La finestra ha "
-                       "il davanzale in alto e il battiscopa ci passa sotto, "
-                       "quindi toglie superficie **solo** a rasatura e "
-                       "tinteggiatura; la **porta finestra** arriva a terra "
-                       "e interrompe anche il battiscopa. Le misure "
-                       "predefinite sono quelle correnti: cambiale se le tue "
-                       "sono diverse.")
-            f1, f2, f3, f4, f5, f6 = st.columns(6)
-            n_fin = f1.number_input(
-                "Finestre", min_value=0, max_value=200, step=1,
-                value=int(st.session_state.fin_n), key="fin_n_w",
-                help="Quante finestre nei locali spuntati «Tinteggiatura».")
-            st.session_state.fin_n = n_fin
-            larg_fin = f2.number_input(
-                "Larghezza finestra (m)", min_value=0.0, max_value=6.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.fin_larg), key="fin_larg_w")
-            st.session_state.fin_larg = larg_fin
-            alt_fin = f3.number_input(
-                "Altezza finestra (m)", min_value=0.0, max_value=4.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.fin_alt), key="fin_alt_w")
-            st.session_state.fin_alt = alt_fin
-            n_pf = f4.number_input(
-                "Porte finestra", min_value=0, max_value=200, step=1,
-                value=int(st.session_state.pf_n), key="pf_n_w",
-                help="Vanno a terra: tolgono anche battiscopa.")
-            st.session_state.pf_n = n_pf
-            larg_pf = f5.number_input(
-                "Larghezza p. finestra (m)", min_value=0.0, max_value=6.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.pf_larg), key="pf_larg_w")
-            st.session_state.pf_larg = larg_pf
-            alt_pf = f6.number_input(
-                "Altezza p. finestra (m)", min_value=0.0, max_value=4.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.pf_alt), key="pf_alt_w")
-            st.session_state.pf_alt = alt_pf
+            with st.container(key="pan_finestre"):
+                st.markdown("**🪟 Finestre e porte finestra (detrazioni)**")
+                st.caption("Stanno su un muro perimetrale, quindi affacciano "
+                           "su **un solo locale**: valgono un lato. La "
+                           "finestra ha il davanzale in alto e il battiscopa "
+                           "ci passa sotto, quindi toglie superficie **solo** "
+                           "a rasatura e tinteggiatura; la **porta finestra** "
+                           "arriva a terra e interrompe anche il battiscopa. "
+                           "Le misure predefinite sono quelle correnti: "
+                           "cambiale se le tue sono diverse.")
+                f1, f2, f3, f4, f5, f6 = st.columns(6)
+                n_fin = f1.number_input(
+                    "Finestre", min_value=0, max_value=200, step=1,
+                    value=int(st.session_state.fin_n), key="fin_n_w",
+                    help="Quante finestre nei locali spuntati "
+                         "«Tinteggiatura».")
+                st.session_state.fin_n = n_fin
+                larg_fin = f2.number_input(
+                    "Larghezza finestra (m)", min_value=0.0, max_value=6.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.fin_larg), key="fin_larg_w")
+                st.session_state.fin_larg = larg_fin
+                alt_fin = f3.number_input(
+                    "Altezza finestra (m)", min_value=0.0, max_value=4.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.fin_alt), key="fin_alt_w")
+                st.session_state.fin_alt = alt_fin
+                n_pf = f4.number_input(
+                    "Porte finestra", min_value=0, max_value=200, step=1,
+                    value=int(st.session_state.pf_n), key="pf_n_w",
+                    help="Vanno a terra: tolgono anche battiscopa.")
+                st.session_state.pf_n = n_pf
+                larg_pf = f5.number_input(
+                    "Larghezza p. finestra (m)", min_value=0.0, max_value=6.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.pf_larg), key="pf_larg_w")
+                st.session_state.pf_larg = larg_pf
+                alt_pf = f6.number_input(
+                    "Altezza p. finestra (m)", min_value=0.0, max_value=4.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.pf_alt), key="pf_alt_w")
+                st.session_state.pf_alt = alt_pf
 
             aperture = [
                 {"n": n_fin, "larghezza": larg_fin, "altezza": alt_fin,
@@ -3550,34 +3602,39 @@ with tab_plan:
                        f"(**{numero_it(altezza, 2)} m**), al netto delle "
                        "aperture dichiarate qui sotto: dove c'è un vano non "
                        "c'è muratura da buttare giù né da tirare su.")
-            a1, a2, a3, a4 = st.columns(4)
-            n_apert_dem = a1.number_input(
-                "Aperture nei muri da demolire", min_value=0, max_value=200,
-                step=1, value=int(st.session_state.apert_dem_n),
-                key="apert_dem_n_w",
-                help="Quanti vani (porte, passaggi, finestre) ci sono nei "
-                     "muri rossi. I m² li fa l'app, con le misure qui "
-                     "accanto.")
-            st.session_state.apert_dem_n = n_apert_dem
-            n_apert_cos = a2.number_input(
-                "Aperture nei muri da costruire", min_value=0, max_value=200,
-                step=1, value=int(st.session_state.apert_cos_n),
-                key="apert_cos_n_w",
-                help="Vani previsti nei muri gialli: quella superficie non "
-                     "va murata.")
-            st.session_state.apert_cos_n = n_apert_cos
-            larg_apert = a3.number_input(
-                "Larghezza apertura (m)", min_value=0.0, max_value=6.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.apert_larg), key="apert_larg_w",
-                help="Misura della porta tipo: 0,80 × 2,10 nelle case. "
-                     "Cambiala se i tuoi vani sono diversi.")
-            st.session_state.apert_larg = larg_apert
-            alt_apert = a4.number_input(
-                "Altezza apertura (m)", min_value=0.0, max_value=4.0,
-                step=0.05, format="%.2f",
-                value=float(st.session_state.apert_alt), key="apert_alt_w")
-            st.session_state.apert_alt = alt_apert
+            with st.container(key="pan_aperture"):
+                a1, a2, a3, a4 = st.columns(4)
+                n_apert_dem = a1.number_input(
+                    "Aperture nei muri da demolire", min_value=0,
+                    max_value=200, step=1,
+                    value=int(st.session_state.apert_dem_n),
+                    key="apert_dem_n_w",
+                    help="Quanti vani (porte, passaggi, finestre) ci sono nei "
+                         "muri rossi. I m² li fa l'app, con le misure qui "
+                         "accanto.")
+                st.session_state.apert_dem_n = n_apert_dem
+                n_apert_cos = a2.number_input(
+                    "Aperture nei muri da costruire", min_value=0,
+                    max_value=200, step=1,
+                    value=int(st.session_state.apert_cos_n),
+                    key="apert_cos_n_w",
+                    help="Vani previsti nei muri gialli: quella superficie "
+                         "non va murata.")
+                st.session_state.apert_cos_n = n_apert_cos
+                larg_apert = a3.number_input(
+                    "Larghezza apertura (m)", min_value=0.0, max_value=6.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.apert_larg),
+                    key="apert_larg_w",
+                    help="Misura della porta tipo: 0,80 × 2,10 nelle case. "
+                         "Cambiala se i tuoi vani sono diversi.")
+                st.session_state.apert_larg = larg_apert
+                alt_apert = a4.number_input(
+                    "Altezza apertura (m)", min_value=0.0, max_value=4.0,
+                    step=0.05, format="%.2f",
+                    value=float(st.session_state.apert_alt),
+                    key="apert_alt_w")
+                st.session_state.apert_alt = alt_apert
 
             apert_dem = planimetria.superficie_aperture(
                 n_apert_dem, larg_apert, alt_apert)
