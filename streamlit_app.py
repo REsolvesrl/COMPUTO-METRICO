@@ -832,81 +832,153 @@ def voci_dal_listino():
 
 
 def css_schede_computo():
-    """CSS delle schede colorate del computo (stile «card» per categoria).
+    """CSS dei campioni del computo: una categoria, una tinta, un totale.
 
     Ogni scheda è avvolta in un st.container(key="card_…"): Streamlit le
-    assegna la classe .st-key-card_… e da lì coloriamo sfondo e bordo.
+    assegna la classe .st-key-card_… e da lì si veste il campione.
 
-    IMPORTANTE: il «Totale» a destra è disegnato dal CSS (::after), NON
-    scritto nell'etichetta dell'expander. Se il totale stesse nel titolo,
-    a ogni modifica il titolo cambierebbe e Streamlit tratterebbe la
-    tendina come un widget nuovo, richiudendola: con il CSS il titolo
-    resta identico e la tendina rimane aperta mentre si lavora.
+    L'intestazione è un bottone (key «apri_N») e si compone di tre parti,
+    due delle quali le disegna il CSS perché nell'etichetta di un bottone
+    non ci sta altro che una riga di testo:
+    - `button::before` è la **pastiglia**: la tinta piena del materiale, una
+      superficie da guardare. Non una banda sul bordo, che è l'abitudine
+      del gestionale travestita da campionario;
+    - il contenitore markdown porta l'**etichetta campione** (codice e
+      numero di voci) sopra il nome della categoria;
+    - `button::after` è il **totale**, il numero grande a destra.
+
+    IMPORTANTE: il totale è disegnato dal CSS, NON scritto nell'etichetta.
+    Se stesse nel titolo, a ogni modifica il titolo cambierebbe e Streamlit
+    tratterebbe il bottone come un widget nuovo; con il CSS il titolo resta
+    identico e la categoria rimane aperta mentre si lavora.
     """
     regole = ["""
-/* «Voci aggiuntive»: è rimasta una tendina di Streamlit */
+/* «Voci aggiuntive»: è rimasta una tendina di Streamlit, vestita da
+   campione come le categorie. */
 .st-key-card_extra [data-testid="stExpander"] details {
-    border-radius: 12px;
+    border-radius: 0;
+}
+.st-key-card_extra summary {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+.st-key-card_extra summary::before {
+    content: "";
+    flex: 0 0 44px;
+    align-self: stretch;
+    min-height: 44px;
 }
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] {
     width: 100%;
+}
+.st-key-card_extra summary [data-testid="stMarkdownContainer"]::before {
+    content: "CAMPIONE LIBERO · FUORI LISTINO";
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    /* Cemento pieno su ardesia sta a 3,1:1: sotto la soglia proprio nella
+       riga che nomina le cose. Resta la voce del cemento, schiarita col
+       travertino fino a leggersi. */
+    color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
+    margin-bottom: 0.05rem;
 }
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] p {
     display: flex;
     align-items: baseline;
     width: 100%;
-    font-size: 1.25rem;
+    margin: 0;
+    font-size: 1.1rem;
 }
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] p::after {
     margin-left: auto;
+    font-size: 1.4rem;
     font-weight: 700;
-    padding-left: 0.5rem;
+    padding-left: 0.75rem;
     white-space: nowrap;
+    color: var(--travertino);
 }
 /* Categorie: il titolo è un bottone (key «apri_N») travestito da
    intestazione di tendina, così l'apertura passa dal server e possiamo
    disegnare le righe della sola categoria aperta. */
 [class*="st-key-apri_"] button {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    column-gap: 0.85rem;
     background: transparent;
     border: none;
+    border-radius: 0;
     box-shadow: none;
     text-align: left;
-    padding: 0.55rem 0.9rem;
+    padding: 0.6rem 0.9rem;
+    width: 100%;
+}
+/* la pastiglia: tinta piena, alta quanto l'intestazione */
+[class*="st-key-apri_"] button::before {
+    content: "";
+    align-self: stretch;
+    min-height: 44px;
+}
+[class*="st-key-apri_"] button [data-testid="stMarkdownContainer"]::before {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    /* Cemento pieno su ardesia sta a 3,1:1: sotto la soglia proprio nella
+       riga che nomina le cose. Resta la voce del cemento, schiarita col
+       travertino fino a leggersi. */
+    color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
+    margin-bottom: 0.05rem;
 }
 [class*="st-key-apri_"] button p {
-    display: flex;
-    align-items: baseline;
-    width: 100%;
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
+    line-height: 1.25;
 }
-[class*="st-key-apri_"] button p::after {
-    margin-left: auto;
+/* il numero è il protagonista: più grande del nome che lo intesta */
+[class*="st-key-apri_"] button::after {
+    justify-self: end;
+    font-size: 1.4rem;
     font-weight: 700;
-    padding-left: 0.5rem;
     white-space: nowrap;
+    color: var(--travertino);
 }
 """]
     for indice, cat in enumerate(listino.CATEGORIE, start=1):
         colore = COLORI_CATEGORIE[cat][0]
         totale = totale_categoria_listino(cat)
+        n_voci = len(listino.voci_della_categoria(cat))
+        aperta = cat in st.session_state.get("cat_aperte", set())
+        # aperta: il contorno del materiale si fa più netto, come il campione
+        # tirato fuori dalla cartella
+        bordo = "E6" if aperta else "99"
         regole.append(f"""
 .st-key-card_{indice} {{
     background: {colore}26;
-    border: 1px solid {colore}99;
-    border-radius: 12px;
+    border: 1px solid {colore}{bordo};
+    border-radius: 0;
     margin-bottom: 0.55rem;
     padding-bottom: 0.2rem;
 }}
-.st-key-apri_{indice} button:hover {{
-    background: {colore}33;
+.st-key-apri_{indice} button::before {{
+    background: {colore};
 }}
-.st-key-apri_{indice} button p::after {{
-    content: "Totale: {euro(totale)}";
+.st-key-apri_{indice} button:hover {{
+    background: {colore}1F;
+}}
+.st-key-apri_{indice} button::after {{
+    content: "{euro(totale)}";
+}}
+.st-key-apri_{indice} button [data-testid="stMarkdownContainer"]::before {{
+    content: "CATEGORIA {indice:02d} · {n_voci} VOCI";
 }}
 .st-key-card_{indice} hr {{
-    height: 2px;
-    background-color: {colore}77;
+    height: 1px;
+    background-color: {colore}66;
     border: none;
     margin: 0.35rem 0 0.6rem;
 }}
@@ -915,19 +987,22 @@ def css_schede_computo():
         calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
     regole.append(f"""
 .st-key-card_extra [data-testid="stExpander"] details {{
-    background: {ORO}26;
-    border: 1px solid {ORO}99;
+    background: {OTTONE}26;
+    border: 1px solid {OTTONE}99;
+}}
+.st-key-card_extra summary::before {{
+    background: {OTTONE};
 }}
 .st-key-card_extra [data-testid="stExpander"] summary:hover {{
-    background: {ORO}33;
-    border-radius: 12px;
+    background: {OTTONE}1F;
+    border-radius: 0;
 }}
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] p::after {{
-    content: "Totale: {euro(tot_extra)}";
+    content: "{euro(tot_extra)}";
 }}
 .st-key-card_extra hr {{
-    height: 2px;
-    background-color: {ORO}77;
+    height: 1px;
+    background-color: {OTTONE}66;
     border: none;
     margin: 0.35rem 0 0.6rem;
 }}
@@ -2434,11 +2509,16 @@ with tab_computo:
             # apre e chiude nel browser SENZA avvisare il server, quindi non
             # potremmo sapere quali voci disegnare. Il bottone invece ce lo
             # dice, ed è ciò che permette di disegnare solo le righe aperte.
-            # Niente totale nell'etichetta: lo scrive il CSS (::after).
+            # Niente totale nell'etichetta: lo scrive il CSS (::after), che
+            # disegna anche la pastiglia del materiale e l'etichetta campione
+            # con codice e numero di voci. L'etichetta del bottone porta solo
+            # il nome, tutto dentro un'unica marcatura di colore: due nodi
+            # affiancati (la freccia fuori dal colore) sarebbero due elementi
+            # distinti e il CSS li impaginerebbe uno sotto l'altro.
             with st.container(key=f"card_{indice}"):
-                if st.button(f"{'▾' if aperta else '▸'} "
-                             f":{colore_md}[**{indice} · {cat}**]",
-                             key=f"apri_{indice}", use_container_width=True):
+                if st.button(f":{colore_md}"
+                             f"[**{'▾' if aperta else '▸'} {cat}**]",
+                             key=f"apri_{indice}", width="stretch"):
                     st.session_state.cat_aperte ^= {cat}   # apre o chiude
                     st.rerun()
                 if aperta:
@@ -2510,12 +2590,14 @@ with tab_computo:
         tot_extra_dot = calcoli.totale_generale(
             calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
         righe_dot.append((ALTRE_VOCI, "#C9A96A", tot_extra_dot))
+        # pastiglie quadrate, non pallini: sono campioni di materiale, e
+        # richiamano la tinta piena in testa a ogni categoria
         html_dot = "".join(
             f'<div style="display:flex;justify-content:space-between;'
             f'align-items:center;margin:4px 0;font-size:0.9rem;">'
-            f'<span><span style="display:inline-block;width:10px;'
-            f'height:10px;border-radius:50%;background:{colore};'
-            f'margin-right:8px;"></span>{nome}</span>'
+            f'<span><span style="display:inline-block;width:12px;'
+            f'height:12px;background:{colore};'
+            f'margin-right:9px;vertical-align:-1px;"></span>{nome}</span>'
             f'<b>{euro(importo)}</b></div>'
             for nome, colore, importo in righe_dot)
         st.markdown(html_dot, unsafe_allow_html=True)
@@ -2537,13 +2619,18 @@ with tab_computo:
         # Excel chiama «Totale finale (IVA inclusa)» quello DOPO: lo stesso
         # nome su due cifre diverse, sullo strumento in cui il numero giusto
         # è tutto. Il finale è uno solo, ed è quello che si paga.
+        # Il campione più pieno della pagina: qui la tinta non contorna, è
+        # tutta la superficie. È il numero che si paga, e nella colonna deve
+        # vincere su ogni altra cifra. Niente sfumatura, niente angoli
+        # arrotondati: la materia è piatta e squadrata come un campione vero.
         st.markdown(
-            '<div style="background:linear-gradient(135deg,#243459,#1A2744);'
-            'border:1px solid #C9A96A;border-radius:12px;'
-            'padding:12px 14px;margin:6px 0 10px;">'
-            '<div style="font-size:0.72rem;color:#C9A96A;'
-            'letter-spacing:.05em;">💎 TOTALE FINALE (IVA INCLUSA)</div>'
-            '<div style="font-size:1.45rem;font-weight:700;color:#ECE7DA;">'
+            f'<div style="background:{OTTONE};padding:13px 15px;'
+            'margin:6px 0 10px;">'
+            f'<div style="font-size:.7rem;color:{ARDESIA};font-weight:700;'
+            'text-transform:uppercase;letter-spacing:.12em;opacity:.85;">'
+            'Totale finale · IVA inclusa</div>'
+            f'<div style="font-size:1.8rem;font-weight:700;color:{ARDESIA};'
+            'line-height:1.2;">'
             f'{euro(totale_ivato)}</div></div>',
             unsafe_allow_html=True)
 

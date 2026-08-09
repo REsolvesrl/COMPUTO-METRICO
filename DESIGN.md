@@ -51,9 +51,12 @@ pagina che si ridisegna sotto gli occhi.
 - Numeri (quantità, prezzi, superfici): stessa pila con
   `font-variant-numeric: tabular-nums` — le cifre incolonnate sono un
   requisito, non un vezzo: qui si confrontano importi.
-- **Etichetta campione**: 0,7 rem, maiuscoletto, `letter-spacing: .12em`,
-  colore cemento. È la voce del sistema: nomina categorie, unità, codici.
-  Non usarla per frasi.
+- **Etichetta campione**: 0,7 rem, maiuscoletto, `letter-spacing: .12em`.
+  È la voce del sistema: nomina categorie, unità, codici. Non usarla per
+  frasi. ⚠️ **Il cemento pieno su ardesia sta a 3,1:1**, sotto la soglia di
+  leggibilità proprio nella riga che nomina le cose: si schiarisce col
+  travertino (`color-mix(in srgb, var(--travertino) 78%, var(--cemento))`).
+  Resta la voce del cemento, ma si legge.
 
 ## Componenti
 
@@ -64,6 +67,13 @@ pagina che si ridisegna sotto gli occhi.
   ⚠️ **Mai una banda sottile sul bordo sinistro**: è l'abitudine del
   gestionale travestita da campionario. Un campione vero è una tinta che si
   guarda, non una riga che decora.
+  Applicato alle categorie del computo: la pastiglia è `button::before`
+  (44 px di tinta piena), l'etichetta col codice è
+  `[data-testid="stMarkdownContainer"]::before` e il totale è
+  `button::after`. Nell'etichetta di un bottone Streamlit ci sta una sola
+  riga di testo, e dev'essere un unico nodo — la freccia va dentro la
+  marcatura di colore, altrimenti diventa un secondo elemento della griglia
+  e finisce a capo.
 - **Azioni**: ottone pieno per l'azione principale, contorno ottone per le
   secondarie, mai due azioni piene affiancate.
 - **Il disegno comanda**: nella scheda planimetria la tela ha la larghezza
