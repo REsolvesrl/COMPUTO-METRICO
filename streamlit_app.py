@@ -59,6 +59,7 @@ import calcoli
 import fattibilita
 import fattura
 import listino
+import listino_personale
 import stampa
 from formato import colore_testo_su, euro, numero_it
 import planimetria
@@ -1025,6 +1026,127 @@ def css_schede_computo():
 }}
 """)
     return "<style>" + "".join(regole) + "</style>"
+
+
+PASSI_STORIA_COMPUTO = 15
+
+
+def registra_storia_computo(descrizione):
+    """Istantanea di quantità e prezzi PRIMA di un'azione che li cambia.
+
+    L'annulla del disegno non copriva il computo: svuotare una categoria per
+    sbaglio, o riscrivere i prezzi col listino personale, era senza ritorno.
+
+    Si registrano solo le azioni che cambiano tutto in un colpo — non la
+    singola cifra battuta a mano, che si ricorregge da sé, e nemmeno le
+    quantità che arrivano dal disegno quando il computo è agganciato: lì
+    cambiano a ogni gesto, e la storia si riempirebbe di passi identici.
+    """
+    st.session_state.storia_computo.append({
+        "descrizione": descrizione,
+        "q": {v["codice"]: st.session_state.get(f"q_{v['codice']}") or 0.0
+              for v in listino.VOCI},
+        "p": {v["codice"]: st.session_state.get(f"p_{v['codice']}")
+              or v["prezzo"] for v in listino.VOCI},
+        "df_voci": st.session_state.df_voci.copy(deep=True),
+    })
+    del st.session_state.storia_computo[:-PASSI_STORIA_COMPUTO]
+
+
+def annulla_computo():
+    """Riporta indietro di un passo. Ritorna la descrizione, o None."""
+    storia = st.session_state.storia_computo
+    if not storia:
+        return None
+    passo = storia.pop()
+    # Come per la planimetria: quantità e prezzi si riscrivono al giro dopo,
+    # prima che i campi rinascano.
+    st.session_state.listino_pending = passo["q"]
+    st.session_state.prezzi_pending = passo["p"]
+    st.session_state.df_voci = passo["df_voci"]
+    st.session_state.versione_editor += 1
+    return passo["descrizione"]
+
+
+def barra_annulla_computo():
+    """Il tasto per tornare indietro, con l'ultima operazione registrata."""
+    storia = st.session_state.storia_computo
+    if not storia:
+        return
+    c_und, c_info = st.columns([1, 3], vertical_alignment="center")
+    if c_und.button(f"↩️ Annulla ({len(storia)})", width="stretch",
+                    key="annulla_computo",
+                    help="Torna indietro di un passo su quantità e prezzi "
+                         "del computo. Non tocca le planimetrie."):
+        fatto = annulla_computo()
+        if fatto:
+            st.toast(f"Annullato: {fatto} ↩️")
+        st.rerun()
+    c_info.caption(f"Ultima operazione sul computo: "
+                   f"**{storia[-1]['descrizione']}**")
+
+
+def pannello_listino_personale():
+    """I tuoi prezzi, quelli che non se ne vanno col progetto.
+
+    Il listino guida ha prezzi indicativi: correggerli a ogni operazione da
+    capo era il lavoro che si rifaceva ogni volta. Qui si mettono da parte
+    una volta e si riapplicano.
+    """
+    prezzi_salvati, quando = listino_personale.carica()
+    correnti = {v["codice"]: st.session_state.get(f"p_{v['codice']}")
+                for v in listino.VOCI}
+    miei = listino_personale.scostamenti(listino.VOCI, correnti)
+    da_scrivere = listino_personale.da_applicare(
+        prezzi_salvati, listino.VOCI, correnti)
+
+    if prezzi_salvati:
+        titolo = (f"📓 Il mio listino — {len(prezzi_salvati)} prezzi"
+                  + (f", aggiornato il {quando}" if quando else ""))
+    else:
+        titolo = "📓 Il mio listino — non ancora salvato"
+
+    with st.expander(titolo):
+        st.caption(
+            "I prezzi del listino guida sono indicativi: quando li correggi "
+            "valgono **solo per questo progetto**. Qui li metti da parte una "
+            "volta sola e li ritrovi in tutti i progetti che verranno. Si "
+            "salvano **solo quelli che hai cambiato**: le voci che non hai "
+            "toccato continuano a seguire il listino guida.")
+        s1, s2 = st.columns(2)
+        if s1.button(f"💾 Salva i {len(miei)} prezzi di questo progetto",
+                     disabled=not miei, width="stretch",
+                     help="Sovrascrive il listino personale con i prezzi "
+                          "che hai corretto qui."):
+            try:
+                file = listino_personale.salva(miei)
+                st.toast(f"Listino personale salvato: {len(miei)} prezzi ✔")
+                st.caption(f":gray[{file}]")
+                st.rerun()
+            except OSError as errore:
+                st.error(f"Non sono riuscito a salvare il listino: {errore}")
+        if s2.button(f"📥 Applica il mio listino ({len(da_scrivere)} voci)",
+                     disabled=not da_scrivere, width="stretch",
+                     help="Riscrive i prezzi di questo progetto con i tuoi. "
+                          "Le quantità non si toccano."):
+            registra_storia_computo("applicazione del listino personale")
+            st.session_state.prezzi_pending = dict(da_scrivere)
+            st.toast(f"{len(da_scrivere)} prezzi aggiornati ✔")
+            st.rerun()
+
+        if not miei and not prezzi_salvati:
+            st.caption(":gray[Correggi il prezzo di qualche voce qui sotto: "
+                       "poi potrai metterlo da parte.]")
+        elif prezzi_salvati and not da_scrivere:
+            st.caption(":green[Questo progetto usa già i tuoi prezzi.]")
+
+        if prezzi_salvati:
+            if st.checkbox("Voglio cancellare il mio listino",
+                           key="conf_elimina_listino"):
+                if st.button("🗑️ Cancella il listino personale"):
+                    listino_personale.elimina()
+                    st.toast("Listino personale cancellato")
+                    st.rerun()
 
 
 def riga_voce_listino(voce):
@@ -2192,6 +2314,7 @@ st.session_state.setdefault("sel_parete", None)
 st.session_state.setdefault("upl_count", 0)
 st.session_state.setdefault("ultimo_rilevamento", None)
 st.session_state.setdefault("storia", [])   # annulla (aree, muri, scala)
+st.session_state.setdefault("storia_computo", [])   # annulla (quantità, prezzi)
 st.session_state.setdefault("et_font", 14)
 st.session_state.setdefault("et_nome", True)
 st.session_state.setdefault("et_m2", True)
@@ -2316,6 +2439,7 @@ if "da_caricare" in st.session_state:
     st.session_state.ultimo_rilevamento = None
     # le istantanee dell'annulla riguardano il progetto precedente
     st.session_state.storia = []
+    st.session_state.storia_computo = []
     st.session_state.pop("cat_attiva", None)
     st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
@@ -2371,6 +2495,13 @@ if "listino_pending" in st.session_state:
     for _cod, _quantita in st.session_state.pop("listino_pending").items():
         st.session_state[f"q_{_cod}"] = _quantita
         st.session_state.pop(f"lq_{_cod}", None)   # rinasce col valore nuovo
+
+# Stessa strada per i PREZZI del listino personale: si applicano prima che i
+# campi lp_… nascano, altrimenti Streamlit rifiuta di riscriverli.
+if "prezzi_pending" in st.session_state:
+    for _cod, _prezzo in st.session_state.pop("prezzi_pending").items():
+        st.session_state[f"p_{_cod}"] = _prezzo
+        st.session_state.pop(f"lp_{_cod}", None)
 
 # I comandi delle etichette stanno SOTTO il disegno, ma il disegno legge i
 # loro valori PRIMA: senza questo riallineamento userebbe quelli del giro
@@ -2619,6 +2750,8 @@ with tab_computo:
     col_sx, col_dx = st.columns([3.3, 0.7], gap="medium")
 
     with col_sx:
+        barra_annulla_computo()
+        pannello_listino_personale()
         for indice, cat in enumerate(listino.CATEGORIE, start=1):
             colore_md = COLORI_CATEGORIE[cat][1]
             aperta = cat in st.session_state.cat_aperte
@@ -3834,6 +3967,10 @@ with tab_plan:
                     f"che si aggiornano da sé.]")
             elif st.button("➕ Scrivi le quantità nel listino", type="primary",
                            disabled=not proposte):
+                # registrata solo qui: col computo agganciato le quantità
+                # cambiano a ogni gesto sul disegno, e la storia si
+                # riempirebbe di passi tutti uguali
+                registra_storia_computo("quantità portate dalla planimetria")
                 st.session_state.listino_pending = dict(proposte)
                 st.toast(f"{len(proposte)} voci aggiornate nel computo ✔")
                 st.rerun()
