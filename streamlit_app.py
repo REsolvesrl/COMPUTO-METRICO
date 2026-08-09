@@ -1797,8 +1797,10 @@ def _payload_progetto():
                      "pf_n": st.session_state.pf_n,
                      "pf_larg": st.session_state.pf_larg,
                      "pf_alt": st.session_state.pf_alt,
-                     "apert_dem": st.session_state.apert_dem,
-                     "apert_cos": st.session_state.apert_cos},
+                     "apert_dem_n": st.session_state.apert_dem_n,
+                     "apert_cos_n": st.session_state.apert_cos_n,
+                     "apert_larg": st.session_state.apert_larg,
+                     "apert_alt": st.session_state.apert_alt},
         "auto_computo": st.session_state.auto_computo,
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
@@ -2047,9 +2049,12 @@ st.session_state.setdefault("fin_alt", 1.40)
 st.session_state.setdefault("pf_n", 0)
 st.session_state.setdefault("pf_larg", 1.20)
 st.session_state.setdefault("pf_alt", 2.30)
-# vani contenuti nei muri da demolire e da costruire (m²)
-st.session_state.setdefault("apert_dem", 0.0)
-st.session_state.setdefault("apert_cos", 0.0)
+# vani contenuti nei muri da demolire e da costruire: si dichiara QUANTI
+# sono, la misura della porta tipo li converte in m²
+st.session_state.setdefault("apert_dem_n", 0)
+st.session_state.setdefault("apert_cos_n", 0)
+st.session_state.setdefault("apert_larg", 0.80)
+st.session_state.setdefault("apert_alt", 2.10)
 # il computo segue il disegno da sé (si può sganciare dalla planimetria)
 st.session_state.setdefault("auto_computo", True)
 
@@ -2117,13 +2122,15 @@ if "da_caricare" in st.session_state:
     st.session_state.pf_n = int(finiture.get("pf_n", 0))
     st.session_state.pf_larg = float(finiture.get("pf_larg", 1.20))
     st.session_state.pf_alt = float(finiture.get("pf_alt", 2.30))
-    st.session_state.apert_dem = float(finiture.get("apert_dem", 0.0))
-    st.session_state.apert_cos = float(finiture.get("apert_cos", 0.0))
+    st.session_state.apert_dem_n = int(finiture.get("apert_dem_n", 0))
+    st.session_state.apert_cos_n = int(finiture.get("apert_cos_n", 0))
+    st.session_state.apert_larg = float(finiture.get("apert_larg", 0.80))
+    st.session_state.apert_alt = float(finiture.get("apert_alt", 2.10))
     st.session_state.auto_computo = bool(dati.get("auto_computo", True))
     for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
                "riv_alt_w", "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
-               "pf_larg_w", "pf_alt_w", "apert_dem_w", "apert_cos_w",
-               "auto_computo_w"):
+               "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
+               "apert_larg_w", "apert_alt_w", "auto_computo_w"):
         st.session_state.pop(_k, None)
     try:
         st.session_state.piante = [pianta_da_json(p)
@@ -2204,7 +2211,8 @@ if "listino_pending" in st.session_state:
 for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
             "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt",
             "fin_n", "fin_larg", "fin_alt", "pf_n", "pf_larg", "pf_alt",
-            "apert_dem", "apert_cos", "auto_computo"):
+            "apert_dem_n", "apert_cos_n", "apert_larg", "apert_alt",
+            "auto_computo"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
 
@@ -3455,22 +3463,47 @@ with tab_plan:
                        f"(**{numero_it(altezza, 2)} m**), al netto delle "
                        "aperture dichiarate qui sotto: dove c'è un vano non "
                        "c'è muratura da buttare giù né da tirare su.")
-            a1, a2 = st.columns(2)
-            apert_dem = a1.number_input(
-                "Aperture nei muri da demolire (m²)", min_value=0.0,
-                max_value=999.0, step=0.5, format="%.2f",
-                value=float(st.session_state.apert_dem), key="apert_dem_w",
-                help="Superficie complessiva dei vani (porte, finestre, "
-                     "passaggi) contenuti nei muri rossi. Una porta da "
-                     "0,80 × 2,10 sono 1,68 m².")
-            st.session_state.apert_dem = apert_dem
-            apert_cos = a2.number_input(
-                "Aperture nei muri da costruire (m²)", min_value=0.0,
-                max_value=999.0, step=0.5, format="%.2f",
-                value=float(st.session_state.apert_cos), key="apert_cos_w",
+            a1, a2, a3, a4 = st.columns(4)
+            n_apert_dem = a1.number_input(
+                "Aperture nei muri da demolire", min_value=0, max_value=200,
+                step=1, value=int(st.session_state.apert_dem_n),
+                key="apert_dem_n_w",
+                help="Quanti vani (porte, passaggi, finestre) ci sono nei "
+                     "muri rossi. I m² li fa l'app, con le misure qui "
+                     "accanto.")
+            st.session_state.apert_dem_n = n_apert_dem
+            n_apert_cos = a2.number_input(
+                "Aperture nei muri da costruire", min_value=0, max_value=200,
+                step=1, value=int(st.session_state.apert_cos_n),
+                key="apert_cos_n_w",
                 help="Vani previsti nei muri gialli: quella superficie non "
                      "va murata.")
-            st.session_state.apert_cos = apert_cos
+            st.session_state.apert_cos_n = n_apert_cos
+            larg_apert = a3.number_input(
+                "Larghezza apertura (m)", min_value=0.0, max_value=6.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.apert_larg), key="apert_larg_w",
+                help="Misura della porta tipo: 0,80 × 2,10 nelle case. "
+                     "Cambiala se i tuoi vani sono diversi.")
+            st.session_state.apert_larg = larg_apert
+            alt_apert = a4.number_input(
+                "Altezza apertura (m)", min_value=0.0, max_value=4.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.apert_alt), key="apert_alt_w")
+            st.session_state.apert_alt = alt_apert
+
+            apert_dem = planimetria.superficie_aperture(
+                n_apert_dem, larg_apert, alt_apert)
+            apert_cos = planimetria.superficie_aperture(
+                n_apert_cos, larg_apert, alt_apert)
+            if apert_dem or apert_cos:
+                st.caption(
+                    f":gray[Un vano da {numero_it(larg_apert, 2)} × "
+                    f"{numero_it(alt_apert, 2)} m vale "
+                    f"**{numero_it(larg_apert * alt_apert, 2)} m²**: "
+                    f"{n_apert_dem} da demolire = "
+                    f"{numero_it(apert_dem, 2)} m², {n_apert_cos} da "
+                    f"costruire = {numero_it(apert_cos, 2)} m².]")
 
             dem_netto = planimetria.muri_al_netto(dem["m2"], apert_dem)
             cos_netto = planimetria.muri_al_netto(cos["m2"], apert_cos)

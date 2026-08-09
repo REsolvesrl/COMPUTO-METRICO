@@ -235,12 +235,14 @@ Le quantità arrivano già **al netto dei vani**:
 | Finestra | sì, un lato | no (passa sotto il davanzale) |
 | Porta finestra | sì, un lato | sì, un lato |
 
-Le misure predefinite sono quelle correnti (porta 0,80 × 2,10, finestra
-1,20 × 1,40, porta finestra 1,20 × 2,30) e si cambiano dai campi. Per i muri
-da demolire e da costruire si dichiara la **superficie complessiva dei vani
-in m²**: dove c'è un'apertura non c'è muratura da buttare giù né da tirare
-su. Nei locali *rivestiti* la fascia piastrellata non si rasa né si
-tinteggia, e il loro perimetro non fa battiscopa.
+Ovunque si dichiara **quante** aperture ci sono, non quanti metri quadri:
+i m² li fa l'app dalle misure tipo, che sono quelle correnti (porta
+0,80 × 2,10, finestra 1,20 × 1,40, porta finestra 1,20 × 2,30) e si cambiano
+dai campi accanto. Vale anche per i muri da demolire e da costruire, dove si
+indica il **numero di vani** contenuti: dove c'è un'apertura non c'è
+muratura da buttare giù né da tirare su. Nei locali *rivestiti* la fascia
+piastrellata non si rasa né si tinteggia, e il loro perimetro non fa
+battiscopa.
 
 ## Rilevamento automatico delle stanze (beta)
 

@@ -16,6 +16,7 @@ from planimetria import (
     riepilogo_locali,
     muri_al_netto,
     riepilogo_pareti,
+    superficie_aperture,
     voci_da_riscrivere,
     riepilogo_superfici,
     superficie_commerciale,
@@ -571,6 +572,19 @@ def test_aperture_a_zero_non_cambiano_niente():
 
 
 # ------------------------------- aperture nei muri da demolire/costruire
+
+def test_superficie_aperture_dalla_porta_tipo():
+    """Si dichiara quante sono; i m2 li fa l'app (0,80 x 2,10 = 1,68)."""
+    assert superficie_aperture(3, 0.8, 2.1) == pytest.approx(5.04)
+
+
+def test_superficie_aperture_nessuna():
+    assert superficie_aperture(0, 0.8, 2.1) == 0.0
+
+
+def test_superficie_aperture_numero_negativo_vale_zero():
+    assert superficie_aperture(-2, 0.8, 2.1) == 0.0
+
 
 def test_muri_al_netto_toglie_i_vani():
     # 21,60 m2 di muro con dentro una porta da 0,80 x 2,10 = 1,68 m2

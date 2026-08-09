@@ -317,6 +317,17 @@ def riepilogo_pareti(piante, altezza):
              for tipo, v in totali.items()}, senza_scala)
 
 
+def superficie_aperture(n, larghezza, altezza):
+    """Superficie complessiva di n vani uguali, in m².
+
+    Si dichiara QUANTE aperture ci sono e quanto misura la porta tipo
+    (0,80 × 2,10 nelle case): i m² li fa l'app. Un numero negativo — che
+    non vuol dire niente — vale zero.
+    """
+    return round(max(0, int(n or 0)) * float(larghezza or 0.0)
+                 * float(altezza or 0.0), 3)
+
+
 def muri_al_netto(m2, aperture_m2):
     """Superficie di muro da demolire (o costruire) tolte le sue bucature.
 
