@@ -42,3 +42,8 @@ CLAUDE.md
 
 # skill Impeccable (strumento locale di Claude Code - non committare)
 .claude/
+
+# strumenti locali di design: stato e schermate, non vanno nel repository
+.impeccable/
+*.png
+!assets/*.png
