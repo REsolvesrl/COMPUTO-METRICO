@@ -190,6 +190,25 @@ def css_mondo():
     border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
     background: color-mix(in srgb, var(--ottone) 12%, transparent);
 }}
+/* Lo stato del salvataggio, sempre sott'occhio: stava solo in fondo alla
+   scheda computo, cioè proprio dove non si guarda mentre si lavora. */
+.cme-testata .salvataggio {{
+    margin-left: auto;
+    font-size: .72rem;
+    letter-spacing: .04em;
+    padding: .12rem .5rem;
+    white-space: nowrap;
+}}
+.cme-testata .salvataggio.pari {{
+    color: #9FD6AC;
+    border: 1px solid color-mix(in srgb, {GRES} 75%, transparent);
+    background: color-mix(in srgb, {GRES} 22%, transparent);
+}}
+.cme-testata .salvataggio.sospeso {{
+    color: #F2B79E;
+    border: 1px solid color-mix(in srgb, {COTTO} 70%, transparent);
+    background: color-mix(in srgb, {COTTO} 20%, transparent);
+}}
 
 /* ------------------------------------------------------- linguette */
 /* Le tre schede sono le linguette di una cartella di campioni: quella aperta
@@ -2554,10 +2573,24 @@ elif not progetto_e_vuoto():
                   '<span class="progetto">senza nome</span>')
 else:
     _cartiglio = '<span class="cme-etichetta">nessun progetto aperto</span>'
+# Lo stato del salvataggio va detto QUI, non solo in fondo alla scheda
+# computo. La firma si ricalcola apposta a inizio pagina: costa millesimi di
+# secondo (le immagini non ci entrano) e leggere quella dell'ultimo giro
+# direbbe «sei in pari» un istante dopo che hai cambiato qualcosa.
+if progetto_e_vuoto():
+    _stato = ""
+elif st.session_state.get("ultimo_salvataggio") is None:
+    _stato = ('<span class="salvataggio sospeso">mai salvato</span>')
+elif firma_progetto() != st.session_state.get("firma_salvata"):
+    _stato = ('<span class="salvataggio sospeso">modifiche non salvate</span>')
+else:
+    _stato = ('<span class="salvataggio pari">salvato alle '
+              + st.session_state.ultimo_salvataggio.strftime("%H:%M")
+              + '</span>')
 st.markdown(
     '<div class="cme-testata">'
     '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
-    + _cartiglio + '</div>', unsafe_allow_html=True)
+    + _cartiglio + _stato + '</div>', unsafe_allow_html=True)
 
 # Le planimetrie che non si sono lasciate rileggere: dirlo, e dire anche
 # che il resto del progetto è arrivato intero. Un disegno che sparisce in
@@ -3019,6 +3052,8 @@ with tab_computo:
 
 with tab_plan:
     piante = st.session_state.piante
+    # il segnaposto dei totali sotto la tela: esiste solo se una tela c'è
+    riepilogo_vicino = None
 
     if not piante:
         st.markdown(campione_vuoto(
@@ -3194,6 +3229,13 @@ with tab_plan:
                                                      "demolire"),
                     key=f"viewer_{pianta['uid']}",
                 )
+            # Il posto dove finiranno i totali, subito sotto la tela. I numeri
+            # si calcolano molto più giù, dopo le spunte dei locali: senza
+            # questo segnaposto bisognava scorrere fino in fondo e tornare su
+            # per vedere che cosa aveva cambiato una spunta. Si riempie nello
+            # STESSO giro, quindi non è mai in ritardo di un'interazione.
+            riepilogo_vicino = st.empty()
+
             ev = evento_viewer(valore)
             if ev:
                 gestisci_evento(ev, pianta)
@@ -3899,6 +3941,26 @@ with tab_plan:
                            "lavorazioni.]")
             grandezze["muri_demolire"] = dem_netto
             grandezze["muri_costruire"] = cos_netto
+
+        # ------------------------- i totali tornano su, accanto al disegno
+        # Adesso i numeri ci sono: si scrivono nel segnaposto lasciato sotto
+        # la tela. Chi disegna vede subito l'effetto del proprio gesto senza
+        # scorrere due schermate e tornare indietro.
+        _vicino = [
+            ("Superficie commerciale", tot_comm, "m²"),
+            ("Pavimento", grandezze.get("pavimento"), "m²"),
+            ("Battiscopa", grandezze.get("battiscopa"), "m"),
+            ("Tinteggiatura", grandezze.get("tinteggiatura"), "m²"),
+            ("Muri da demolire", grandezze.get("muri_demolire"), "m²"),
+            ("Muri da costruire", grandezze.get("muri_costruire"), "m²"),
+        ]
+        _vicino = [(nome, valore, um) for nome, valore, um in _vicino
+                   if valore]
+        if _vicino and riepilogo_vicino is not None:
+            with riepilogo_vicino.container():
+                for colonna, (nome, valore, um) in zip(
+                        st.columns(len(_vicino)), _vicino):
+                    colonna.metric(nome, f"{numero_it(valore, 2)} {um}")
 
         # ---------------- dalle misure della planimetria alle voci del listino
         if any(v > 0 for v in grandezze.values()):
