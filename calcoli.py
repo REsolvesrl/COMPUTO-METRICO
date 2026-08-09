@@ -54,6 +54,33 @@ def quantita_da_misure(misure):
     return round(totale, 3)
 
 
+def dettaglio_misure(misure):
+    """Le righe del libretto, ciascuna con la sua quantità, e il totale.
+
+    `quantita_da_misure` dà solo la somma: qui si tiene anche il parziale di
+    ogni riga, che è quello che rende il computo VERIFICABILE — chi lo
+    riceve deve poter rifare il conto stanza per stanza, non fidarsi di un
+    numero solo. Le righe tutte vuote non entrano: sono le righe di coda
+    delle tabelle, non misure.
+
+    Ritorna (righe, totale), dove ogni riga è la misura originale più la
+    chiave "quantita".
+    """
+    righe = []
+    for misura in misure or []:
+        parti = misura.get("parti")
+        lunghezza = misura.get("lunghezza")
+        larghezza = misura.get("larghezza")
+        altezza = misura.get("altezza")
+        if all(v is None for v in (parti, lunghezza, larghezza, altezza)):
+            continue
+        righe.append({
+            **misura,
+            "quantita": quantita_voce(parti, lunghezza, larghezza, altezza),
+        })
+    return righe, round(sum(r["quantita"] for r in righe), 3)
+
+
 def calcola_voce(voce):
     """Restituisce una copia della voce con "quantita" e "importo" calcolati.
 

@@ -1553,7 +1553,8 @@ def bp_pct_da_euro_ag_out():
 
 
 @st.cache_data(show_spinner=False, max_entries=4)
-def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
+def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None,
+                df_libretto=None):
     """Il file Excel da scaricare.
 
     Il bottone di scaricamento vuole i byte già pronti, quindi il file veniva
@@ -1564,11 +1565,51 @@ def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_computo.to_excel(writer, sheet_name="Computo", index=False)
+        if df_libretto is not None and len(df_libretto):
+            df_libretto.to_excel(writer, sheet_name="Libretto misure",
+                                 index=False)
         df_riepilogo.to_excel(writer, sheet_name="Riepilogo", index=False)
         if df_superfici is not None and len(df_superfici):
             df_superfici.to_excel(writer, sheet_name="Superfici", index=False)
         df_progetto.to_excel(writer, sheet_name="Dati progetto", index=False)
     return buffer.getvalue()
+
+
+def libretto_per_excel():
+    """Il libretto delle misure di tutte le voci, riga per riga.
+
+    Senza questo foglio il computo esportato dice «84,30 m²» e basta: chi lo
+    riceve non può rifare il conto, e chi l'ha fatto non può difenderlo. Le
+    misure sono già in sessione — qui si mettono solo in tabella, con il
+    parziale di ogni riga e il totale di ogni voce.
+    """
+    righe = []
+    for voce in listino.VOCI:
+        codice = voce["codice"]
+        if not st.session_state.get(f"mis_{codice}"):
+            continue
+        misure = st.session_state.misure_correnti.get(codice)
+        dettaglio, totale = calcoli.dettaglio_misure(misure)
+        if not dettaglio:
+            continue
+        for misura in dettaglio:
+            righe.append({
+                "Codice": codice,
+                "Voce": voce["descrizione"],
+                "Misura": misura.get("descrizione") or "",
+                "Parti": misura.get("parti"),
+                "Lungh. (m)": misura.get("lunghezza"),
+                "Largh. (m)": misura.get("larghezza"),
+                "Alt. / Peso": misura.get("altezza"),
+                "Quantità": misura["quantita"],
+                "U.M.": voce["um"],
+            })
+        righe.append({
+            "Codice": codice, "Voce": "", "Misura": "TOTALE VOCE",
+            "Parti": None, "Lungh. (m)": None, "Largh. (m)": None,
+            "Alt. / Peso": None, "Quantità": totale, "U.M.": voce["um"],
+        })
+    return pd.DataFrame(righe) if righe else None
 
 
 # -------------------------------------------------------------- planimetria
@@ -2262,11 +2303,19 @@ if "da_caricare" in st.session_state:
                "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
                "apert_larg_w", "apert_alt_w", "auto_computo_w"):
         st.session_state.pop(_k, None)
-    try:
-        st.session_state.piante = [pianta_da_json(p)
-                                   for p in dati.get("piante") or []]
-    except Exception:  # noqa: BLE001 — file rovinato: meglio senza piante
-        st.session_state.piante = []
+    # Una per una, non tutte insieme: un'immagine rovinata deve costare
+    # quella planimetria, non l'intero elenco. Prima bastava un foglio
+    # illeggibile per riaprire il progetto senza più nessun disegno, e
+    # senza che l'app lo dicesse.
+    piante_lette = []
+    piante_scartate = []
+    for _p in dati.get("piante") or []:
+        try:
+            piante_lette.append(pianta_da_json(_p))
+        except Exception:  # noqa: BLE001 — foglio rovinato: si tiene il resto
+            piante_scartate.append(_p.get("nome") or "planimetria senza nome")
+    st.session_state.piante = piante_lette
+    st.session_state._piante_scartate = piante_scartate
     st.session_state.pianta_idx = 0
     st.session_state.sel_zona = None
     st.session_state.sel_parete = None
@@ -2386,6 +2435,20 @@ st.markdown(
     '<div class="cme-testata">'
     '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
     + _cartiglio + '</div>', unsafe_allow_html=True)
+
+# Le planimetrie che non si sono lasciate rileggere: dirlo, e dire anche
+# che il resto del progetto è arrivato intero. Un disegno che sparisce in
+# silenzio è peggio di un disegno che sparisce.
+_scartate = st.session_state.pop("_piante_scartate", None)
+if _scartate:
+    st.warning(
+        f"⚠️ **{len(_scartate)} "
+        f"{'planimetria' if len(_scartate) == 1 else 'planimetrie'} "
+        "non si sono potute rileggere** dal file del progetto: "
+        + ", ".join(f"«{n}»" for n in _scartate)
+        + ". Tutto il resto — computo, spese, business plan e le altre "
+        "planimetrie — è stato caricato regolarmente. Ricarica il disegno "
+        "mancante dalla scheda **Misura da planimetria**.")
 
 tab_computo, tab_plan, tab_bp = st.tabs(
     ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"])
@@ -2793,7 +2856,10 @@ with tab_computo:
     col_xlsx.download_button(
         "📊 Esporta Excel (.xlsx)",
         data=excel_bytes(df_calcolato, df_riepilogo_excel,
-                         df_progetto_excel, df_superfici_excel),
+                         df_progetto_excel, df_superfici_excel,
+                         libretto_per_excel()),
+        help="Fogli: Computo, Libretto misure (il dettaglio riga per riga, "
+             "se l'hai usato), Riepilogo, Superfici e Dati progetto.",
         file_name=nome_file("xlsx"),
         mime="application/vnd.openxmlformats-officedocument."
              "spreadsheetml.sheet",

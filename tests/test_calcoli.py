@@ -2,6 +2,7 @@ from calcoli import (
     SENZA_CATEGORIA,
     calcola_computo,
     calcola_voce,
+    dettaglio_misure,
     incidenze_percentuali,
     quantita_da_misure,
     quantita_voce,
@@ -172,3 +173,47 @@ def test_totale_con_imprevisti_a_zero():
     imprevisti, totale = totale_con_imprevisti(1000.0, 0.0)
     assert imprevisti == 0.0
     assert totale == 1000.0
+
+
+# --------------------------------- libretto delle misure, riga per riga
+
+MISURE = [
+    {"descrizione": "Soggiorno", "parti": 1, "lunghezza": 5.0,
+     "larghezza": 4.0, "altezza": None},
+    {"descrizione": "Camera", "parti": 1, "lunghezza": 3.5,
+     "larghezza": 3.0, "altezza": None},
+    {"descrizione": "vano porta", "parti": -1, "lunghezza": 0.8,
+     "larghezza": 2.1, "altezza": None},
+]
+
+
+def test_dettaglio_misure_tiene_il_parziale_di_ogni_riga():
+    righe, totale = dettaglio_misure(MISURE)
+    assert [r["quantita"] for r in righe] == [20.0, 10.5, -1.68]
+    assert totale == 28.82
+
+
+def test_dettaglio_misure_conserva_le_descrizioni():
+    righe, _ = dettaglio_misure(MISURE)
+    assert [r["descrizione"] for r in righe] == ["Soggiorno", "Camera",
+                                                 "vano porta"]
+
+
+def test_dettaglio_misure_scarta_le_righe_vuote():
+    """La riga di coda della tabella non e' una misura."""
+    righe, totale = dettaglio_misure(
+        MISURE + [{"descrizione": None, "parti": None, "lunghezza": None,
+                   "larghezza": None, "altezza": None}])
+    assert len(righe) == 3
+    assert totale == 28.82
+
+
+def test_dettaglio_misure_senza_misure():
+    assert dettaglio_misure([]) == ([], 0.0)
+    assert dettaglio_misure(None) == ([], 0.0)
+
+
+def test_dettaglio_misure_concorda_con_la_somma():
+    """Il totale del libretto e' quello che finisce nella voce."""
+    _, totale = dettaglio_misure(MISURE)
+    assert totale == quantita_da_misure(MISURE)
