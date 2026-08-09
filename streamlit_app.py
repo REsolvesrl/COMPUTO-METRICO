@@ -1791,6 +1791,7 @@ def _payload_progetto():
                      "porta_n": st.session_state.porta_n,
                      "porta_n_est": st.session_state.porta_n_est,
                      "riv_alt": st.session_state.riv_alt},
+        "auto_computo": st.session_state.auto_computo,
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
     return payload
@@ -2030,6 +2031,8 @@ st.session_state.setdefault("porta_alt", 2.10)
 st.session_state.setdefault("porta_n", 0)
 st.session_state.setdefault("porta_n_est", 0)
 st.session_state.setdefault("riv_alt", 1.20)
+# il computo segue il disegno da sé (si può sganciare dalla planimetria)
+st.session_state.setdefault("auto_computo", True)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
 if "da_caricare" in st.session_state:
@@ -2089,8 +2092,9 @@ if "da_caricare" in st.session_state:
     st.session_state.porta_n = int(finiture.get("porta_n", 0))
     st.session_state.porta_n_est = int(finiture.get("porta_n_est", 0))
     st.session_state.riv_alt = float(finiture.get("riv_alt", 1.20))
+    st.session_state.auto_computo = bool(dati.get("auto_computo", True))
     for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
-               "riv_alt_w"):
+               "riv_alt_w", "auto_computo_w"):
         st.session_state.pop(_k, None)
     try:
         st.session_state.piante = [pianta_da_json(p)
@@ -2169,7 +2173,8 @@ if "listino_pending" in st.session_state:
 # inizio giro; se un widget non esiste — perché lo script era ripartito a
 # metà — resta l'ultimo valore buono.
 for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
-            "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt"):
+            "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt",
+            "auto_computo"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
 
@@ -3383,12 +3388,23 @@ with tab_plan:
         # ---------------- dalle misure della planimetria alle voci del listino
         if any(v > 0 for v in grandezze.values()):
             st.markdown("**➕ Porta queste quantità nel computo**")
+            auto = st.toggle(
+                "🔗 Tieni il computo agganciato al disegno",
+                value=bool(st.session_state.auto_computo),
+                key="auto_computo_w",
+                help="Acceso: sposti un muro o cambi una spunta e la quantità "
+                     "nel computo si aggiorna da sé. Spento: la porti tu, con "
+                     "il bottone.")
+            st.session_state.auto_computo = auto
             st.caption(
                 "Le quantità vengono **scritte** nelle voci del listino, non "
-                "sommate: puoi rifare il rilevamento, cambiare le spunte e "
-                "ripremere il bottone senza contare niente due volte. I "
-                "prezzi restano quelli del listino, modificabili come sempre.")
-            proposte = {}
+                "sommate: si può rifare il rilevamento e cambiare le spunte "
+                "senza contare niente due volte. I prezzi restano quelli del "
+                "listino, modificabili come sempre. Le voci non spuntate qui "
+                "sotto non vengono mai toccate, e una misura che scende a "
+                "zero (nessun muro tracciato) **non cancella** un numero "
+                "battuto a mano.")
+            selezionate = []
             for codice, grandezza, acceso in VOCI_DA_SUPERFICI:
                 voce = listino.voce_per_codice(codice)
                 quantita = round(grandezze.get(grandezza, 0.0), 2)
@@ -3402,11 +3418,40 @@ with tab_plan:
                                   f"{numero_it(attuale, 2)})]")
                 if st.checkbox(etichetta, value=acceso,
                                key=f"supvoce_{codice}"):
-                    proposte[codice] = quantita
-            if not proposte:
+                    selezionate.append((codice, grandezza))
+            if not selezionate:
                 st.caption(":gray[Nessuna voce selezionata.]")
-            if st.button("➕ Scrivi le quantità nel listino", type="primary",
-                         disabled=not proposte):
+
+            # Una voce col LIBRETTO MISURE acceso calcola da sé la propria
+            # quantità, più a monte nello script: riscrivergliela qui
+            # innescherebbe un rimpallo senza fine (la scrivo, il libretto la
+            # rifà, la riscrivo…). Quelle voci restano all'utente.
+            escluse = [c for c, _ in selezionate
+                       if st.session_state.get(f"mis_{c}")]
+            proposte = planimetria.voci_da_riscrivere(
+                selezionate, grandezze,
+                {c: st.session_state.get(f"q_{c}") for c, _ in selezionate},
+                escluse=escluse)
+            if escluse:
+                st.caption(
+                    ":gray[Non aggiornate perché hanno un libretto misure "
+                    "(la quantità la decide quello): " + ", ".join(escluse)
+                    + ".]")
+
+            if auto:
+                if proposte:
+                    # Le quantità si applicano a inizio del giro successivo:
+                    # qui la scheda Computo è già disegnata e Streamlit vieta
+                    # di riscrivere i widget dopo che sono nati.
+                    st.session_state.listino_pending = dict(proposte)
+                    st.rerun()
+                st.caption(
+                    f":green[✔ Computo allineato al disegno — "
+                    f"{len(selezionate)} "
+                    f"{'voce' if len(selezionate) == 1 else 'voci'} "
+                    f"che si aggiornano da sé.]")
+            elif st.button("➕ Scrivi le quantità nel listino", type="primary",
+                           disabled=not proposte):
                 st.session_state.listino_pending = dict(proposte)
                 st.toast(f"{len(proposte)} voci aggiornate nel computo ✔")
                 st.rerun()

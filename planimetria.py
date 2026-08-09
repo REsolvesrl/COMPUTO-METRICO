@@ -295,6 +295,41 @@ def riepilogo_pareti(piante, altezza):
              for tipo, v in totali.items()}, senza_scala)
 
 
+def voci_da_riscrivere(mappa, grandezze, attuali, escluse=(), tolleranza=0.005):
+    """Quali voci del computo la planimetria deve riscrivere, e con quanto.
+
+    È il cuore del collegamento automatico: si confronta quello che il disegno
+    misura ORA con quello che c'è già nel computo, e si restituiscono solo le
+    voci che cambierebbero davvero. Chiamandola a ogni giro, il computo segue
+    il disegno da sé; restituendo un dizionario VUOTO quando non è cambiato
+    niente, dice anche quando NON serve rifare il giro.
+
+    mappa: [(codice_voce, nome_grandezza), ...] — quale misura alimenta quale
+        voce di listino (es. ("1.02", "muri_demolire")).
+    grandezze: {nome_grandezza: quantità misurata sul disegno}.
+    attuali: {codice_voce: quantità già nel computo}.
+    escluse: codici da non toccare — la voce non è stata scelta dall'utente,
+        oppure ha un libretto misure che decide lui la quantità.
+    tolleranza: sotto questa differenza si considera già a posto (evita di
+        rincorrere l'ultimo centesimo all'infinito).
+
+    Le quantità NULLE non si scrivono: una misura che non c'è (nessun muro
+    tracciato) non deve cancellare un numero battuto a mano.
+    """
+    escluse = set(escluse)
+    da_scrivere = {}
+    for codice, grandezza in mappa:
+        if codice in escluse:
+            continue
+        quantita = round(float(grandezze.get(grandezza) or 0.0), 2)
+        if quantita <= 0:
+            continue
+        attuale = float(attuali.get(codice) or 0.0)
+        if abs(attuale - quantita) > tolleranza:
+            da_scrivere[codice] = quantita
+    return da_scrivere
+
+
 def superficie_commerciale(m2, percento, soglia=None, percento_oltre=None):
     """Superficie commerciale di una superficie accessoria, a scaglioni.
 
