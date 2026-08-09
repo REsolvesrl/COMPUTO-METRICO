@@ -216,6 +216,32 @@ commerciale** del fabbricato, riportabile nel computo con un clic.
 La geometria (calibrazione, formula di Gauss per l'area, riepilogo
 superfici) vive in `planimetria.py` ed è coperta dai test.
 
+### Dal disegno al computo
+
+Con l'interruttore **🔗 Tieni il computo agganciato al disegno** le quantità
+delle voci di listino seguono la planimetria da sé: si traccia un muro o si
+cambia una spunta e il computo si aggiorna, senza premere niente. Le
+quantità vengono **scritte**, non sommate, quindi il rilevamento si può
+rifare quante volte si vuole; le voci non spuntate non vengono mai toccate e
+una misura che scende a zero non cancella un numero battuto a mano.
+Spegnendo l'interruttore torna il bottone di prima.
+
+Le quantità arrivano già **al netto dei vani**:
+
+| Apertura | Toglie parete da rasare e tinteggiare | Toglie battiscopa |
+| --- | --- | --- |
+| Porta interna | sì, due lati | sì, due lati |
+| Portoncino d'ingresso | sì, un lato | sì, un lato |
+| Finestra | sì, un lato | no (passa sotto il davanzale) |
+| Porta finestra | sì, un lato | sì, un lato |
+
+Le misure predefinite sono quelle correnti (porta 0,80 × 2,10, finestra
+1,20 × 1,40, porta finestra 1,20 × 2,30) e si cambiano dai campi. Per i muri
+da demolire e da costruire si dichiara la **superficie complessiva dei vani
+in m²**: dove c'è un'apertura non c'è muratura da buttare giù né da tirare
+su. Nei locali *rivestiti* la fascia piastrellata non si rasa né si
+tinteggia, e il loro perimetro non fa battiscopa.
+
 ## Rilevamento automatico delle stanze (beta)
 
 Il pulsante **🪄 Rileva stanze** analizza la planimetria con OpenCV
@@ -230,7 +256,7 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [x] Zoom a rotellina, più planimetrie, zone con percentuali, superficie
       commerciale (v3, stile AreaPlan).
 - [x] Rilevamento automatico delle stanze (beta, OpenCV).
-- [ ] Pareti da demolire / costruire con aggiornamento automatico del
+- [x] Pareti da demolire / costruire con aggiornamento automatico del
       computo.
 - [ ] Riconoscimento muri con modelli di computer vision (fase 2).
 - [ ] Listino personale riutilizzabile delle voci più usate.

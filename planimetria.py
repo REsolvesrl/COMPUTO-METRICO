@@ -203,7 +203,8 @@ def riepilogo_locali(piante, escludi=()):
 
 
 def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
-                      n_porte=0, altezza_rivestimento=0.0, n_porte_esterne=0):
+                      n_porte=0, altezza_rivestimento=0.0, n_porte_esterne=0,
+                      aperture=()):
     """Quantità nette di pavimenti, battiscopa, pareti e soffitti.
 
     locali: [{"m2", "perimetro", "pavimento", "battiscopa", "pittura",
@@ -220,6 +221,15 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
       Il portoncino d'ingresso (n_porte_esterne) ne ha uno solo, perché
       l'altra faccia è fuori dall'appartamento.
 
+    aperture: le altre bucature del muro, [{"n", "larghezza", "altezza",
+    "battiscopa"}, ...] — finestre e porte finestra. Stanno su un muro
+    perimetrale, quindi affacciano su UN SOLO locale: contano un lato solo,
+    a differenza della porta interna. Tolgono sempre `n × larghezza ×
+    altezza` alla parete da rasare e tinteggiare; tolgono anche `n ×
+    larghezza` al battiscopa **solo se** `battiscopa` è vero — la finestra
+    ha il davanzale in alto e il battiscopa ci passa sotto indisturbato, la
+    porta finestra invece arriva a terra e lo interrompe.
+
     Le detrazioni non possono portare sotto zero. Ritorna anche i valori
     lordi e le detrazioni, per poterli mostrare.
     """
@@ -228,6 +238,15 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     lati = 2 * max(0, int(n_porte or 0)) + max(0, int(n_porte_esterne or 0))
     larg_p = float(larghezza_porta or 0.0)
     alt_p = float(altezza_porta or 0.0)
+
+    detr_aperture_ml = detr_aperture_m2 = 0.0
+    for apertura in aperture:
+        n = max(0, int(apertura.get("n") or 0))
+        larghezza = float(apertura.get("larghezza") or 0.0)
+        altezza_ap = float(apertura.get("altezza") or 0.0)
+        detr_aperture_m2 += n * larghezza * altezza_ap
+        if apertura.get("battiscopa"):
+            detr_aperture_ml += n * larghezza
 
     pavimento = battiscopa_lordo = pareti_lorde = soffitti = 0.0
     detr_rivestimenti = 0.0
@@ -250,14 +269,17 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     return {
         "lati_porta": lati,
         "pavimento": round(pavimento, 3),
-        "battiscopa": round(max(0.0, battiscopa_lordo - detr_porte_ml), 3),
+        "battiscopa": round(max(0.0, battiscopa_lordo - detr_porte_ml
+                                - detr_aperture_ml), 3),
         "battiscopa_lordo": round(battiscopa_lordo, 3),
         "pareti": round(max(0.0, pareti_lorde - detr_rivestimenti
-                            - detr_porte_m2), 3),
+                            - detr_porte_m2 - detr_aperture_m2), 3),
         "pareti_lorde": round(pareti_lorde, 3),
         "soffitti": round(soffitti, 3),
         "detr_porte_ml": round(detr_porte_ml, 3),
         "detr_porte_m2": round(detr_porte_m2, 3),
+        "detr_aperture_ml": round(detr_aperture_ml, 3),
+        "detr_aperture_m2": round(detr_aperture_m2, 3),
         "detr_rivestimenti": round(detr_rivestimenti, 3),
     }
 
@@ -293,6 +315,18 @@ def riepilogo_pareti(piante, altezza):
     return ({tipo: {"n": v["n"], "ml": round(v["ml"], 3),
                     "m2": round(v["m2"], 3)}
              for tipo, v in totali.items()}, senza_scala)
+
+
+def muri_al_netto(m2, aperture_m2):
+    """Superficie di muro da demolire (o costruire) tolte le sue bucature.
+
+    Il muro si misura pieno (lunghezza × altezza): dove c'è una porta o una
+    finestra non c'è muratura da buttare giù né da tirare su. Qui si toglie
+    la superficie dei vani, dichiarata dall'utente in m², senza mai andare
+    sotto zero — un'apertura più grande del muro è un errore di battitura,
+    non una quantità negativa da portare nel computo.
+    """
+    return round(max(0.0, float(m2 or 0.0) - float(aperture_m2 or 0.0)), 3)
 
 
 def voci_da_riscrivere(mappa, grandezze, attuali, escluse=(), tolleranza=0.005):

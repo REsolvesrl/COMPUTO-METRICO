@@ -14,6 +14,7 @@ from planimetria import (
     punto_in_poligono,
     quantita_finiture,
     riepilogo_locali,
+    muri_al_netto,
     riepilogo_pareti,
     voci_da_riscrivere,
     riepilogo_superfici,
@@ -516,3 +517,70 @@ def test_finiture_non_scendono_sotto_zero():
                           altezza_porta=2.1, n_porte=100)
     assert q["battiscopa"] == 0.0
     assert q["pareti"] == 0.0
+
+
+# ------------------------------ finestre e porte finestra (un solo lato)
+
+FINESTRA = {"n": 3, "larghezza": 1.2, "altezza": 1.4, "battiscopa": False}
+PORTA_FINESTRA = {"n": 2, "larghezza": 1.2, "altezza": 2.3,
+                  "battiscopa": True}
+
+
+def test_finestra_toglie_parete_ma_non_battiscopa():
+    """Il davanzale sta in alto: sotto la finestra il battiscopa passa."""
+    q = quantita_finiture(LOCALI, altezza=2.7, aperture=[FINESTRA])
+    assert q["detr_aperture_m2"] == pytest.approx(5.04)    # 1,2 x 1,4 x 3
+    assert q["detr_aperture_ml"] == 0.0
+    assert q["battiscopa"] == pytest.approx(18.0)          # intatto
+    assert q["pareti"] == pytest.approx(75.6 - 5.04)
+
+
+def test_porta_finestra_toglie_anche_il_battiscopa():
+    """Arriva a terra, quindi interrompe lo zoccolino."""
+    q = quantita_finiture(LOCALI, altezza=2.7, aperture=[PORTA_FINESTRA])
+    assert q["detr_aperture_m2"] == pytest.approx(5.52)    # 1,2 x 2,3 x 2
+    assert q["detr_aperture_ml"] == pytest.approx(2.4)     # 1,2 x 2
+    assert q["battiscopa"] == pytest.approx(18.0 - 2.4)
+    assert q["pareti"] == pytest.approx(75.6 - 5.52)
+
+
+def test_aperture_valgono_un_lato_solo():
+    """Stanno su un muro perimetrale: di la' non c'e' un altro locale."""
+    q = quantita_finiture(LOCALI, altezza=2.7, aperture=[
+        {"n": 1, "larghezza": 1.0, "altezza": 1.0, "battiscopa": True}])
+    assert q["detr_aperture_m2"] == pytest.approx(1.0)     # non 2,0
+    assert q["detr_aperture_ml"] == pytest.approx(1.0)
+
+
+def test_aperture_insieme_a_porte_e_rivestimenti():
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=5,
+                          altezza_rivestimento=1.2,
+                          aperture=[FINESTRA, PORTA_FINESTRA])
+    assert q["battiscopa"] == pytest.approx(18.0 - 8.0 - 2.4)
+    assert q["pareti"] == pytest.approx(75.6 - 12.0 - 16.8 - 5.04 - 5.52)
+    assert q["soffitti"] == pytest.approx(26.0)            # i soffitti restano
+
+
+def test_aperture_a_zero_non_cambiano_niente():
+    senza = quantita_finiture(LOCALI, altezza=2.7)
+    con = quantita_finiture(LOCALI, altezza=2.7, aperture=[
+        {"n": 0, "larghezza": 1.2, "altezza": 1.4, "battiscopa": True}])
+    assert con["battiscopa"] == senza["battiscopa"]
+    assert con["pareti"] == senza["pareti"]
+
+
+# ------------------------------- aperture nei muri da demolire/costruire
+
+def test_muri_al_netto_toglie_i_vani():
+    # 21,60 m2 di muro con dentro una porta da 0,80 x 2,10 = 1,68 m2
+    assert muri_al_netto(21.6, 1.68) == pytest.approx(19.92)
+
+
+def test_muri_al_netto_senza_aperture():
+    assert muri_al_netto(21.6, 0.0) == pytest.approx(21.6)
+
+
+def test_muri_al_netto_non_scende_sotto_zero():
+    """Apertura piu' grande del muro: errore di battitura, non un negativo."""
+    assert muri_al_netto(10.0, 50.0) == 0.0

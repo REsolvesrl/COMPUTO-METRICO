@@ -1790,7 +1790,15 @@ def _payload_progetto():
                      "porta_alt": st.session_state.porta_alt,
                      "porta_n": st.session_state.porta_n,
                      "porta_n_est": st.session_state.porta_n_est,
-                     "riv_alt": st.session_state.riv_alt},
+                     "riv_alt": st.session_state.riv_alt,
+                     "fin_n": st.session_state.fin_n,
+                     "fin_larg": st.session_state.fin_larg,
+                     "fin_alt": st.session_state.fin_alt,
+                     "pf_n": st.session_state.pf_n,
+                     "pf_larg": st.session_state.pf_larg,
+                     "pf_alt": st.session_state.pf_alt,
+                     "apert_dem": st.session_state.apert_dem,
+                     "apert_cos": st.session_state.apert_cos},
         "auto_computo": st.session_state.auto_computo,
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
@@ -2031,6 +2039,17 @@ st.session_state.setdefault("porta_alt", 2.10)
 st.session_state.setdefault("porta_n", 0)
 st.session_state.setdefault("porta_n_est", 0)
 st.session_state.setdefault("riv_alt", 1.20)
+# finestre e porte finestra: misure correnti, da cambiare se le proprie
+# sono diverse
+st.session_state.setdefault("fin_n", 0)
+st.session_state.setdefault("fin_larg", 1.20)
+st.session_state.setdefault("fin_alt", 1.40)
+st.session_state.setdefault("pf_n", 0)
+st.session_state.setdefault("pf_larg", 1.20)
+st.session_state.setdefault("pf_alt", 2.30)
+# vani contenuti nei muri da demolire e da costruire (m²)
+st.session_state.setdefault("apert_dem", 0.0)
+st.session_state.setdefault("apert_cos", 0.0)
 # il computo segue il disegno da sé (si può sganciare dalla planimetria)
 st.session_state.setdefault("auto_computo", True)
 
@@ -2092,9 +2111,19 @@ if "da_caricare" in st.session_state:
     st.session_state.porta_n = int(finiture.get("porta_n", 0))
     st.session_state.porta_n_est = int(finiture.get("porta_n_est", 0))
     st.session_state.riv_alt = float(finiture.get("riv_alt", 1.20))
+    st.session_state.fin_n = int(finiture.get("fin_n", 0))
+    st.session_state.fin_larg = float(finiture.get("fin_larg", 1.20))
+    st.session_state.fin_alt = float(finiture.get("fin_alt", 1.40))
+    st.session_state.pf_n = int(finiture.get("pf_n", 0))
+    st.session_state.pf_larg = float(finiture.get("pf_larg", 1.20))
+    st.session_state.pf_alt = float(finiture.get("pf_alt", 2.30))
+    st.session_state.apert_dem = float(finiture.get("apert_dem", 0.0))
+    st.session_state.apert_cos = float(finiture.get("apert_cos", 0.0))
     st.session_state.auto_computo = bool(dati.get("auto_computo", True))
     for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
-               "riv_alt_w", "auto_computo_w"):
+               "riv_alt_w", "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
+               "pf_larg_w", "pf_alt_w", "apert_dem_w", "apert_cos_w",
+               "auto_computo_w"):
         st.session_state.pop(_k, None)
     try:
         st.session_state.piante = [pianta_da_json(p)
@@ -2174,7 +2203,8 @@ if "listino_pending" in st.session_state:
 # metà — resta l'ultimo valore buono.
 for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
             "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt",
-            "auto_computo"):
+            "fin_n", "fin_larg", "fin_alt", "pf_n", "pf_larg", "pf_alt",
+            "apert_dem", "apert_cos", "auto_computo"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
 
@@ -3309,39 +3339,93 @@ with tab_plan:
                      "(di norma 1,20 m; zona doccia anche 2,40).")
             st.session_state.riv_alt = h_riv
 
+            # ---- finestre e porte finestra ----
+            st.markdown("**🪟 Finestre e porte finestra (detrazioni)**")
+            st.caption("Stanno su un muro perimetrale, quindi affacciano su "
+                       "**un solo locale**: valgono un lato. La finestra ha "
+                       "il davanzale in alto e il battiscopa ci passa sotto, "
+                       "quindi toglie superficie **solo** a rasatura e "
+                       "tinteggiatura; la **porta finestra** arriva a terra "
+                       "e interrompe anche il battiscopa. Le misure "
+                       "predefinite sono quelle correnti: cambiale se le tue "
+                       "sono diverse.")
+            f1, f2, f3, f4, f5, f6 = st.columns(6)
+            n_fin = f1.number_input(
+                "Finestre", min_value=0, max_value=200, step=1,
+                value=int(st.session_state.fin_n), key="fin_n_w",
+                help="Quante finestre nei locali spuntati «Tinteggiatura».")
+            st.session_state.fin_n = n_fin
+            larg_fin = f2.number_input(
+                "Larghezza finestra (m)", min_value=0.0, max_value=6.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.fin_larg), key="fin_larg_w")
+            st.session_state.fin_larg = larg_fin
+            alt_fin = f3.number_input(
+                "Altezza finestra (m)", min_value=0.0, max_value=4.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.fin_alt), key="fin_alt_w")
+            st.session_state.fin_alt = alt_fin
+            n_pf = f4.number_input(
+                "Porte finestra", min_value=0, max_value=200, step=1,
+                value=int(st.session_state.pf_n), key="pf_n_w",
+                help="Vanno a terra: tolgono anche battiscopa.")
+            st.session_state.pf_n = n_pf
+            larg_pf = f5.number_input(
+                "Larghezza p. finestra (m)", min_value=0.0, max_value=6.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.pf_larg), key="pf_larg_w")
+            st.session_state.pf_larg = larg_pf
+            alt_pf = f6.number_input(
+                "Altezza p. finestra (m)", min_value=0.0, max_value=4.0,
+                step=0.05, format="%.2f",
+                value=float(st.session_state.pf_alt), key="pf_alt_w")
+            st.session_state.pf_alt = alt_pf
+
+            aperture = [
+                {"n": n_fin, "larghezza": larg_fin, "altezza": alt_fin,
+                 "battiscopa": False},
+                {"n": n_pf, "larghezza": larg_pf, "altezza": alt_pf,
+                 "battiscopa": True},
+            ]
+
             q = planimetria.quantita_finiture(
                 locali_calcolo, altezza, larghezza_porta=larg_porta,
                 altezza_porta=alt_porta, n_porte=n_porte,
-                altezza_rivestimento=h_riv, n_porte_esterne=n_porte_est)
+                altezza_rivestimento=h_riv, n_porte_esterne=n_porte_est,
+                aperture=aperture)
             pav_m2 = q["pavimento"]
             batt_m = q["battiscopa"]
             pareti_m2 = q["pareti"]
             soffitti_m2 = q["soffitti"]
 
+            detr_ml = q["detr_porte_ml"] + q["detr_aperture_ml"]
+            detr_m2 = (q["detr_porte_m2"] + q["detr_aperture_m2"]
+                       + q["detr_rivestimenti"])
             t1, t2, t3, t4 = st.columns(4)
             t1.metric("Pavimento", f"{numero_it(pav_m2, 2)} m²")
             t2.metric("Battiscopa", f"{numero_it(batt_m, 2)} m",
-                      delta=(f"−{numero_it(q['detr_porte_ml'], 2)} m porte"
-                             if q["detr_porte_ml"] else None),
+                      delta=(f"−{numero_it(detr_ml, 2)} m vani"
+                             if detr_ml else None),
                       delta_color="off")
             t3.metric(f"Pareti (h {numero_it(altezza, 2)} m)",
                       f"{numero_it(pareti_m2, 2)} m²",
-                      delta=(f"−{numero_it(q['detr_porte_m2'] + q['detr_rivestimenti'], 2)} m² "
-                             "porte e rivestimenti"
-                             if (q["detr_porte_m2"] or q["detr_rivestimenti"])
-                             else None),
+                      delta=(f"−{numero_it(detr_m2, 2)} m² "
+                             "vani e rivestimenti" if detr_m2 else None),
                       delta_color="off")
             t4.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
-            if q["detr_porte_ml"] or q["detr_rivestimenti"]:
+            if detr_ml or detr_m2:
                 st.caption(
                     f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
                     f"(i locali rivestiti sono già esclusi) − "
                     f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta "
-                    f"({q['lati_porta']} lati). "
+                    f"({q['lati_porta']} lati) − "
+                    f"{numero_it(q['detr_aperture_ml'], 2)} m di porte "
+                    f"finestra. "
                     f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
                     f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
                     f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "
-                    f"vani porta.]")
+                    f"vani porta − {numero_it(q['detr_aperture_m2'], 2)} m² "
+                    f"di finestre e porte finestra.]")
 
             grandezze.update({
                 "pavimento": pav_m2,
@@ -3368,22 +3452,49 @@ with tab_plan:
             cos = riep_muri.get("costruire", vuoto)
             esi = riep_muri.get("esistente", vuoto)
             st.caption(f"Superficie = lunghezza × altezza "
-                       f"(**{numero_it(altezza, 2)} m**). Le aperture non "
-                       "vengono detratte: se un muro ha una porta, affina la "
-                       "quantità nel computo.")
+                       f"(**{numero_it(altezza, 2)} m**), al netto delle "
+                       "aperture dichiarate qui sotto: dove c'è un vano non "
+                       "c'è muratura da buttare giù né da tirare su.")
+            a1, a2 = st.columns(2)
+            apert_dem = a1.number_input(
+                "Aperture nei muri da demolire (m²)", min_value=0.0,
+                max_value=999.0, step=0.5, format="%.2f",
+                value=float(st.session_state.apert_dem), key="apert_dem_w",
+                help="Superficie complessiva dei vani (porte, finestre, "
+                     "passaggi) contenuti nei muri rossi. Una porta da "
+                     "0,80 × 2,10 sono 1,68 m².")
+            st.session_state.apert_dem = apert_dem
+            apert_cos = a2.number_input(
+                "Aperture nei muri da costruire (m²)", min_value=0.0,
+                max_value=999.0, step=0.5, format="%.2f",
+                value=float(st.session_state.apert_cos), key="apert_cos_w",
+                help="Vani previsti nei muri gialli: quella superficie non "
+                     "va murata.")
+            st.session_state.apert_cos = apert_cos
+
+            dem_netto = planimetria.muri_al_netto(dem["m2"], apert_dem)
+            cos_netto = planimetria.muri_al_netto(cos["m2"], apert_cos)
             w1, w2, w3, w4 = st.columns(4)
             w1.metric(f"🔴 Da demolire ({dem['n']})",
                       f"{numero_it(dem['ml'], 2)} m")
-            w2.metric("→ superficie", f"{numero_it(dem['m2'], 2)} m²")
+            w2.metric("→ superficie", f"{numero_it(dem_netto, 2)} m²",
+                      delta=(f"−{numero_it(apert_dem, 2)} m² aperture"
+                             if apert_dem else None), delta_color="off")
             w3.metric(f"🟡 Da costruire ({cos['n']})",
                       f"{numero_it(cos['ml'], 2)} m")
-            w4.metric("→ superficie", f"{numero_it(cos['m2'], 2)} m²")
+            w4.metric("→ superficie", f"{numero_it(cos_netto, 2)} m²",
+                      delta=(f"−{numero_it(apert_cos, 2)} m² aperture"
+                             if apert_cos else None), delta_color="off")
+            if apert_dem or apert_cos:
+                st.caption(f":gray[Muri lordi: "
+                           f"{numero_it(dem['m2'], 2)} m² da demolire e "
+                           f"{numero_it(cos['m2'], 2)} m² da costruire.]")
             if esi["n"]:
                 st.caption(f":gray[Esclusi {esi['n']} muri «esistenti» "
                            f"({numero_it(esi['ml'], 2)} m): non sono "
                            "lavorazioni.]")
-            grandezze["muri_demolire"] = dem["m2"]
-            grandezze["muri_costruire"] = cos["m2"]
+            grandezze["muri_demolire"] = dem_netto
+            grandezze["muri_costruire"] = cos_netto
 
         # ---------------- dalle misure della planimetria alle voci del listino
         if any(v > 0 for v in grandezze.values()):
