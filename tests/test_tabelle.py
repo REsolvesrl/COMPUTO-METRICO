@@ -1,0 +1,164 @@
+"""Le conversioni fra tabella e dati: vivevano nell'interfaccia, senza test.
+
+Le regole che qui si controllano non sono formali: una cella vuota che
+diventa 0 mette nel computo una quantità che nessuno ha deciso, e una
+colonna di testo nata numerica fa rifiutare la tabella dall'editor.
+"""
+import pandas as pd
+import pytest
+
+import tabelle
+
+
+# ------------------------------------------------------- voci del computo
+
+def test_df_vuoto_ha_le_colonne_e_i_tipi_giusti():
+    df = tabelle.df_vuoto()
+    assert list(df.columns) == tabelle.COLONNE
+    assert df["descrizione"].dtype == object
+    assert df["prezzo"].dtype == "float64"
+    assert len(df) == 0
+
+
+def test_voci_da_df_legge_le_righe_piene():
+    df = pd.DataFrame([{"categoria": "Demolizioni", "codice": "1.01",
+                        "descrizione": "Demolizione", "um": "m²",
+                        "parti": 1.0, "lunghezza": 5.0, "larghezza": 4.0,
+                        "altezza": None, "quantita_manuale": None,
+                        "prezzo": 100.0}])
+    voci = tabelle.voci_da_df(df)
+    assert len(voci) == 1
+    assert voci[0]["descrizione"] == "Demolizione"
+    assert voci[0]["lunghezza"] == 5.0
+
+
+def test_voci_da_df_le_celle_vuote_sono_None_non_zero():
+    """Uno zero e' una quantita' decisa da qualcuno; il vuoto no."""
+    df = pd.DataFrame([{"categoria": "X", "codice": "", "descrizione": "Voce",
+                        "um": "m", "parti": None, "lunghezza": None,
+                        "larghezza": None, "altezza": None,
+                        "quantita_manuale": None, "prezzo": None}])
+    voce = tabelle.voci_da_df(df)[0]
+    assert voce["lunghezza"] is None
+    assert voce["prezzo"] is None
+    assert voce["codice"] is None          # stringa vuota = niente
+
+
+def test_voci_da_df_salta_le_righe_del_tutto_vuote():
+    df = tabelle.df_vuoto()
+    df.loc[0] = [None] * len(tabelle.COLONNE)
+    assert tabelle.voci_da_df(df) == []
+
+
+# ---------------------------------------------------- libretto delle misure
+
+def test_df_misure_da_righe_e_ritorno():
+    righe = [{"descrizione": "Soggiorno", "parti": 1.0, "lunghezza": 5.0,
+              "larghezza": 4.0, "altezza": None}]
+    df = tabelle.df_misure(righe)
+    assert list(df.columns) == tabelle.COLONNE_MISURE
+    assert tabelle.misure_da_df(df) == righe
+
+
+def test_df_misure_senza_righe_da_la_tabella_vuota():
+    df = tabelle.df_misure([])
+    assert len(df) == 0
+    assert list(df.columns) == tabelle.COLONNE_MISURE
+
+
+def test_misure_da_df_tiene_le_parti_negative():
+    """Le detrazioni si scrivono con parti negative: non sono un errore."""
+    df = tabelle.df_misure([{"descrizione": "vano porta", "parti": -1.0,
+                             "lunghezza": 0.8, "larghezza": 2.1,
+                             "altezza": None}])
+    assert tabelle.misure_da_df(df)[0]["parti"] == -1.0
+
+
+# ------------------------------------------------------------------ spese
+
+def test_cat_pulita_toglie_il_pallino():
+    assert tabelle.cat_pulita("🟡 LAVORI") == "LAVORI"
+    assert tabelle.cat_pulita("LAVORI") == "LAVORI"
+    assert tabelle.cat_pulita(None) == ""
+
+
+def test_cat_display_mette_il_pallino():
+    assert tabelle.cat_display("LAVORI") == "🟡 LAVORI"
+    assert tabelle.cat_display("🟡 LAVORI") == "🟡 LAVORI"   # non lo raddoppia
+
+
+def test_cat_display_lascia_stare_le_categorie_sconosciute():
+    assert tabelle.cat_display("PIPPO") == "PIPPO"
+
+
+def test_categoria_fa_il_giro_completo_senza_sporcarsi():
+    """Tabella → dati → tabella: nel JSON la categoria resta pulita."""
+    righe = [{"importo": 100.0, "aliquota_iva": 22.0, "data": "01/01/2026",
+              "nr_fattura": "1", "oggetto": "x", "categoria": "LAVORI",
+              "note": ""}]
+    df = tabelle.df_spese_da_righe(righe, tabelle.COLONNE_SPESE)
+    assert df["categoria"][0] == "🟡 LAVORI"      # a video col pallino
+    assert tabelle.spese_da_df(df)[0]["categoria"] == "LAVORI"   # nei dati no
+
+
+def test_df_spese_colonna_di_testo_mancante_nasce_testo():
+    """Una colonna di soli NaN diventa numerica e l'editor la rifiuta."""
+    righe = [{"importo": 100.0, "aliquota_iva": 22.0, "oggetto": "x",
+              "categoria": "LAVORI", "note": ""}]      # senza data/fattura
+    df = tabelle.df_spese_da_righe(righe, tabelle.COLONNE_SPESE)
+    assert df["data"].dtype == object
+    assert df["data"][0] == ""
+
+
+def test_df_spese_categoria_vuota_e_None_mai_stringa_vuota():
+    """«» non e' tra le opzioni del menu: manda in crash l'editor."""
+    df = tabelle.df_spese_da_righe([{"importo": 10.0}], tabelle.COLONNE_SPESE)
+    assert df["categoria"][0] is None
+
+
+def test_spese_da_df_salta_le_righe_senza_importo():
+    df = tabelle.df_spese_da_righe(
+        [{"importo": 100.0, "categoria": "LAVORI"}, {"oggetto": "vuota"}],
+        tabelle.COLONNE_SPESE)
+    assert len(tabelle.spese_da_df(df)) == 1
+
+
+def test_spese_da_df_senza_categoria_finisce_in_altro():
+    df = tabelle.df_spese_da_righe([{"importo": 100.0}],
+                                   tabelle.COLONNE_SPESE)
+    assert tabelle.spese_da_df(df)[0]["categoria"] == "ALTRO"
+
+
+def test_spese_da_df_senza_iva_vale_zero_non_None():
+    df = tabelle.df_spese_da_righe([{"importo": 100.0}],
+                                   tabelle.COLONNE_SPESE)
+    assert tabelle.spese_da_df(df)[0]["aliquota_iva"] == 0.0
+
+
+def test_registro_previsioni_ha_le_sue_colonne():
+    df = tabelle.df_spese_vuoto(tabelle.COLONNE_SPESE_PREV)
+    assert list(df.columns) == tabelle.COLONNE_SPESE_PREV
+    assert "nr_fattura" not in df.columns
+
+
+# ------------------------------------------------------- comparabili (MCA)
+
+def test_mca_giro_completo():
+    righe = [{"nome": "Via Roma 5", "prezzo": 200000.0, "mq": 90.0,
+              "coeff": 1.05, "note": "ristrutturato"}]
+    df = pd.DataFrame(righe)
+    assert tabelle.mca_da_df(df) == righe
+
+
+def test_mca_vuoto_ha_i_tipi_giusti():
+    df = tabelle.df_mca_vuoto()
+    assert df["prezzo"].dtype == "float64"
+    assert df["nome"].dtype == object
+
+
+@pytest.mark.parametrize("funzione", [tabelle.voci_da_df,
+                                      tabelle.misure_da_df,
+                                      tabelle.spese_da_df,
+                                      tabelle.mca_da_df])
+def test_una_tabella_vuota_non_da_righe(funzione):
+    assert funzione(pd.DataFrame()) == []

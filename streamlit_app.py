@@ -62,6 +62,31 @@ import listino
 import listino_personale
 import stampa
 from formato import colore_testo_su, euro, numero_it
+from tabelle import (
+    CATEGORIE_SPESE_EMOJI,
+    COLONNE,
+    COLONNE_MCA,
+    COLONNE_MISURE,
+    COLONNE_MISURE_NUM,
+    COLONNE_NUMERI,
+    COLONNE_SPESE,
+    COLONNE_SPESE_NUM,
+    COLONNE_SPESE_PREV,
+    COLONNE_TESTO,
+    EMOJI_CATEGORIA,
+    cat_display,
+    cat_pulita,
+    df_misure,
+    df_misure_vuoto,
+    df_mca_vuoto,
+    df_spese_da_righe,
+    df_spese_vuoto,
+    df_vuoto,
+    mca_da_df,
+    misure_da_df,
+    spese_da_df,
+    voci_da_df,
+)
 import planimetria
 import rilevamento
 from cme_viewer import image_viewer, pil_a_src
@@ -405,16 +430,6 @@ if not _accesso_consentito():
     st.stop()
 
 
-COLONNE_TESTO = ["categoria", "codice", "descrizione", "um"]
-COLONNE_NUMERI = ["parti", "lunghezza", "larghezza", "altezza",
-                  "quantita_manuale", "prezzo"]
-COLONNE = COLONNE_TESTO + COLONNE_NUMERI
-
-# Colonne del "libretto delle misure": ogni voce del listino può essere
-# scomposta in più righe (una per stanza/parete) che si sommano nella quantità.
-COLONNE_MISURE = ["descrizione", "parti", "lunghezza", "larghezza", "altezza"]
-COLONNE_MISURE_NUM = ["parti", "lunghezza", "larghezza", "altezza"]
-
 UM_OPZIONI = ["m", "m²", "m³", "kg", "t", "cad", "h", "a corpo",
               "punto", "utenza"]
 
@@ -450,12 +465,6 @@ VOCI_DA_SUPERFICI = [
 # (chiave di sessione → valore iniziale; il tipo del default comanda).
 # Spese a consuntivo: due registri distinti (come il foglio «Spese» Excel).
 # Sostenute = fatture reali (con data e numero); da sostenere = previsioni.
-COLONNE_SPESE = ["importo", "aliquota_iva", "data", "nr_fattura",
-                 "oggetto", "categoria", "note"]
-COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
-                      "note"]
-COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
-COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
 
 # Colori categorie di spesa: allineati ai pallini-emoji della colonna
 # Categoria, così pallino + fetta di torta + cella del riepilogo combaciano.
@@ -470,15 +479,6 @@ COLORE_CATEGORIA_SPESA = {
     "AGENZIA": "#B49BE0",          # 🟣 viola
     "ALTRO": "#C0392B",            # 🟤 rosso scuro
 }
-# Pallino colorato mostrato davanti alla categoria nella tabella modificabile
-# (il data_editor non colora lo sfondo delle celle: l'emoji è il ripiego).
-EMOJI_CATEGORIA = {
-    "ACQUISTO": "🔴", "LAVORI": "🟡", "MATERIALE": "🟢",
-    "ARCHITETTO": "🟠", "COSTI INDIRETTI": "⚪",
-    "AGENZIA": "🟣", "ALTRO": "🟤",
-}
-CATEGORIE_SPESE_EMOJI = [f"{EMOJI_CATEGORIA.get(c, '')} {c}".strip()
-                         for c in fattibilita.CATEGORIE_SPESE]
 IMPOSTAZIONI_BP = {
     "bp_acquisto": 0.0, "bp_vendita": 0.0, "bp_mq": 0.0,
     "bp_imposta": 9.0, "bp_imposte_fisse": 0.0, "bp_notaio": 3500.0,
@@ -597,153 +597,14 @@ TIPI_PARETE_SCELTA = ["demolire", "costruire"]
 
 # ------------------------------------------------------------------ utilità
 
-def df_vuoto():
-    colonne = {}
-    for col in COLONNE:
-        tipo = "object" if col in COLONNE_TESTO else "float64"
-        colonne[col] = pd.Series(dtype=tipo)
-    return pd.DataFrame(colonne)
 
 
-def voci_da_df(df):
-    """Trasforma la tabella dell'editor in una lista di voci (dizionari)."""
-    voci = []
-    for _, riga in df.iterrows():
-        voce = {}
-        for col in COLONNE:
-            valore = riga.get(col)
-            if valore is None or pd.isna(valore) or valore == "":
-                voce[col] = None
-            elif col in COLONNE_NUMERI:
-                voce[col] = float(valore)
-            else:
-                voce[col] = str(valore)
-        if any(v is not None for v in voce.values()):
-            voci.append(voce)
-    return voci
 
 
-def df_misure_vuoto():
-    """Tabella vuota per il libretto delle misure di una voce."""
-    colonne = {"descrizione": pd.Series(dtype="object")}
-    for col in COLONNE_MISURE_NUM:
-        colonne[col] = pd.Series(dtype="float64")
-    return pd.DataFrame(colonne)
 
 
-def df_misure(righe):
-    """Costruisce la tabella del libretto misure da un elenco di dizionari."""
-    if not righe:
-        return df_misure_vuoto()
-    df = pd.DataFrame(righe).reindex(columns=COLONNE_MISURE)
-    for col in COLONNE_MISURE_NUM:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
 
 
-def misure_da_df(df):
-    """La tabella del libretto misure come elenco di dizionari (righe piene)."""
-    righe = []
-    for _, riga in df.iterrows():
-        misura = {}
-        for col in COLONNE_MISURE:
-            valore = riga.get(col)
-            if valore is None or pd.isna(valore) or valore == "":
-                misura[col] = None
-            elif col in COLONNE_MISURE_NUM:
-                misura[col] = float(valore)
-            else:
-                misura[col] = str(valore)
-        if any(v is not None for v in misura.values()):
-            righe.append(misura)
-    return righe
-
-
-def df_spese_vuoto(colonne=None):
-    """Tabella spese vuota (sostenute per default, o l'elenco colonne dato)."""
-    colonne = colonne or COLONNE_SPESE
-    dati = {}
-    for col in colonne:
-        tipo = "float64" if col in COLONNE_SPESE_NUM else "object"
-        dati[col] = pd.Series(dtype=tipo)
-    return pd.DataFrame(dati)
-
-
-def df_spese_da_righe(righe, colonne):
-    """Tabella spese tipizzata da una lista di dizionari.
-
-    Le colonne mancanti nei dati (es. una spesa da sostenere senza numero
-    fattura) vengono create vuote ma col tipo GIUSTO: testo → stringa
-    (mai una colonna float di soli NaN, che l'editor rifiuterebbe come
-    colonna di testo), numeri → float.
-    """
-    dati = {}
-    for col in colonne:
-        valori = [r.get(col) for r in righe]
-        if col in COLONNE_SPESE_NUM:
-            dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
-                                      errors="coerce")
-        elif col == "categoria":
-            # nella tabella modificabile la categoria porta il pallino emoji;
-            # vuota = None (NON stringa vuota: "" non è tra le opzioni del menu
-            # a tendina e fa crashare il data_editor nel browser)
-            def _cat(v):
-                if v is None or (isinstance(v, float) and pd.isna(v)):
-                    return None
-                return cat_display(v) or None
-            dati[col] = pd.Series([_cat(v) for v in valori], dtype="object")
-        else:
-            dati[col] = pd.Series(
-                ["" if v is None or (isinstance(v, float) and pd.isna(v))
-                 else str(v) for v in valori], dtype="object")
-    return pd.DataFrame(dati)
-
-
-def spese_da_df(df):
-    """Le spese come lista di dizionari (solo le righe con un importo).
-
-    Vale per entrambi i registri: i campi assenti in una tabella (una non ha
-    data né numero fattura) diventano stringa vuota.
-    """
-    righe = []
-    for _, riga in df.iterrows():
-        importo = riga.get("importo")
-        if importo is None or pd.isna(importo):
-            continue
-
-        def testo(campo, predefinito=""):
-            valore = riga.get(campo)
-            return predefinito if valore is None or pd.isna(valore) \
-                else str(valore)
-
-        aliquota = riga.get("aliquota_iva")
-        righe.append({
-            "importo": float(importo),
-            "aliquota_iva": (0.0 if aliquota is None or pd.isna(aliquota)
-                             else float(aliquota)),
-            "data": testo("data"),
-            "nr_fattura": testo("nr_fattura"),
-            "oggetto": testo("oggetto"),
-            "categoria": cat_pulita(testo("categoria")) or "ALTRO",
-            "note": testo("note"),
-        })
-    return righe
-
-
-def cat_pulita(valore):
-    """Categoria senza l'eventuale pallino emoji iniziale (per calcoli/JSON)."""
-    testo = (str(valore) if valore is not None else "").strip()
-    for emoji in EMOJI_CATEGORIA.values():
-        if testo.startswith(emoji):
-            return testo[len(emoji):].strip()
-    return testo
-
-
-def cat_display(valore):
-    """Categoria col pallino emoji davanti (per la tabella modificabile)."""
-    base = cat_pulita(valore)
-    emoji = EMOJI_CATEGORIA.get(base)
-    return f"{emoji} {base}" if emoji else base
 
 
 def config_colonne_spese():
@@ -788,30 +649,6 @@ def dati_fattura_da_file(file):
     return None
 
 
-def df_mca_vuoto():
-    colonne = {}
-    for col in COLONNE_MCA:
-        tipo = "float64" if col in ("prezzo", "mq", "coeff") else "object"
-        colonne[col] = pd.Series(dtype=tipo)
-    return pd.DataFrame(colonne)
-
-
-def mca_da_df(df):
-    """La tabella dei comparabili come lista di dizionari."""
-    righe = []
-    for _, riga in df.iterrows():
-        valori = {}
-        for col in COLONNE_MCA:
-            valore = riga.get(col)
-            if valore is None or pd.isna(valore):
-                valori[col] = None
-            elif col in ("prezzo", "mq", "coeff"):
-                valori[col] = float(valore)
-            else:
-                valori[col] = str(valore)
-        if any(v is not None for v in valori.values()):
-            righe.append(valori)
-    return righe
 
 
 def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo,
