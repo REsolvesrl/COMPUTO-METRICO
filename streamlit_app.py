@@ -1620,16 +1620,27 @@ def registra_storia(descrizione):
 
 
 def annulla_ultima():
-    """Riporta zone, muri e scala com'erano prima dell'ultima operazione."""
+    """Riporta zone, muri e scala com'erano prima dell'ultima operazione.
+
+    Restituisce {descrizione, scala_persa}. La scala fa parte di ciò che si
+    annulla — deve esserlo, altrimenti una calibrazione sbagliata sarebbe
+    irrimediabile — ma tornando indietro oltre il momento in cui è stata
+    impostata la planimetria resta SENZA scala, e da lì in poi le misure non
+    sono più in metri: niente cifre mentre si traccia, niente m² sulle aree.
+    Succede in silenzio e sembra un guasto, quindi va detto (2026-08-09).
+    """
     storia = st.session_state.get("storia") or []
     if not storia:
         return None
     passo = storia.pop()
     per_uid = {s["uid"]: s for s in passo["piante"]}
+    scala_persa = False
     for pianta in st.session_state.piante:
         salvata = per_uid.get(pianta["uid"])
         if salvata is None:
             continue
+        if pianta["mpp"] and not salvata["mpp"]:
+            scala_persa = True
         pianta["mpp"] = salvata["mpp"]
         pianta["prossimo_id"] = salvata["prossimo_id"]
         pianta["zone"] = copy.deepcopy(salvata["zone"])
@@ -1639,7 +1650,7 @@ def annulla_ultima():
     st.session_state.sel_parete = None
     st.session_state.scala_temp = None
     st.session_state.pop("ultimo_rilevamento", None)
-    return passo["descrizione"]
+    return {"descrizione": passo["descrizione"], "scala_persa": scala_persa}
 
 
 # eventi del visualizzatore che modificano il disegno (gli altri — selezione,
@@ -2708,8 +2719,17 @@ with tab_plan:
                          "Non tocca il computo né le altre schede."):
                 fatto = annulla_ultima()
                 if fatto:
-                    st.toast(f"Annullato: {fatto} ↩️")
+                    st.toast(f"Annullato: {fatto['descrizione']} ↩️")
+                    # Il messaggio deve sopravvivere al rerun che segue,
+                    # altrimenti sparisce prima di essere letto.
+                    st.session_state._scala_persa = fatto["scala_persa"]
                 st.rerun()
+            if st.session_state.pop("_scala_persa", False):
+                st.warning(
+                    "↩️ Tornando indietro è stata annullata anche **la "
+                    "scala**: questa planimetria non è più calibrata, quindi "
+                    "le misure non sono in metri finché non la reimposti con "
+                    "lo strumento ↔️. Le aree disegnate restano dove sono.")
             if storia:
                 c_info.caption(f"Ultima operazione: **{storia[-1]['descrizione']}**"
                                f" · si può tornare indietro di "
