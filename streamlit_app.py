@@ -303,6 +303,28 @@ def css_mondo():
     line-height: 1.15;
 }}
 [data-testid="stMetricDelta"] {{ font-size: .78rem; }}
+/* Un numero tagliato non è un numero: «97,32 …» non dice né quanto né di
+   che cosa. Streamlit taglia con i puntini quello che non ci sta; qui si
+   preferisce andare a capo, sempre — l'unità di misura fa parte del dato. */
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p,
+[data-testid="stMetricValue"] {{
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: 100%;
+}}
+/* Sotto la tela i campioni sono sei in fila: la cifra scende di taglia
+   quanto basta a starci intera con la sua unità. */
+.st-key-totali_tela [data-testid="stMetricValue"] {{ font-size: 1.45rem; }}
+.st-key-totali_tela [data-testid="stMetric"] {{
+    padding: .5rem .55rem .55rem;
+}}
+.st-key-totali_tela [data-testid="stMetricLabel"],
+.st-key-totali_tela [data-testid="stMetricLabel"] p {{
+    font-size: .64rem;
+    letter-spacing: .08em;
+}}
 
 /* -------------------------------------------- il disegno comanda */
 /* La tela è il pezzo vero appoggiato sul piano da lavoro: fondo rialzato e
@@ -3071,7 +3093,10 @@ with tab_plan:
             # questo segnaposto bisognava scorrere fino in fondo e tornare su
             # per vedere che cosa aveva cambiato una spunta. Si riempie nello
             # STESSO giro, quindi non è mai in ritardo di un'interazione.
-            riepilogo_vicino = st.empty()
+            # la chiave sta sul contenitore ESTERNO, non dentro il segnaposto:
+            # così la classe che il CSS aggancia c'è di sicuro
+            with st.container(key="totali_tela"):
+                riepilogo_vicino = st.empty()
 
             ev = evento_viewer(valore)
             if ev:
