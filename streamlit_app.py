@@ -61,7 +61,7 @@ import fattura
 import listino
 import listino_personale
 import stampa
-from formato import colore_testo_su, euro, numero_it
+from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
     CATEGORIE_SPESE_EMOJI,
     COLONNE,
@@ -1034,7 +1034,7 @@ def riga_voce_listino(voce):
     scomponendola in più righe (parti × lung × larg × alt) che si sommano —
     con le detrazioni scritte come parti negative. Quando il libretto è
     attivo la quantità è la somma delle misure (non digitabile a mano) e
-    viene comunque scritta in lq_<codice>, così riepilogo, export e
+    viene comunque scritta in q_<codice>, così riepilogo, export e
     salvataggio la leggono senza modifiche.
     """
     codice = voce["codice"]
@@ -1054,11 +1054,9 @@ def riga_voce_listino(voce):
              "che si sommano. Le detrazioni si scrivono con parti negative.")
     st.session_state[f"mis_{codice}"] = usa_misure
 
-    prezzo = c_prezzo.number_input(
-        "Prezzo €", min_value=0.0, step=1.0, format="%.2f",
-        key=f"lp_{codice}", label_visibility="collapsed",
-        value=float(st.session_state.get(f"p_{codice}") or voce["prezzo"]))
-    st.session_state[f"p_{codice}"] = prezzo
+    campo_numero_it(c_prezzo, f"Prezzo € {codice}", f"p_{codice}",
+                    decimali=2)
+    prezzo = float(st.session_state.get(f"p_{codice}") or voce["prezzo"])
 
     if usa_misure:
         # Tabella "di partenza" costante tra i run (finché non si carica/azzera
@@ -1091,16 +1089,14 @@ def riga_voce_listino(voce):
         # altrimenti al ritorno all'inserimento a mano rinascerebbe col
         # vecchio valore invece che con la somma delle misure.
         st.session_state[f"q_{codice}"] = quantita
-        st.session_state.pop(f"lq_{codice}", None)
+        st.session_state.pop(f"q_{codice}_txt", None)
         c_qta.markdown(f"**{numero_it(quantita, 2)}** :gray[{voce['um']}]")
     else:
         st.session_state.misure_base.pop(codice, None)
         st.session_state.misure_correnti.pop(codice, None)
-        quantita = c_qta.number_input(
-            "Quantità", min_value=0.0, step=1.0, format="%.2f",
-            key=f"lq_{codice}", label_visibility="collapsed",
-            value=float(st.session_state.get(f"q_{codice}") or 0.0))
-        st.session_state[f"q_{codice}"] = quantita
+        campo_numero_it(c_qta, f"Quantità {codice}", f"q_{codice}",
+                        decimali=2)
+        quantita = float(st.session_state.get(f"q_{codice}") or 0.0)
 
     if quantita > 0:
         c_parz.markdown(f"**{euro(quantita * prezzo)}**")
@@ -1481,12 +1477,99 @@ def riga_costo_bp(etichetta, centro=None, destra=None):
         else:
             impostazioni = dict(contenuto)
             chiave = impostazioni.pop("chiave")
-            colonna.number_input(f"{etichetta} {chiave}", key=chiave,
-                                 label_visibility="collapsed",
-                                 **impostazioni)
+            if chiave in CAMPI_NUMERO_IT:
+                # gli importi: casella di testo, per avere le migliaia
+                campo_numero_it(colonna, f"{etichetta} {chiave}", chiave,
+                                decimali=CAMPI_NUMERO_IT[chiave][0],
+                                segnaposto=None,
+                                aiuto=impostazioni.get("help"))
+            else:
+                # le percentuali restano numeriche: niente migliaia da
+                # separare, e il passo a freccette lì serve davvero
+                colonna.number_input(f"{etichetta} {chiave}", key=chiave,
+                                     label_visibility="collapsed",
+                                     **impostazioni)
 
     cella(c_inp, centro)
     cella(c_val, destra, a_destra=True)
+
+
+def campo_numero_it(colonna, etichetta, chiave, decimali=2,
+                    label_visibility="collapsed", aiuto=None,
+                    segnaposto=None):
+    """Casella per un importo, scritta e riletta all'italiana.
+
+    `st.number_input` non sa raggruppare le migliaia — accetta solo formati
+    printf — quindi mostrava `145000` dove serve `145.000`. Qui la casella è
+    di testo: la formattazione la fa l'app.
+
+    ⚠️ Qui si DISEGNA soltanto. Il testo viene riletto a inizio pagina
+    (`rileggi_campi_numero_it`), prima di ogni calcolo: farlo qui, dove il
+    campo sta sotto ai risultati, li lascerebbe indietro di
+    un'interazione. Il valore di verità resta in `chiave`, la casella vive
+    in «chiave_txt».
+    """
+    return colonna.text_input(
+        etichetta, value=numero_it(st.session_state.get(chiave) or 0.0,
+                                   decimali),
+        key=f"{chiave}_txt", help=aiuto, placeholder=segnaposto,
+        label_visibility=label_visibility)
+
+
+# Campi in cui l'utente scrive un importo: quanti decimali mostrare e che
+# cosa ricalcolare quando cambiano (il sincronismo %↔€ del business plan).
+# chiave: (decimali, cosa ricalcolare, minimo)
+CAMPI_NUMERO_IT = {
+    "bp_acquisto": (0, "bp_ricalcola_euro", 0.0),
+    "bp_vendita": (0, "bp_ricalcola_euro", 0.0),
+    # il passo delle matrici non può essere zero: le colonne diventerebbero
+    # tutte lo stesso prezzo
+    "bp_passo": (0, None, 1000.0),
+    "bp_imposta_eur": (2, "bp_pct_da_euro_imposta", 0.0),
+    "bp_imposte_fisse": (2, None, 0.0),
+    "bp_notaio": (2, None, 0.0),
+    "bp_mutuo": (2, None, 0.0),
+    "bp_imprevisti": (2, None, 0.0),
+    "bp_ag_in_eur": (2, "bp_pct_da_euro_ag_in", 0.0),
+    "bp_ag_out_eur": (2, "bp_pct_da_euro_ag_out", 0.0),
+    "bp_ristr": (2, None, 0.0),
+}
+
+
+def rileggi_campi_numero_it():
+    """Da testo a numero, a inizio pagina e prima di ogni calcolo.
+
+    Tre passaggi, in quest'ordine: si rileggono le caselle, si ricalcolano i
+    campi che dipendono da loro, e solo allora si buttano via le caselle il
+    cui testo non è più la scrittura corretta del valore — così rinascono
+    formattate («145000» diventa «145.000») senza che l'utente perda quello
+    che stava battendo. Buttarle via QUI, prima che i widget nascano, è
+    l'unico momento in cui Streamlit lo consente.
+
+    Quello che non è un numero non si applica e non si cancella: resta
+    scritto nella casella, e il valore di prima continua a valere.
+    """
+    da_ricalcolare = []
+    for chiave, (_, ricalcolo, minimo) in CAMPI_NUMERO_IT.items():
+        testo = st.session_state.get(f"{chiave}_txt")
+        if testo is None:
+            continue
+        valore = numero_da_it(testo)
+        if valore is None:
+            continue
+        valore = max(minimo, valore)
+        if abs(valore - float(st.session_state.get(chiave) or 0.0)) > 0.0005:
+            st.session_state[chiave] = valore
+            if ricalcolo:
+                da_ricalcolare.append(ricalcolo)
+    for nome in dict.fromkeys(da_ricalcolare):      # una volta sola ciascuno
+        globals()[nome]()
+    for chiave, (decimali, _, _minimo) in CAMPI_NUMERO_IT.items():
+        testo = st.session_state.get(f"{chiave}_txt")
+        if testo is None or numero_da_it(testo) is None:
+            continue
+        if testo != numero_it(st.session_state.get(chiave) or 0.0, decimali):
+            st.session_state.pop(f"{chiave}_txt")
 
 
 def bp_ricalcola_euro():
@@ -2070,6 +2153,38 @@ def segna_salvato():
     st.session_state.firma_salvata = firma_progetto()
 
 
+def nome_archivio_corrente():
+    """Il nome con cui salvare al volo. Mai vuoto.
+
+    Senza nome il salvataggio non può fermarsi a chiederlo — il tasto in
+    testata serve proprio a non interrompere il lavoro — quindi si usa un
+    nome di ripiego che si riconosce a colpo d'occhio in archivio.
+    """
+    return (st.session_state.prg_nome or "").strip() or "Progetto senza nome"
+
+
+def salva_al_volo():
+    """Salva subito in archivio, sovrascrivendo, senza chiedere niente.
+
+    ⚠️ Sovrascrive di proposito: è il tasto «Salva» di qualunque programma,
+    e chiedere conferma a ogni salvataggio del progetto su cui si sta
+    lavorando sarebbe una domanda a cui si risponde sempre sì. La conferma
+    resta dov'è utile — nell'archivio, quando si salva **con un altro
+    nome** sopra un progetto diverso da quello aperto.
+    """
+    nome = nome_archivio_corrente()
+    try:
+        archivio_locale.salva_progetto(nome, progetto_json_bytes())
+    except OSError as errore:
+        st.session_state._esito_salva = ("errore", f"Non sono riuscito a "
+                                                   f"salvare: {errore}")
+        return
+    segna_salvato()
+    st.session_state._esito_salva = (
+        "ok", f"«{nome}» salvato alle "
+              f"{st.session_state.ultimo_salvataggio.strftime('%H:%M')}")
+
+
 def azzera_progetto():
     """Svuota il progetto. Da usare come on_click, mai nel corpo dello script.
 
@@ -2245,7 +2360,7 @@ if "da_caricare" in st.session_state:
         st.session_state[f"mis_{_cod}"] = bool(righe_mis)
         # via i widget della sessione precedente: se restassero, le righe
         # rinascerebbero coi valori del progetto vecchio invece che con questi
-        for _w in (f"lq_{_cod}", f"lp_{_cod}", f"usamis_{_cod}"):
+        for _w in (f"q_{_cod}_txt", f"p_{_cod}_txt", f"usamis_{_cod}"):
             st.session_state.pop(_w, None)
         if righe_mis:
             st.session_state.misure_correnti[_cod] = righe_mis
@@ -2366,20 +2481,25 @@ if "bp_vendita_pending" in st.session_state:
     bp_ricalcola_euro()
 
 # Le quantità che la planimetria porta nel listino passano di qui. Quando si
-# preme il bottone, la scheda Computo è già stata disegnata e i widget lq_…
+# preme il bottone, la scheda Computo è già stata disegnata e le caselle…
 # esistono: Streamlit vieta di riscriverli a quel punto. Come sopra, si
 # applicano al giro successivo, prima che i widget nascano.
 if "listino_pending" in st.session_state:
     for _cod, _quantita in st.session_state.pop("listino_pending").items():
         st.session_state[f"q_{_cod}"] = _quantita
-        st.session_state.pop(f"lq_{_cod}", None)   # rinasce col valore nuovo
+        st.session_state.pop(f"q_{_cod}_txt", None)   # rinasce col nuovo
 
 # Stessa strada per i PREZZI del listino personale: si applicano prima che i
-# campi lp_… nascano, altrimenti Streamlit rifiuta di riscriverli.
+# caselle dei prezzi nascano, altrimenti Streamlit rifiuta di riscriverle.
 if "prezzi_pending" in st.session_state:
     for _cod, _prezzo in st.session_state.pop("prezzi_pending").items():
         st.session_state[f"p_{_cod}"] = _prezzo
-        st.session_state.pop(f"lp_{_cod}", None)
+        st.session_state.pop(f"p_{_cod}_txt", None)
+
+# Gli importi si scrivono in caselle di testo (le migliaia vogliono il punto,
+# e il campo numerico di Streamlit non lo sa fare): qui si rileggono, PRIMA
+# di ogni calcolo, così il valore appena scritto vale già in questo giro.
+rileggi_campi_numero_it()
 
 # I comandi delle etichette stanno SOTTO il disegno, ma il disegno legge i
 # loro valori PRIMA: senza questo riallineamento userebbe quelli del giro
@@ -2400,13 +2520,26 @@ for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
 # delle categorie CHIUSE non vengono disegnate (è ciò che rende l'app veloce),
 # e Streamlit cancella lo stato dei widget che non ridisegna. Le quantità e i
 # prezzi vivono quindi in chiavi «di verità» (q_/p_/mis_), che sopravvivono a
-# tutto; i widget (lq_/lp_/usamis_) nascono da quelle e ci riversano dentro il
-# valore appena l'utente lo cambia.
+# tutto; le caselle (q_…_txt / p_…_txt / usamis_) nascono da quelle e ci
+# riversano dentro il valore appena l'utente lo cambia.
 for _voce in listino.VOCI:
     _cod = _voce["codice"]
-    for _verita, _widget in (("q_", "lq_"), ("p_", "lp_"), ("mis_", "usamis_")):
-        if _widget + _cod in st.session_state:
-            st.session_state[_verita + _cod] = st.session_state[_widget + _cod]
+    if "usamis_" + _cod in st.session_state:
+        st.session_state["mis_" + _cod] = st.session_state["usamis_" + _cod]
+    # Quantità e prezzo si scrivono all'italiana in caselle di testo: si
+    # rileggono qui, prima che i totali delle categorie vengano calcolati
+    # (li disegna il CSS, molto più in alto delle righe). Il testo che non è
+    # un numero non si applica e non si cancella.
+    for _verita in ("q_" + _cod, "p_" + _cod):
+        _testo = st.session_state.get(_verita + "_txt")
+        if _testo is None:
+            continue
+        _valore = numero_da_it(_testo)
+        if _valore is None:
+            continue
+        st.session_state[_verita] = max(0.0, _valore)
+        if _testo != numero_it(st.session_state[_verita], 2):
+            st.session_state.pop(_verita + "_txt")   # rinasce formattato
 
 # Le categorie si ricostruiscono a ogni giro dalle zone effettivamente
 # disegnate: così i pesi aggiornati valgono subito e una zona marcata con una
@@ -2446,10 +2579,24 @@ else:
     _stato = ('<span class="salvataggio pari">salvato alle '
               + st.session_state.ultimo_salvataggio.strftime("%H:%M")
               + '</span>')
-st.markdown(
-    '<div class="cme-testata">'
-    '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
-    + _cartiglio + _stato + '</div>', unsafe_allow_html=True)
+# Il tasto «Salva» sta in alto a destra, dove lo si cerca: due colonne, il
+# cartiglio a sinistra e il comando a filo con esso.
+_t_titolo, _t_salva = st.columns([6, 1], vertical_alignment="center")
+with _t_titolo:
+    st.markdown(
+        '<div class="cme-testata">'
+        '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
+        + _cartiglio + _stato + '</div>', unsafe_allow_html=True)
+with _t_salva:
+    st.button("💾 Salva", type="primary", width="stretch",
+              on_click=salva_al_volo, key="salva_testata",
+              help=f"Salva subito in archivio come "
+                   f"«{nome_archivio_corrente()}», sovrascrivendo la "
+                   f"versione precedente. Cartella: "
+                   f"{archivio_locale.cartella()}")
+_esito = st.session_state.pop("_esito_salva", None)
+if _esito:
+    (st.error if _esito[0] == "errore" else st.toast)(_esito[1])
 
 # Le planimetrie che non si sono lasciate rileggere: dirlo, e dire anche
 # che il resto del progetto è arrivato intero. Un disegno che sparisce in
@@ -4200,8 +4347,8 @@ with tab_bp:
             with col_sum:
                 st.number_input("Mq commerciali (0 = dalla planimetria)",
                                 min_value=0.0, step=1.0, key="bp_mq")
-                st.number_input("Passo sensitività (€)", min_value=1000.0,
-                                step=1000.0, key="bp_passo")
+                campo_numero_it(st, "Passo sensitività (€)", "bp_passo",
+                                decimali=0, label_visibility="visible")
                 st.number_input("Durata operazione (mesi)", min_value=1,
                                 max_value=120, step=1, key="bp_durata")
                 # Testata di colonna: etichetta campione, non un bottone
@@ -4210,10 +4357,9 @@ with tab_bp:
                 st.markdown(intestazione_bp("ESTIMATED"),
                             unsafe_allow_html=True)
                 with st.container(key="bp_in_acq"):
-                    st.number_input("Prezzo base (acquisto, €)",
-                                    min_value=0.0, step=5000.0,
-                                    format="%.0f", key="bp_acquisto",
-                                    on_change=bp_ricalcola_euro)
+                    campo_numero_it(st, "Prezzo base (acquisto, €)",
+                                    "bp_acquisto", decimali=0,
+                                    label_visibility="visible")
                 st.markdown(righe_bp([
                     ("€/mq acquisto",
                      numero_it(esito["eur_mq_acquisto"], 0) + " €"
@@ -4222,12 +4368,11 @@ with tab_bp:
                     ("Prezzo netto — entry", euro(esito["entry"]), "bold"),
                 ]), unsafe_allow_html=True)
                 with st.container(key="bp_in_ven"):
-                    st.number_input("Estimated sell price (€)",
-                                    min_value=0.0, step=5000.0,
-                                    format="%.0f", key="bp_vendita",
-                                    on_change=bp_ricalcola_euro,
-                                    help="Puoi stimarlo con l'MCA (terza "
-                                         "sezione)")
+                    campo_numero_it(st, "Estimated sell price (€)",
+                                    "bp_vendita", decimali=0,
+                                    label_visibility="visible",
+                                    aiuto="Puoi stimarlo con l'MCA (terza "
+                                          "sezione)")
                 st.markdown(righe_bp([
                     ("€/mq vendita",
                      numero_it(esito["eur_mq_vendita"], 0) + " €"

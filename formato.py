@@ -38,6 +38,43 @@ def euro(valore):
     return f"{numero_it(valore, 2)} €"
 
 
+def numero_da_it(testo):
+    """Rilegge un numero scritto all'italiana. None se non è un numero.
+
+    Serve ai campi in cui l'utente scrive: `st.number_input` non sa
+    raggruppare le migliaia (accetta solo formati printf), quindi i campi
+    degli importi sono caselle di testo — e questa funzione è ciò che le
+    rende dei numeri.
+
+    Accetta come lo scriverebbe una persona: `1.234,56`, `1234,56`,
+    `1.234`, `1234`, con o senza `€`, con o senza spazi.
+
+    ⚠️ Il punto è ambiguo: in `1.234` separa le migliaia, in `1234.56`
+    separa i decimali. La regola, quando manca la virgola: **è separatore
+    di migliaia solo se raggruppa a tre a tre** (`1.234`, `1.234.567`);
+    altrimenti vale come virgola decimale, così anche chi digita
+    all'inglese ottiene il numero che intendeva.
+    """
+    if testo is None:
+        return None
+    ripulito = (str(testo).replace("€", "").replace("%", "")
+                .replace(" ", "").replace(" ", "").strip())
+    if not ripulito:
+        return None
+    if "," in ripulito:
+        ripulito = ripulito.replace(".", "").replace(",", ".")
+    elif "." in ripulito:
+        pezzi = ripulito.lstrip("+-").split(".")
+        migliaia = (len(pezzi) > 1 and pezzi[0] != ""
+                    and all(len(p) == 3 for p in pezzi[1:]))
+        if migliaia:
+            ripulito = ripulito.replace(".", "")
+    try:
+        return float(ripulito)
+    except ValueError:
+        return None
+
+
 def colore_testo_su(colore_hex):
     """Colore di testo leggibile su uno sfondo dato.
 
