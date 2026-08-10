@@ -81,10 +81,10 @@ def stato_cantiere(importo_contratto, percentuali, pagati=(), extra=0.0):
 def scostamento_percentuale(contratto, totale_finale):
     """Di quanto si è sforato, in percentuale sul contratto.
 
-    È il numero che vale per l'operazione DOPO: dice se il 5% di imprevisti
-    messo nel business plan è una convenzione o una misura. None quando non
-    c'è un contratto da confrontare — meglio niente che uno zero che sembra
-    «nessuno sforamento».
+    È il numero che vale per l'operazione DOPO: dice se il 10% di imprevisti
+    previsto dal contratto d'appalto regge alla prova dei fatti, o se sui
+    tuoi cantieri va alzato. None quando non c'è un contratto da confrontare
+    — meglio niente che uno zero che sembra «nessuno sforamento».
     """
     contratto = float(contratto or 0.0)
     if contratto <= 0:

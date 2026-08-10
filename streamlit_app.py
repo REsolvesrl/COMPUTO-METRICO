@@ -2281,7 +2281,9 @@ st.session_state.setdefault("prg_committente", "")
 st.session_state.setdefault("prg_oggetto", "")
 st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 10.0)   # 10%: aliquota tipica in edilizia
-st.session_state.setdefault("imprevisti", 5.0)
+# 10%: è la quota prevista dal contratto d'appalto, non una convenzione.
+# Lo storico dei cantieri chiusi può poi tararla sul tuo sforamento reale.
+st.session_state.setdefault("imprevisti", 10.0)
 # contratto d'appalto: importo, quote dei SAL, extra di fine lavori
 st.session_state.setdefault("cant_contratto", 0.0)
 st.session_state.setdefault("cant_extra", 0.0)
@@ -2368,7 +2370,7 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_committente = progetto.get("committente", "")
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
-    st.session_state.imprevisti = float(progetto.get("imprevisti", 5.0))
+    st.session_state.imprevisti = float(progetto.get("imprevisti", 10.0))
     stato_listino = dati.get("listino_stato") or {}
     misure_salvate = dati.get("misure_listino") or {}
     st.session_state.misure_base = {}
@@ -2694,8 +2696,11 @@ with tab_computo:
         d6.number_input("Imprevisti (%)", min_value=0.0, max_value=50.0,
                         step=1.0, key="imprevisti",
                         help="Accantonamento sul totale lavori per le "
-                             "sorprese di cantiere (tipicamente 5%), "
-                             "applicato prima dell'IVA.")
+                             "sorprese di cantiere, applicato prima "
+                             "dell'IVA. Il predefinito è il **10% previsto "
+                             "dal contratto d'appalto**; quando avrai "
+                             "chiuso qualche cantiere, la scheda Cantiere "
+                             "potrà tararlo sul tuo sforamento reale.")
 
         st.divider()
         if not progetto_e_vuoto():
