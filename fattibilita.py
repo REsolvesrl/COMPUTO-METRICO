@@ -62,10 +62,30 @@ def riepilogo_per_categoria(righe):
                 "iva": round(agg[c]["iva"], 2)} for c in chiavi}
 
 
+def iva_su(imponibile, aliquota):
+    """L'IVA su un imponibile. Zero per le voci che non ne hanno.
+
+    L'imposta di registro non è soggetta a IVA (è già un'imposta), il
+    notaio e le agenzie sì al 22%, i lavori edili al 10%: l'aliquota la
+    decide la voce, non una regola sola per tutti.
+    """
+    return round(float(imponibile or 0.0) * float(aliquota or 0.0) / 100, 2)
+
+
 def costi_acquisto(prezzo, imposta_pct=9.0, imposte_fisse=0.0,
                    notaio=3500.0, agenzia_pct=3.0, iva_agenzia_pct=22.0,
-                   imprevisti=0.0, spese_mutuo=0.0, ristrutturazione=0.0):
-    """Dettaglio dei costi di acquisto; "totale" è la somma."""
+                   imprevisti=0.0, spese_mutuo=0.0, ristrutturazione=0.0,
+                   iva=0.0):
+    """Dettaglio dei costi di acquisto; "totale" è la somma.
+
+    `iva` è l'IVA complessiva delle voci, calcolata fuori di qui perché
+    ogni voce ha la sua aliquota. Vale zero per difetto: così i conti di
+    chi non la traccia restano identici a prima.
+
+    ⚠️ L'agenzia porta l'IVA DENTRO il proprio importo (è sempre stato
+    così, ed è il numero che l'utente confronta col suo foglio): non
+    rimetterla anche in `iva`, o si conta due volte.
+    """
     dettaglio = {
         "imposte": round(prezzo * imposta_pct / 100 + imposte_fisse, 2),
         "notaio": round(notaio, 2),
@@ -74,6 +94,7 @@ def costi_acquisto(prezzo, imposta_pct=9.0, imposte_fisse=0.0,
         "imprevisti": round(imprevisti, 2),
         "spese_mutuo": round(spese_mutuo, 2),
         "ristrutturazione": round(ristrutturazione, 2),
+        "iva": round(float(iva or 0.0), 2),
     }
     dettaglio["totale"] = round(sum(dettaglio.values()), 2)
     return dettaglio
@@ -106,6 +127,7 @@ def studio_fattibilita(parametri):
         imprevisti=parametri.get("imprevisti", 0.0),
         spese_mutuo=parametri.get("spese_mutuo", 0.0),
         ristrutturazione=parametri.get("ristrutturazione", 0.0),
+        iva=parametri.get("iva_costi", 0.0),
     )
     ven = costi_vendita(
         vendita,

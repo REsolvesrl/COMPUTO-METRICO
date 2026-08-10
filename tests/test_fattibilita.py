@@ -4,6 +4,7 @@ from fattibilita import (
     costi_acquisto,
     costi_vendita,
     iva_scorporata,
+    iva_su,
     matrice_sensitivita,
     riepilogo_per_categoria,
     stima_mca,
@@ -194,3 +195,29 @@ def test_senza_lavori_niente_costo_al_metro():
         "ristrutturazione": 0.0, "mq_calpestabile": 110.0,
     })
     assert esito["eur_mq_ristrutturazione"] is None
+
+
+# --------------------------------------- l'IVA delle voci di costo
+
+def test_iva_su_un_imponibile():
+    assert iva_su(2500.0, 22.0) == 550.0
+    assert iva_su(65000.0, 10.0) == 6500.0          # lavori edili
+
+
+def test_iva_su_una_voce_che_non_ne_ha():
+    """L'imposta di registro non e' soggetta a IVA: e' gia' un'imposta."""
+    assert iva_su(13050.0, 0.0) == 0.0
+    assert iva_su(None, 22.0) == 0.0
+
+
+def test_l_iva_entra_nei_costi_di_acquisto():
+    senza = costi_acquisto(145000.0, notaio=2500.0, agenzia_pct=0.0)
+    con = costi_acquisto(145000.0, notaio=2500.0, agenzia_pct=0.0, iva=550.0)
+    assert con["totale"] == round(senza["totale"] + 550.0, 2)
+    assert con["iva"] == 550.0
+
+
+def test_senza_iva_i_conti_restano_quelli_di_prima():
+    """Chi non la traccia non deve vedere cambiare un numero."""
+    assert costi_acquisto(145000.0)["totale"] == \
+        costi_acquisto(145000.0, iva=0.0)["totale"]

@@ -356,6 +356,12 @@ def css_mondo():
     margin-bottom: .75rem;
 }}
 
+/* Contenitori tecnici: servono solo a far girare uno script, e Streamlit
+   lasciava comunque il loro ingombro a video — un trattino che spuntava in
+   mezzo alla pagina, su ogni scheda. Nascosti: l'iframe resta nel documento
+   e lo script gira lo stesso. */
+[class*="st-key-cme_script_"] {{ display: none; }}
+
 /* ---------------------------------------------------- stato vuoto */
 /* Una cartella di campioni aperta, non un riquadro grigio con una frase:
    dice cosa succede dopo e mette l'azione a portata. */
@@ -521,6 +527,11 @@ IMPOSTAZIONI_BP = {
     "bp_ag_in": 3.0, "bp_ag_out": 2.5, "bp_iva_ag": 22.0,
     "bp_imprevisti_pct": 10.0, "bp_imprevisti": 0.0, "bp_mutuo": 0.0, "bp_durata": 12,
     "bp_ristr": 0.0, "bp_passo": 10000.0,
+    # Aliquote IVA, una per voce: l'imposta di registro non ne ha (e' gia'
+    # un'imposta), notaio e servizi stanno al 22%, i lavori edili al 10%.
+    "bp_iva_imposta": 0.0, "bp_iva_imposte_fisse": 0.0,
+    "bp_iva_notaio": 22.0, "bp_iva_mutuo": 22.0,
+    "bp_iva_imprevisti": 22.0, "bp_iva_ristr": 10.0,
     "bp_coeff_sogg": 1.0, "bp_sconto": 13.0,
 }
 
@@ -1374,6 +1385,11 @@ def righe_bp(righe):
     """
     pezzi = []
     for etichetta, valore, stile in righe:
+        # Una riga senza valore non si scrive: il trattino che ci stava al
+        # posto del numero non diceva niente e compariva a mezz'aria in
+        # varie schede, sembrando un difetto della pagina.
+        if valore is None or str(valore).strip() in ("", "—"):
+            continue
         colore = {"buono": "#7DDC7D", "cattivo": "#FF8A8A"}.get(stile, CREMA)
         peso = "700" if stile else "500"
         pezzi.append(
@@ -1425,7 +1441,11 @@ def guardia_prezzi_bp(acquisto, vendita):
         f' data-acq="{float(acquisto or 0):.2f}"'
         f' data-ven="{float(vendita or 0):.2f}"></div>',
         unsafe_allow_html=True)
-    st.iframe("""<!doctype html><html><body><script>
+    # dentro un contenitore nascosto: l'iframe è solo un modo per far
+    # girare uno script, ma Streamlit gli lascia comunque un ingombro a
+    # video — un trattino che compariva in mezzo alla pagina
+    with st.container(key="cme_script_prezzi"):
+        st.iframe("""<!doctype html><html><body><script>
 (function () {
   var doc;
   try { doc = window.parent.document; } catch (errore) { return; }
@@ -1465,17 +1485,23 @@ def guardia_prezzi_bp(acquisto, vendita):
 </script></body></html>""", height=1)
 
 
-def riga_costo_bp(etichetta, centro=None, destra=None):
-    """Riga del dettaglio costi stile Excel: etichetta | %/€ | netto.
+def riga_costo_bp(etichetta, centro=None, destra=None, iva=None,
+                  imponibile=None):
+    """Riga del dettaglio costi: etichetta | % | netto | IVA % | IVA €.
 
     centro e destra possono essere: None (mostra «/»), una stringa (testo
     di sola lettura) oppure un dizionario {"chiave": …, **kwargs} che
-    diventa un number_input modificabile.
+    diventa un campo modificabile.
+
+    iva: la chiave dell'aliquota di questa voce (`bp_iva_notaio`…). L'IVA
+    in euro non è modificabile: è il prodotto di due numeri che stanno lì
+    accanto, e lasciarla scrivere aprirebbe una terza sincronizzazione da
+    tenere allineata — di quelle in questa scheda ne bastano due.
     """
     # la colonna «Netto» ospita cifre a 7 numeri con i loro stepper: stretta
     # com'era, i valori uscivano troncati a metà ("16200,0(")
-    c_eti, c_inp, c_val = st.columns([1.7, 0.95, 1.35],
-                                     vertical_alignment="center")
+    c_eti, c_inp, c_val, c_ivapct, c_ivaeur = st.columns(
+        [1.5, 0.75, 1.15, 0.7, 1.0], vertical_alignment="center")
     c_eti.markdown(f":gray[{etichetta}]")
 
     def cella(colonna, contenuto, a_destra=False):
@@ -1506,6 +1532,23 @@ def riga_costo_bp(etichetta, centro=None, destra=None):
 
     cella(c_inp, centro)
     cella(c_val, destra, a_destra=True)
+
+    if iva is None:
+        cella(c_ivapct, None)
+        cella(c_ivaeur, None)
+        return 0.0
+    c_ivapct.number_input(
+        f"{etichetta} {iva}", key=iva, min_value=0.0, max_value=50.0,
+        step=1.0, format="%.2f", label_visibility="collapsed",
+        help="Aliquota di questa voce: 22% è l'ordinaria, 10% i lavori "
+             "edili, 0% le voci che l'IVA non ce l'hanno (l'imposta di "
+             "registro è già un'imposta).")
+    if imponibile is None:
+        imponibile = float(st.session_state.get(destra["chiave"], 0.0)
+                           if isinstance(destra, dict) else 0.0)
+    importo_iva = fattibilita.iva_su(imponibile, st.session_state[iva])
+    cella(c_ivaeur, euro(importo_iva), a_destra=True)
+    return importo_iva
 
 
 def campo_numero_it(colonna, etichetta, chiave, decimali=2,
@@ -1550,6 +1593,17 @@ def campo_numero_it(colonna, etichetta, chiave, decimali=2,
 
 # Campi in cui l'utente scrive un importo: quanti decimali mostrare e che
 # cosa ricalcolare quando cambiano (il sincronismo %↔€ del business plan).
+# Le voci del dettaglio costi che hanno un'IVA, con l'aliquota che la
+# governa. La ristrutturazione sta fuori: il suo imponibile non è un campo
+# ma il valore effettivo (computo, consuntivo o cifra a mano).
+VOCI_CON_IVA = (
+    ("bp_imposta_eur", "bp_iva_imposta"),
+    ("bp_imposte_fisse", "bp_iva_imposte_fisse"),
+    ("bp_notaio", "bp_iva_notaio"),
+    ("bp_mutuo", "bp_iva_mutuo"),
+    ("bp_imprevisti", "bp_iva_imprevisti"),
+)
+
 # chiave: (decimali, cosa ricalcolare, minimo)
 CAMPI_NUMERO_IT = {
     "bp_acquisto": (0, "bp_ricalcola_euro", 0.0),
@@ -4444,17 +4498,13 @@ with tab_bp:
         st.markdown("""
 <style>
 .st-key-bp_scroll { overflow-x: auto; padding-bottom: 6px; }
-.st-key-bp_scroll [data-testid="stHorizontalBlock"] { min-width: 1120px; }
+.st-key-bp_scroll [data-testid="stHorizontalBlock"] { min-width: 1560px; }
 .st-key-bp_scroll [data-testid="stHorizontalBlock"]
  [data-testid="stHorizontalBlock"] { min-width: 0; }
-@media (max-width: 1400px) {
-    .st-key-bp_scroll [data-testid="stHorizontalBlock"] {
-        min-width: 0; flex-wrap: wrap;
-    }
-    .st-key-bp_scroll > div > [data-testid="stHorizontalBlock"] > div {
-        flex: 1 1 100% !important; min-width: 0 !important;
-    }
-}
+/* Su schermo stretto la scheda SCORRE, non si impila: c'era una regola che
+   sotto i 1400 px mandava le tre colonne una sotto l'altra, ed era il
+   contrario di quello che serve — un foglio di conti si legge affiancato,
+   come nell'Excel da cui viene, e comprimerlo tronca i numeri. */
 /* prezzi base evidenziati come in Excel: acquisto giallino, vendita azzurro */
 .st-key-bp_in_acq input {
     background-color: #FFF2CC !important;
@@ -4532,13 +4582,29 @@ with tab_bp:
             st.session_state._base_imprevisti = base_imprevisti
             bp_ricalcola_euro()
 
+        # L'IVA di ogni voce, sommata PRIMA dei totali: le righe più sotto
+        # la ridisegnano soltanto. Il conto sta qui perché «TOTALE SPESE»
+        # deve comprenderla — è tutta la ragione per cui la si traccia.
+        _iva_voci = [
+            fattibilita.iva_su(st.session_state.get(campo, 0.0),
+                               st.session_state.get(aliquota, 0.0))
+            for campo, aliquota in VOCI_CON_IVA
+        ]
+        # la ristrutturazione paga l'IVA sul valore EFFETTIVO: quando il
+        # campo è a zero l'importo arriva dal computo
+        _iva_voci.append(fattibilita.iva_su(
+            ristr_eff, st.session_state.get("bp_iva_ristr", 0.0)))
+        parametri_bp["iva_costi"] = round(sum(_iva_voci), 2)
         esito = fattibilita.studio_fattibilita(parametri_bp)
         acq = esito["costi_acquisto"]
         ven = esito["costi_vendita"]
 
         with st.container(key="bp_scroll"):
+            # il dettaglio costi ha cinque colonne (voce, %, netto, IVA %,
+            # IVA €): gli si dà più spazio, e la pagina scorre invece di
+            # comprimerle fino a troncare i numeri
             col_sum, col_matrici, col_costi = st.columns(
-                [1.15, 2.15, 1.7], gap="large")
+                [1.0, 1.85, 2.15], gap="large")
 
             # ------------------------------------------ riepilogo (Summary)
             with col_sum:
@@ -4702,33 +4768,41 @@ with tab_bp:
                         ":orange[Le percentuali qui sotto restano a zero "
                         "finché manca " + " · ".join(_senza_base)
                         + ": non c'è ancora un importo su cui calcolarle.]")
-                e1, e2, e3 = st.columns([1.7, 0.95, 1.35])
+                e1, e2, e3, e4, e5 = st.columns(
+                    [1.5, 0.75, 1.15, 0.7, 1.0])
                 e1.caption("Voce")
-                e2.caption("% / €")
+                e2.caption("%")
                 e3.caption("Netto")
-                riga_costo_bp(
+                e4.caption("IVA %")
+                e5.caption("IVA €")
+                iva_voci = []
+                iva_voci.append(riga_costo_bp(
                     "Imposte d'acquisto",
                     centro={"chiave": "bp_imposta", "min_value": 0.0,
                             "max_value": 30.0, "step": 0.5,
                             "on_change": bp_ricalcola_euro},
                     destra={"chiave": "bp_imposta_eur", "min_value": 0.0,
                             "step": 100.0, "format": "%.2f",
-                            "on_change": bp_pct_da_euro_imposta})
-                riga_costo_bp(
+                            "on_change": bp_pct_da_euro_imposta},
+                    iva="bp_iva_imposta"))
+                iva_voci.append(riga_costo_bp(
                     "Imposte fisse",
                     destra={"chiave": "bp_imposte_fisse", "min_value": 0.0,
-                            "step": 50.0, "format": "%.2f"})
-                riga_costo_bp(
+                            "step": 50.0, "format": "%.2f"},
+                    iva="bp_iva_imposte_fisse"))
+                iva_voci.append(riga_costo_bp(
                     "Notaio",
                     destra={"chiave": "bp_notaio", "min_value": 0.0,
                             "step": 100.0, "format": "%.2f",
                             "help": "Compreso IVA, visure, archivio "
-                                    "notarile…"})
-                riga_costo_bp(
+                                    "notarile…"},
+                    iva="bp_iva_notaio"))
+                iva_voci.append(riga_costo_bp(
                     "Spese e interessi mutuo",
                     destra={"chiave": "bp_mutuo", "min_value": 0.0,
-                            "step": 100.0, "format": "%.2f"})
-                riga_costo_bp(
+                            "step": 100.0, "format": "%.2f"},
+                    iva="bp_iva_mutuo"))
+                iva_voci.append(riga_costo_bp(
                     "Imprevisti e condominio",
                     centro={"chiave": "bp_imprevisti_pct", "min_value": 0.0,
                             "max_value": 50.0, "step": 1.0, "format": "%.2f",
@@ -4740,7 +4814,8 @@ with tab_bp:
                                     "l'importo a destra e la percentuale si "
                                     "adegua."},
                     destra={"chiave": "bp_imprevisti", "min_value": 0.0,
-                            "step": 500.0, "format": "%.2f"})
+                            "step": 500.0, "format": "%.2f"},
+                    iva="bp_iva_imprevisti"))
                 riga_costo_bp(
                     "Agenzia IN",
                     centro={"chiave": "bp_ag_in", "min_value": 0.0,
@@ -4750,8 +4825,9 @@ with tab_bp:
                                     "il € a destra è IVA inclusa"},
                     destra={"chiave": "bp_ag_in_eur", "min_value": 0.0,
                             "step": 100.0, "format": "%.2f",
-                            "on_change": bp_pct_da_euro_ag_in})
-                riga_costo_bp(
+                            "on_change": bp_pct_da_euro_ag_in},
+                    iva=None)
+                iva_voci.append(riga_costo_bp(
                     ":orange[**Ristrutturazione stimata**] (0 = dal "
                     "computo)",
                     destra={"chiave": "bp_ristr", "min_value": 0.0,
@@ -4760,7 +4836,8 @@ with tab_bp:
                                     "imprevisti sono la riga qui sopra e "
                                     "si contano una volta sola. Lasciando "
                                     "0 arriva il totale del computo, anche "
-                                    "quello al netto dei suoi imprevisti."})
+                                    "quello al netto dei suoi imprevisti."},
+                    iva="bp_iva_ristr", imponibile=ristr_eff))
                 # A cantiere avviato le fatture reali valgono più di ogni
                 # stima: l'opzione compare solo quando un consuntivo esiste
                 # davvero, altrimenti sarebbe un interruttore che non fa nulla.
@@ -4808,6 +4885,7 @@ with tab_bp:
                         "la superficie commerciale non va bene come "
                         "ripiego.]")
                 st.markdown(righe_bp([
+                    ("di cui IVA", euro(acq["iva"]), None),
                     ("TOTALE SPESE ACQUISTO", euro(acq["totale"]), "bold"),
                 ]), unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>",
@@ -5072,10 +5150,11 @@ with tab_bp:
 # fonetica inglese a «Computo», «Demolizioni», «Imprevisti». Il componente
 # gira nella stessa origine e può correggere l'attributo sul documento padre;
 # se il browser lo impedisce non succede nulla di male.
-st.iframe(
-    '<!doctype html><html><body><script>'
-    'try { window.parent.document.documentElement.lang = "it"; }'
-    ' catch (errore) {}'
-    '</script></body></html>',
-    height=1,
+with st.container(key="cme_script_lingua"):
+    st.iframe(
+        '<!doctype html><html><body><script>'
+        'try { window.parent.document.documentElement.lang = "it"; }'
+        ' catch (errore) {}'
+        '</script></body></html>',
+        height=1,
 )
