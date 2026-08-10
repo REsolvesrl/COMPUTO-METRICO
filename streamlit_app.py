@@ -4601,6 +4601,24 @@ with tab_bp:
                 st.markdown(
                     intestazione_bp("Spese acquisto — dettaglio"),
                     unsafe_allow_html=True)
+                # Una percentuale senza il prezzo su cui applicarla dà zero,
+                # e uno zero muto accanto a un «9,00» scritto a mano sembra
+                # un difetto. Qui si dice quale prezzo manca.
+                _senza_base = []
+                if not st.session_state.bp_acquisto:
+                    _senza_base.append("il **prezzo di acquisto** (imposte e "
+                                       "agenzia IN)")
+                if not st.session_state.bp_vendita:
+                    _senza_base.append("il **prezzo di vendita** "
+                                       "(agenzia OUT)")
+                if not ristr_eff:
+                    _senza_base.append("l'**importo dei lavori** "
+                                       "(imprevisti)")
+                if _senza_base:
+                    st.caption(
+                        ":orange[Le percentuali qui sotto restano a zero "
+                        "finché manca " + " · ".join(_senza_base)
+                        + ": non c'è ancora un importo su cui calcolarle.]")
                 e1, e2, e3 = st.columns([1.7, 0.95, 1.35])
                 e1.caption("Voce")
                 e2.caption("% / €")
