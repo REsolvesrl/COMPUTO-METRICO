@@ -510,7 +510,7 @@ IMPOSTAZIONI_BP = {
     "bp_acquisto": 0.0, "bp_vendita": 0.0, "bp_mq": 0.0,
     "bp_imposta": 9.0, "bp_imposte_fisse": 0.0, "bp_notaio": 3500.0,
     "bp_ag_in": 3.0, "bp_ag_out": 2.5, "bp_iva_ag": 22.0,
-    "bp_imprevisti": 15000.0, "bp_mutuo": 0.0, "bp_durata": 12,
+    "bp_imprevisti_pct": 10.0, "bp_imprevisti": 0.0, "bp_mutuo": 0.0, "bp_durata": 12,
     "bp_ristr": 0.0, "bp_passo": 10000.0,
     "bp_coeff_sogg": 1.0, "bp_sconto": 13.0,
 }
@@ -1534,7 +1534,7 @@ CAMPI_NUMERO_IT = {
     "bp_imposte_fisse": (2, None, 0.0),
     "bp_notaio": (2, None, 0.0),
     "bp_mutuo": (2, None, 0.0),
-    "bp_imprevisti": (2, None, 0.0),
+    "bp_imprevisti": (2, "bp_pct_da_euro_imprevisti", 0.0),
     "bp_ag_in_eur": (2, "bp_pct_da_euro_ag_in", 0.0),
     "bp_ag_out_eur": (2, "bp_pct_da_euro_ag_out", 0.0),
     "bp_ristr": (2, None, 0.0),
@@ -1595,6 +1595,22 @@ def bp_ricalcola_euro():
         prezzo_a * st.session_state.bp_ag_in / 100 * iva, 2)
     st.session_state.bp_ag_out_eur = round(
         prezzo_v * st.session_state.bp_ag_out / 100 * iva, 2)
+    # Gli imprevisti dell'operazione si calcolano sull'IMPORTO DEI LAVORI,
+    # non sul prezzo d'acquisto: la base la deposita la scheda quando sa
+    # quale ristrutturazione sta considerando (computo, consuntivo o cifra
+    # a mano). Senza base restano quello che sono.
+    base = st.session_state.get("_base_imprevisti")
+    if base:
+        st.session_state.bp_imprevisti = round(
+            base * st.session_state.bp_imprevisti_pct / 100, 2)
+
+
+def bp_pct_da_euro_imprevisti():
+    """Se scrivi l'importo, la percentuale si adegua (come per le agenzie)."""
+    base = st.session_state.get("_base_imprevisti") or 0.0
+    if base > 0:
+        st.session_state.bp_imprevisti_pct = round(
+            st.session_state.bp_imprevisti / base * 100, 3)
 
 
 def bp_pct_da_euro_imposta():
@@ -2193,6 +2209,16 @@ def salva_al_volo():
     st.session_state._esito_salva = (
         "ok", f"«{nome}» salvato alle "
               f"{st.session_state.ultimo_salvataggio.strftime('%H:%M')}")
+
+
+def riprendi_mq_planimetria(valore):
+    """Rimette i mq della planimetria dopo che sono stati scritti a mano.
+
+    Da usare come on_click: il campo è già stato disegnato quando il bottone
+    viene premuto, e Streamlit vieta di riscriverlo fuori da una callback.
+    """
+    st.session_state.bp_mq = float(valore)
+    st.session_state._mq_automatici = float(valore)
 
 
 def applica_imprevisti(percentuale):
@@ -4349,6 +4375,20 @@ with tab_bp:
 </style>
 """, unsafe_allow_html=True)
 
+        # I mq si COMPILANO da sé con quello che dice la planimetria, e
+        # restano modificabili. Prima il campo restava a zero con la
+        # promessa «0 = dalla planimetria»: il valore veniva usato davvero,
+        # ma a vederlo sembrava che l'app non l'avesse preso.
+        # Il segnalibro dice qual è l'ultimo valore scritto in automatico: se
+        # il campo non combacia più, l'ha cambiato l'utente e non si tocca.
+        if (mq_da_planimetria
+                and st.session_state.bp_mq == st.session_state.get(
+                    "_mq_automatici", 0.0)):
+            st.session_state.bp_mq = mq_da_planimetria
+            st.session_state._mq_automatici = mq_da_planimetria
+        mq_a_mano = bool(st.session_state.bp_mq
+                         and st.session_state.bp_mq
+                         != st.session_state.get("_mq_automatici"))
         mq_eff = st.session_state.bp_mq or mq_da_planimetria
         # ordine di precedenza della ristrutturazione: consuntivo reale se
         # richiesto esplicitamente, altrimenti la cifra a mano, altrimenti
@@ -4375,6 +4415,16 @@ with tab_bp:
             "mq_calpestabile": mq_calpestabili,
             "durata_mesi": st.session_state.bp_durata,
         }
+        # Gli imprevisti dell'operazione sono una percentuale dell'IMPORTO DEI
+        # LAVORI: qui la scheda deposita la base, perché le callback del
+        # sincronismo %↔€ (che girano a inizio pagina) non sanno da sole
+        # quale ristrutturazione si sta considerando. Quando la base cambia
+        # l'importo si rifà subito, e la casella rinasce col valore nuovo.
+        if st.session_state.get("_base_imprevisti") != ristr_eff:
+            st.session_state._base_imprevisti = ristr_eff
+            bp_ricalcola_euro()
+            st.session_state.pop("bp_imprevisti_txt", None)
+
         esito = fattibilita.studio_fattibilita(parametri_bp)
         acq = esito["costi_acquisto"]
         ven = esito["costi_vendita"]
@@ -4385,8 +4435,48 @@ with tab_bp:
 
             # ------------------------------------------ riepilogo (Summary)
             with col_sum:
-                st.number_input("Mq commerciali (0 = dalla planimetria)",
-                                min_value=0.0, step=1.0, key="bp_mq")
+                st.number_input("Mq commerciali", min_value=0.0, step=1.0,
+                                key="bp_mq",
+                                help="Si compila da sé con la superficie "
+                                     "commerciale della planimetria. "
+                                     "Scrivici sopra quando serve: da quel "
+                                     "momento comanda la tua cifra.")
+                # Il campo dice sempre da dove viene quello che c'è dentro.
+                if mq_a_mano:
+                    st.caption(":orange[Cifra scritta a mano.]"
+                               + (f" :gray[La planimetria dice "
+                                  f"**{numero_it(mq_da_planimetria, 2)} m²**.]"
+                                  if mq_da_planimetria else ""))
+                    if mq_da_planimetria:
+                        st.button("↩️ Riprendi dalla planimetria",
+                                  key="mq_da_planim",
+                                  on_click=riprendi_mq_planimetria,
+                                  args=(mq_da_planimetria,))
+                elif mq_da_planimetria:
+                    st.caption(f":green[Compilato dalla planimetria: "
+                               f"**{numero_it(mq_da_planimetria, 2)} m²** "
+                               "commerciali.]")
+                elif not st.session_state.piante:
+                    st.caption(":gray[Nessuna planimetria caricata: scrivi "
+                               "qui i mq, oppure disegnale nella scheda "
+                               "**Misura da planimetria**.]")
+                elif mq_calpestabili:
+                    # il caso che confonde: stanze disegnate, ma nessun
+                    # perimetro d'ingombro — e la commerciale resta zero
+                    st.warning(
+                        "Nella planimetria ci sono stanze "
+                        f"(**{numero_it(mq_calpestabili, 2)} m²** "
+                        "calpestabili) ma **nessun perimetro «Superficie "
+                        "commerciale»**, e le stanze interne da sole non "
+                        "fanno superficie commerciale: il perimetro le "
+                        "racchiude già, contarle in due posti gonfierebbe "
+                        "il totale. Disegna il perimetro d'ingombro con la "
+                        "categoria **Superficie commerciale**, oppure "
+                        "scrivi qui i mq a mano.")
+                else:
+                    st.caption(":gray[La planimetria non ha ancora aree "
+                               "disegnate con una scala: scrivi qui i mq, "
+                               "oppure disegnale.]")
                 campo_numero_it(st, "Passo sensitività (€)", "bp_passo",
                                 decimali=0, label_visibility="visible")
                 st.number_input("Durata operazione (mesi)", min_value=1,
@@ -4515,6 +4605,15 @@ with tab_bp:
                             "step": 100.0, "format": "%.2f"})
                 riga_costo_bp(
                     "Imprevisti e condominio",
+                    centro={"chiave": "bp_imprevisti_pct", "min_value": 0.0,
+                            "max_value": 50.0, "step": 1.0, "format": "%.2f",
+                            "on_change": bp_ricalcola_euro,
+                            "help": "Percentuale sull'importo dei lavori "
+                                    "considerato qui sotto. Il 10% e' la "
+                                    "quota del contratto d'appalto: "
+                                    "cambiala quando serve, oppure scrivi "
+                                    "l'importo a destra e la percentuale si "
+                                    "adegua."},
                     destra={"chiave": "bp_imprevisti", "min_value": 0.0,
                             "step": 500.0, "format": "%.2f"})
                 riga_costo_bp(
