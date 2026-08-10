@@ -56,11 +56,13 @@ from PIL import Image
 import archivio
 import archivio_locale
 import calcoli
+import cantiere
 import fattibilita
 import fattura
 import listino
 import listino_personale
 import stampa
+import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
     CATEGORIE_SPESE_EMOJI,
@@ -1536,6 +1538,8 @@ CAMPI_NUMERO_IT = {
     "bp_ag_in_eur": (2, "bp_pct_da_euro_ag_in", 0.0),
     "bp_ag_out_eur": (2, "bp_pct_da_euro_ag_out", 0.0),
     "bp_ristr": (2, None, 0.0),
+    "cant_contratto": (2, None, 0.0),
+    "cant_extra": (2, None, 0.0),
 }
 
 
@@ -2051,6 +2055,9 @@ def _payload_progetto():
                      "apert_larg": st.session_state.apert_larg,
                      "apert_alt": st.session_state.apert_alt},
         "auto_computo": st.session_state.auto_computo,
+        "cantiere": {"contratto": st.session_state.cant_contratto,
+                     "extra": st.session_state.cant_extra,
+                     "sal": st.session_state.cant_sal},
         "piante": [pianta_a_json(p) for p in st.session_state.piante],
     }
     return payload
@@ -2188,6 +2195,15 @@ def salva_al_volo():
               f"{st.session_state.ultimo_salvataggio.strftime('%H:%M')}")
 
 
+def applica_imprevisti(percentuale):
+    """Porta gli imprevisti del computo alla percentuale dei cantieri chiusi.
+
+    Da usare come on_click, mai nel corpo dello script: il campo nasce nella
+    scheda Computo e Streamlit vieta di riscriverlo dopo.
+    """
+    st.session_state.imprevisti = float(percentuale)
+
+
 def azzera_progetto():
     """Svuota il progetto. Da usare come on_click, mai nel corpo dello script.
 
@@ -2266,6 +2282,10 @@ st.session_state.setdefault("prg_oggetto", "")
 st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 10.0)   # 10%: aliquota tipica in edilizia
 st.session_state.setdefault("imprevisti", 5.0)
+# contratto d'appalto: importo, quote dei SAL, extra di fine lavori
+st.session_state.setdefault("cant_contratto", 0.0)
+st.session_state.setdefault("cant_extra", 0.0)
+st.session_state.setdefault("cant_sal", [])
 for _voce in listino.VOCI:
     # chiavi «di verità»: sopravvivono anche quando la categoria è chiusa e
     # le sue righe non vengono disegnate (vedi il riallineamento più sotto)
@@ -2409,10 +2429,15 @@ if "da_caricare" in st.session_state:
     st.session_state.apert_larg = float(finiture.get("apert_larg", 0.80))
     st.session_state.apert_alt = float(finiture.get("apert_alt", 2.10))
     st.session_state.auto_computo = bool(dati.get("auto_computo", True))
+    _cant = dati.get("cantiere") or {}
+    st.session_state.cant_contratto = float(_cant.get("contratto", 0.0))
+    st.session_state.cant_extra = float(_cant.get("extra", 0.0))
+    st.session_state.cant_sal = list(_cant.get("sal") or [])
     for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
                "riv_alt_w", "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
                "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
-               "apert_larg_w", "apert_alt_w", "auto_computo_w"):
+               "apert_larg_w", "apert_alt_w", "auto_computo_w",
+               "cant_contratto_txt", "cant_extra_txt"):
         st.session_state.pop(_k, None)
     # Una per una, non tutte insieme: un'immagine rovinata deve costare
     # quella planimetria, non l'intero elenco. Prima bastava un foglio
@@ -4059,9 +4084,9 @@ with tab_plan:
 # ======================================================= SCHEDA BUSINESS PLAN
 
 with tab_bp:
-    sotto_fatt, sotto_spese, sotto_mca = st.tabs(
+    sotto_fatt, sotto_spese, sotto_cant, sotto_mca = st.tabs(
         ["🏦 Studio di fattibilità", "🧾 Spese a consuntivo",
-         "🏷️ MCA — prezzo di vendita"])
+         "🏗️ Cantiere — contratto e SAL", "🏷️ MCA — prezzo di vendita"])
 
     # valori automatici condivisi: superficie commerciale dalla planimetria
     # e costo di ristrutturazione dal computo (imprevisti inclusi)
@@ -4576,6 +4601,175 @@ with tab_bp:
                 ]), unsafe_allow_html=True)
 
     # --------------------------------------------- MCA prezzo di vendita
+    # ============================ CANTIERE: contratto, SAL, extra finali
+    with sotto_cant:
+        st.subheader("🏗️ Contratto d'appalto e stati di avanzamento")
+        st.caption(
+            "Le imprese si pagano a **SAL**, concordati nel contratto prima "
+            "che il cantiere apra (spesso 20-30-30-20, ma ogni cantiere fa "
+            "storia a sé). Gli **extra** non si vedono lungo la strada: si "
+            "calcolano a cantiere chiuso, quando ci si siede con le parti e "
+            "si fa il SAL finale. Qui si tiene il conto, e alla chiusura si "
+            "impara quanto si è sforato — che è il numero che serve "
+            "all'operazione dopo.")
+
+        c_imp, c_ext = st.columns(2)
+        with c_imp:
+            campo_numero_it(st, "Importo di contratto (€)", "cant_contratto",
+                            decimali=2, label_visibility="visible",
+                            aiuto="Quanto hai firmato con l'impresa. Se lo "
+                                  "lasci a zero non c'è niente da ripartire.")
+            if not st.session_state.cant_contratto and ristr_da_computo:
+                if st.button(f"Usa il computo: {euro(ristr_da_computo)}",
+                             key="cant_da_computo"):
+                    st.session_state.cant_contratto = ristr_da_computo
+                    st.session_state.pop("cant_contratto_txt", None)
+                    st.rerun()
+        with c_ext:
+            campo_numero_it(st, "Extra finali (€)", "cant_extra",
+                            decimali=2, label_visibility="visible",
+                            aiuto="Si compila a cantiere chiuso, dopo il SAL "
+                                  "finale concordato con le parti.")
+
+        st.markdown("**Stati di avanzamento**")
+        st.caption("Le quote del contratto. Spunta i SAL già saldati.")
+        quote = st.session_state.cant_sal or [
+            {"percento": p, "pagato": False} for p in cantiere.SAL_PREDEFINITI]
+        df_sal = st.data_editor(
+            pd.DataFrame([{"SAL": f"SAL {i}", "%": q.get("percento", 0.0),
+                           "Pagato": bool(q.get("pagato"))}
+                          for i, q in enumerate(quote, start=1)]),
+            hide_index=True, num_rows="dynamic", key="editor_sal",
+            column_config={
+                "SAL": st.column_config.TextColumn("Stato", disabled=True),
+                "%": st.column_config.NumberColumn(
+                    "% del contratto", min_value=0.0, max_value=100.0,
+                    step=5.0, format="%.1f"),
+                "Pagato": st.column_config.CheckboxColumn("Saldato"),
+            })
+        st.session_state.cant_sal = [
+            {"percento": float(r["%"] or 0.0), "pagato": bool(r["Pagato"])}
+            for _, r in df_sal.iterrows()]
+
+        percentuali = [q["percento"] for q in st.session_state.cant_sal]
+        somma = cantiere.somma_percentuali(percentuali)
+        if percentuali and abs(somma - 100.0) > 0.01:
+            st.warning(f"⚠️ Le quote fanno **{numero_it(somma, 1)}%**, non "
+                       "100: il contratto non è ripartito per intero. Non "
+                       "correggo io — è un numero da guardare.")
+        stato = cantiere.stato_cantiere(
+            st.session_state.cant_contratto, percentuali,
+            pagati=[i for i, q in enumerate(st.session_state.cant_sal,
+                                            start=1) if q["pagato"]],
+            extra=st.session_state.cant_extra)
+
+        if stato["contratto"]:
+            st.dataframe(pd.DataFrame([{
+                "Stato": f"SAL {s['n']}",
+                "% del contratto": numero_it(s["percento"], 1) + " %",
+                "Importo": euro(s["importo"]),
+                "Saldato": "sì" if st.session_state.cant_sal[s["n"] - 1]
+                                   ["pagato"] else "—",
+            } for s in stato["piano"]]), hide_index=True, width="stretch")
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Pagato", euro(stato["pagato"]))
+            m2.metric("Residuo di contratto", euro(stato["residuo"]))
+            m3.metric("Totale finale", euro(stato["totale_finale"]),
+                      delta=(f"+{euro(stato['extra'])} extra"
+                             if stato["extra"] else None), delta_color="off")
+            m4.metric("Ancora da pagare", euro(stato["da_pagare"]))
+
+            if stato["extra"]:
+                segno = "+" if stato["scostamento"] >= 0 else ""
+                st.markdown(
+                    f'<div style="background:{OTTONE};padding:13px 15px;'
+                    'margin:6px 0 10px;">'
+                    f'<div style="font-size:.7rem;color:{ARDESIA};'
+                    'font-weight:700;text-transform:uppercase;'
+                    'letter-spacing:.12em;opacity:.85;">'
+                    'Scostamento dal contratto</div>'
+                    f'<div style="font-size:1.8rem;font-weight:700;'
+                    f'color:{ARDESIA};line-height:1.2;">'
+                    f'{segno}{numero_it(stato["scostamento"], 2)} %</div>'
+                    '</div>', unsafe_allow_html=True)
+
+        # ------------------------------------------- chiusura e storico
+        st.divider()
+        st.markdown("**📕 Chiudi l'operazione**")
+        st.caption(
+            "A cantiere concluso l'operazione entra nello storico, che vive "
+            "**fuori dai progetti**. Da tre operazioni in poi lo storico "
+            "smette di essere un archivio e diventa una misura: quanto "
+            "sfori tu, con le tue imprese.")
+        nome_op = st.session_state.prg_nome or "Progetto senza nome"
+        eur_mq_lav = (round(stato["totale_finale"] / mq_calpestabili, 2)
+                      if mq_calpestabili and stato["totale_finale"] else None)
+        if st.button(f"📕 Chiudi «{nome_op}» e mettila nello storico",
+                     type="primary", key="chiudi_operazione",
+                     disabled=not stato["contratto"]):
+            try:
+                storico.registra({
+                    "nome": nome_op,
+                    "contratto": stato["contratto"],
+                    "extra": stato["extra"],
+                    "scostamento": stato["scostamento"],
+                    "mq_calpestabili": mq_calpestabili or None,
+                    "eur_mq": eur_mq_lav,
+                })
+                st.toast(f"«{nome_op}» è nello storico ✔")
+                st.rerun()
+            except OSError as errore:
+                st.error(f"Non sono riuscito a scrivere lo storico: {errore}")
+
+        chiuse = storico.carica()
+        if not chiuse:
+            st.caption(":gray[Nessuna operazione chiusa: lo storico comincia "
+                       "dalla prima.]")
+        else:
+            st.dataframe(pd.DataFrame([{
+                "Operazione": r.get("nome"),
+                "Chiusa il": r.get("chiusa_il"),
+                "Contratto": euro(r.get("contratto")),
+                "Extra": euro(r.get("extra")),
+                "Scostamento": (numero_it(r.get("scostamento"), 2) + " %"
+                                if r.get("scostamento") is not None else "—"),
+                "€/mq lavori": (numero_it(r.get("eur_mq"), 0) + " €"
+                                if r.get("eur_mq") else "—"),
+            } for r in chiuse]), hide_index=True, width="stretch")
+
+            consigliati = cantiere.imprevisti_consigliati(
+                storico.scostamenti(chiuse))
+            media_mq = storico.media(storico.costi_al_mq(chiuse))
+            s1, s2 = st.columns(2)
+            if consigliati is not None:
+                s1.metric(f"Sforamento medio su {len(chiuse)} "
+                          f"{'operazione' if len(chiuse) == 1 else 'operazioni'}",
+                          f"{numero_it(consigliati, 2)} %")
+            if media_mq:
+                s2.metric("Costo medio dei lavori",
+                          f"{numero_it(media_mq, 0)} €/mq")
+            if (consigliati is not None
+                    and abs(consigliati - st.session_state.imprevisti) > 0.5):
+                st.info(
+                    f"Nel computo gli imprevisti sono al "
+                    f"**{numero_it(st.session_state.imprevisti, 1)}%**, ma i "
+                    f"tuoi cantieri chiusi dicono "
+                    f"**{numero_it(consigliati, 2)}%**. Quella percentuale "
+                    "gonfia il computo, che a sua volta è il costo di "
+                    "ristrutturazione del business plan: è lì che decidi se "
+                    "l'affare sta in piedi.")
+                # ⚠️ La riscrittura va in una callback: il campo «imprevisti»
+                # nasce nella scheda Computo, molto più in alto, e scriverci
+                # sopra qui pianterebbe l'app («cannot be modified after the
+                # widget is instantiated»). Dentro on_click Streamlit lo
+                # consente.
+                st.button(f"Porta gli imprevisti a "
+                          f"{numero_it(consigliati, 2)}%",
+                          key="applica_imprevisti",
+                          on_click=applica_imprevisti,
+                          args=(consigliati,))
+
     with sotto_mca:
         st.caption("Stima del prezzo di vendita col **metodo comparativo** "
                    "(il tuo foglio «MCA sell»): per ogni comparabile "

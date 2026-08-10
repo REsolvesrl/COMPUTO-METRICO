@@ -29,6 +29,8 @@ CME/
 ├── formato.py                 # numeri e importi all'italiana (puro)
 ├── tabelle.py                 # colonne e conversioni tabella↔dati (puro)
 ├── fattibilita.py             # business plan: fattibilità, spese, MCA
+├── cantiere.py                # contratto d'appalto, SAL, extra finali
+├── storico.py                 # le operazioni chiuse, fuori dai progetti
 ├── fattura.py                 # lettura fatture PDF/XML (FatturaPA)
 ├── archivio.py                # archivio dei progetti su Supabase Storage
 ├── cme_viewer/                # componente visualizzatore planimetrie
@@ -267,6 +269,7 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [ ] Riconoscimento muri con modelli di computer vision (fase 2).
 - [x] Listino personale riutilizzabile delle voci più usate.
 - [x] Stampa del computo in PDF, con il libretto delle misure in appendice.
+- [x] Contratto e SAL, con lo sforamento finale che tara gli imprevisti.
 - [ ] Import da prezzari regionali (Excel/CSV).
 - [ ] Spessore dei muri: distinguere tramezzi e murature portanti.
 - [x] Pubblicazione su Streamlit Community Cloud.
