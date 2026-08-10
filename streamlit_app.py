@@ -1532,9 +1532,19 @@ def campo_numero_it(colonna, etichetta, chiave, decimali=2,
     # riscriveva il valore appena caricato, e i numeri di un progetto
     # salvato sparivano riaprendolo.
     st.session_state[f"_reso_{chiave}"] = valore
+    # ⚠️⚠️ Il testo si scrive DIRETTAMENTE nello stato del widget, non con
+    # `value=`. Passare `value=` funziona solo la prima volta: da lì in poi
+    # la casella nel BROWSER si tiene quello che ha dentro e ignora il
+    # valore nuovo. È la differenza che è costata più tempo di ogni altra in
+    # questo progetto — nei test con AppTest il browser non c'è, `value=`
+    # sembra funzionare, e il difetto resta invisibile: nella pagina vera si
+    # vedeva «9,00 %» accanto a «0,00 €» mentre il calcolo era giusto e
+    # finiva regolarmente nei totali.
+    testo = numero_it(valore, decimali)
+    if st.session_state.get(f"{chiave}_txt") != testo:
+        st.session_state[f"{chiave}_txt"] = testo
     return colonna.text_input(
-        etichetta, value=numero_it(valore, decimali),
-        key=f"{chiave}_txt", help=aiuto, placeholder=segnaposto,
+        etichetta, key=f"{chiave}_txt", help=aiuto, placeholder=segnaposto,
         label_visibility=label_visibility)
 
 
