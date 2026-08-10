@@ -1579,6 +1579,22 @@ def rileggi_campi_numero_it():
             st.session_state.pop(f"{chiave}_txt")
 
 
+def _importo_derivato(chiave, valore):
+    """Scrive un importo calcolato e BUTTA VIA la sua casella di testo.
+
+    ⚠️ Senza il secondo passaggio la percentuale scritta a mano tornava
+    indietro da sola: la casella dell'importo conserva il testo del valore
+    VECCHIO, a inizio pagina quel testo viene riletto e riscrive l'importo
+    appena calcolato, e da lì la percentuale si ricostruisce all'indietro
+    sul numero sbagliato. Scriveva 4% e si ritrovava 9%.
+
+    Buttandola via qui — dentro una callback, prima che i widget del giro
+    nuovo nascano — la casella rinasce dal valore giusto.
+    """
+    st.session_state[chiave] = round(valore, 2)
+    st.session_state.pop(f"{chiave}_txt", None)
+
+
 def bp_ricalcola_euro():
     """Aggiorna i campi € derivati dalle percentuali del business plan.
 
@@ -1589,20 +1605,20 @@ def bp_ricalcola_euro():
     prezzo_a = st.session_state.get("bp_acquisto") or 0.0
     prezzo_v = st.session_state.get("bp_vendita") or 0.0
     iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
-    st.session_state.bp_imposta_eur = round(
-        prezzo_a * st.session_state.bp_imposta / 100, 2)
-    st.session_state.bp_ag_in_eur = round(
-        prezzo_a * st.session_state.bp_ag_in / 100 * iva, 2)
-    st.session_state.bp_ag_out_eur = round(
-        prezzo_v * st.session_state.bp_ag_out / 100 * iva, 2)
+    _importo_derivato("bp_imposta_eur",
+                      prezzo_a * st.session_state.bp_imposta / 100)
+    _importo_derivato("bp_ag_in_eur",
+                      prezzo_a * st.session_state.bp_ag_in / 100 * iva)
+    _importo_derivato("bp_ag_out_eur",
+                      prezzo_v * st.session_state.bp_ag_out / 100 * iva)
     # Gli imprevisti dell'operazione si calcolano sull'IMPORTO DEI LAVORI,
     # non sul prezzo d'acquisto: la base la deposita la scheda quando sa
     # quale ristrutturazione sta considerando (computo, consuntivo o cifra
     # a mano). Senza base restano quello che sono.
     base = st.session_state.get("_base_imprevisti")
     if base:
-        st.session_state.bp_imprevisti = round(
-            base * st.session_state.bp_imprevisti_pct / 100, 2)
+        _importo_derivato("bp_imprevisti",
+                          base * st.session_state.bp_imprevisti_pct / 100)
 
 
 def bp_pct_da_euro_imprevisti():
@@ -4133,8 +4149,13 @@ with tab_bp:
     voci_bp = voci_dal_listino() + voci_da_df(st.session_state.df_voci)
     totale_computo_bp = calcoli.totale_generale(
         calcoli.calcola_computo(voci_bp))
-    _, ristr_da_computo = calcoli.totale_con_imprevisti(
-        totale_computo_bp, st.session_state.imprevisti)
+    # ⚠️ NETTO, senza gli imprevisti del computo. Gli imprevisti sono UNA
+    # cosa sola: se il computo li porta già dentro e poi il business plan
+    # ne aggiunge un altro 10% sulla riga «Imprevisti e condominio», la
+    # stessa riserva viene contata due volte e il costo dell'operazione
+    # esce gonfiato. Qui arrivano i lavori nudi; la riserva è la riga del
+    # business plan, dove si vede ed è modificabile.
+    ristr_da_computo = totale_computo_bp
 
 
     # ------------------------------------------------- spese a consuntivo
@@ -4321,7 +4342,7 @@ with tab_bp:
             st.subheader("⚖️ Preventivo vs consuntivo (cantiere)")
             scostamento = cantiere_consuntivo - ristr_da_computo
             c1, c2, c3 = st.columns(3)
-            c1.metric("Preventivo (computo + imprevisti)",
+            c1.metric("Preventivo (computo, senza imprevisti)",
                       euro(ristr_da_computo))
             c2.metric("Consuntivo cantiere (lavori+materiali+architetto)",
                       euro(cantiere_consuntivo))
@@ -4420,10 +4441,13 @@ with tab_bp:
         # sincronismo %↔€ (che girano a inizio pagina) non sanno da sole
         # quale ristrutturazione si sta considerando. Quando la base cambia
         # l'importo si rifà subito, e la casella rinasce col valore nuovo.
-        if st.session_state.get("_base_imprevisti") != ristr_eff:
-            st.session_state._base_imprevisti = ristr_eff
+        # Col consuntivo la base è ZERO: quei numeri sono soldi già usciti,
+        # una riserva sopra a una spesa reale non ha senso. La riga resta
+        # scrivibile a mano, per il condominio.
+        base_imprevisti = 0.0 if usa_consuntivo else ristr_eff
+        if st.session_state.get("_base_imprevisti") != base_imprevisti:
+            st.session_state._base_imprevisti = base_imprevisti
             bp_ricalcola_euro()
-            st.session_state.pop("bp_imprevisti_txt", None)
 
         esito = fattibilita.studio_fattibilita(parametri_bp)
         acq = esito["costi_acquisto"]
@@ -4630,7 +4654,12 @@ with tab_bp:
                     ":orange[**Ristrutturazione stimata**] (0 = dal "
                     "computo)",
                     destra={"chiave": "bp_ristr", "min_value": 0.0,
-                            "step": 1000.0, "format": "%.2f"})
+                            "step": 1000.0, "format": "%.2f",
+                            "help": "I lavori NUDI, senza riserva: gli "
+                                    "imprevisti sono la riga qui sopra e "
+                                    "si contano una volta sola. Lasciando "
+                                    "0 arriva il totale del computo, anche "
+                                    "quello al netto dei suoi imprevisti."})
                 # A cantiere avviato le fatture reali valgono più di ogni
                 # stima: l'opzione compare solo quando un consuntivo esiste
                 # davvero, altrimenti sarebbe un interruttore che non fa nulla.
@@ -4643,17 +4672,10 @@ with tab_bp:
                              "«Spese a consuntivo» (sostenute e da "
                              "sostenere), al posto della stima. Ha la "
                              "precedenza sulla cifra a mano qui sopra.")
-                if usa_consuntivo:
-                    provenienza_ristr = "(dal consuntivo: fatture reali)"
-                elif st.session_state.bp_ristr:
-                    provenienza_ristr = "(a mano)"
-                else:
-                    provenienza_ristr = "(dal computo, imprevisti inclusi)"
-                st.caption("🔗 Ristrutturazione considerata: "
-                           f"**{euro(ristr_eff)}** {provenienza_ristr}"
-                           + f" · mq: {numero_it(mq_eff, 0)} "
-                           + ("(a mano)" if st.session_state.bp_mq
-                              else "(dalla planimetria)"))
+                # La didascalia che ripeteva ristrutturazione e mq è stata
+                # tolta: adesso ogni campo si compila da sé e dichiara da
+                # dove viene il proprio numero, quindi ripeterli qui sotto
+                # era rumore.
                 # Il parametro con cui si ragiona davvero in questo mestiere:
                 # «quella la rifai con 600 al metro». Diviso per i mq
                 # CALPESTABILI — sulla commerciale uscirebbe più basso del
