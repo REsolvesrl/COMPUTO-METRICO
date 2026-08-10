@@ -7,3 +7,10 @@ backgroundColor = "#1A2744"              # ardesia: il banco di lavoro
 secondaryBackgroundColor = "#243352"     # ardesia chiara: il campione rialzato
 textColor = "#ECE7DA"                    # travertino: il testo
 font = "sans serif"
+
+[server]
+# Quando il codice cambia, l'app si ricarica DA SOLA. Senza questo Streamlit
+# si limita a mostrare il cartello «File change · Rerun» e resta ferma finché
+# non lo premi: si finisce per guardare una versione vecchia convinti di
+# provare quella nuova, e a inseguire difetti già corretti.
+runOnSave = true

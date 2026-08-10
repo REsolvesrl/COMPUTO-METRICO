@@ -219,6 +219,15 @@ def css_mondo():
 }}
 /* Lo stato del salvataggio, sempre sott'occhio: stava solo in fondo alla
    scheda computo, cioè proprio dove non si guarda mentre si lavora. */
+/* La data del codice in funzione: serve a sapere se si sta guardando la
+   versione aggiornata o quella di prima. Senza, si inseguono difetti già
+   corretti convinti che siano ancora lì. */
+.cme-testata .versione {{
+    font-size: .68rem;
+    letter-spacing: .04em;
+    color: color-mix(in srgb, var(--travertino) 55%, var(--cemento));
+    white-space: nowrap;
+}}
 .cme-testata .salvataggio {{
     margin-left: auto;
     font-size: .72rem;
@@ -2229,6 +2238,14 @@ def salva_al_volo():
     resta dov'è utile — nell'archivio, quando si salva **con un altro
     nome** sopra un progetto diverso da quello aperto.
     """
+    # ⚠️ PRIMA di leggere il progetto, si convertono le caselle di testo.
+    # Questa funzione gira come callback del bottone, cioè PRIMA dello
+    # script — e la conversione da testo a numero avviene dentro lo script.
+    # Senza questa riga si salvava il valore di prima: scrivevi 145.000 nel
+    # prezzo d'acquisto, premevi Salva e nel file finiva 0. Le percentuali
+    # invece si salvavano, perché sono campi numerici e non passano di qui:
+    # è per quello che il difetto sembrava colpire solo certi campi.
+    rileggi_campi_numero_it()
     nome = nome_archivio_corrente()
     try:
         archivio_locale.salva_progetto(nome, progetto_json_bytes())
@@ -2656,6 +2673,22 @@ st.session_state.categorie = categorie_per_progetto(st.session_state.piante)
 # «Nessun progetto aperto» vale solo a sessione VUOTA: dirlo mentre ci sono
 # voci compilate o planimetrie caricate è semplicemente falso — il progetto
 # c'è, gli manca il nome.
+def versione_codice():
+    """Quando è stato scritto il programma che sta girando ADESSO.
+
+    Streamlit rilegge ed esegue questo file a ogni giro, quindi la data qui
+    sotto è quella del codice davvero in funzione — non quella del file sul
+    disco. Serve a chiudere in un secondo la domanda «sto provando la
+    versione nuova o quella di prima?», che da sola è costata più tempo di
+    parecchi difetti veri.
+    """
+    try:
+        quando = datetime.fromtimestamp(Path(__file__).stat().st_mtime)
+        return quando.strftime("codice del %d/%m alle %H:%M")
+    except OSError:
+        return ""
+
+
 _progetto_aperto = (st.session_state.prg_nome or "").strip()
 if _progetto_aperto:
     _cartiglio = (f'<span class="cme-etichetta">progetto</span>'
@@ -2686,7 +2719,9 @@ with _t_titolo:
     st.markdown(
         '<div class="cme-testata">'
         '<h1><span class="sigla">CME</span> Computo Metrico Estimativo</h1>'
-        + _cartiglio + _stato + '</div>', unsafe_allow_html=True)
+        + _cartiglio
+        + f'<span class="versione">{versione_codice()}</span>'
+        + _stato + '</div>', unsafe_allow_html=True)
 with _t_salva:
     st.button("💾 Salva", type="primary", width="stretch",
               on_click=salva_al_volo, key="salva_testata",
