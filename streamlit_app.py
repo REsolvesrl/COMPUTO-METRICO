@@ -1514,9 +1514,17 @@ def campo_numero_it(colonna, etichetta, chiave, decimali=2,
     un'interazione. Il valore di verità resta in `chiave`, la casella vive
     in «chiave_txt».
     """
+    valore = float(st.session_state.get(chiave) or 0.0)
+    # Si annota il valore con cui la casella nasce. Serve a riconoscere il
+    # testo VECCHIO: se al giro dopo il valore di verità non è più questo,
+    # vuol dire che l'ha cambiato qualcun altro — un progetto aperto, un
+    # prezzo arrivato dall'MCA — e allora il testo nella casella non va
+    # riletto, va buttato. Senza questa annotazione il testo di prima
+    # riscriveva il valore appena caricato, e i numeri di un progetto
+    # salvato sparivano riaprendolo.
+    st.session_state[f"_reso_{chiave}"] = valore
     return colonna.text_input(
-        etichetta, value=numero_it(st.session_state.get(chiave) or 0.0,
-                                   decimali),
+        etichetta, value=numero_it(valore, decimali),
         key=f"{chiave}_txt", help=aiuto, placeholder=segnaposto,
         label_visibility=label_visibility)
 
@@ -1560,6 +1568,13 @@ def rileggi_campi_numero_it():
     for chiave, (_, ricalcolo, minimo) in CAMPI_NUMERO_IT.items():
         testo = st.session_state.get(f"{chiave}_txt")
         if testo is None:
+            continue
+        # Il valore è cambiato dopo che la casella era stata disegnata:
+        # quel testo racconta il passato e non deve tornare a comandare.
+        reso = st.session_state.get(f"_reso_{chiave}")
+        attuale = float(st.session_state.get(chiave) or 0.0)
+        if reso is not None and abs(attuale - reso) > 0.0005:
+            st.session_state.pop(f"{chiave}_txt")
             continue
         valore = numero_da_it(testo)
         if valore is None:
@@ -2477,12 +2492,24 @@ if "da_caricare" in st.session_state:
     st.session_state.cant_contratto = float(_cant.get("contratto", 0.0))
     st.session_state.cant_extra = float(_cant.get("extra", 0.0))
     st.session_state.cant_sal = list(_cant.get("sal") or [])
+    # ⚠️ Via TUTTE le caselle della sessione precedente, senza elencarle a
+    # mano. Dimenticarne una costava carissimo: il progetto veniva caricato
+    # con i suoi valori, ma la casella conservava il testo di prima e la
+    # rilettura a inizio pagina — che gira DOPO questo blocco — lo riscriveva
+    # sopra. Aprire un progetto salvato con 145.000 € di acquisto dentro una
+    # sessione vuota lo riportava a zero, e i numeri sembravano non essersi
+    # mai salvati.
     for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
                "riv_alt_w", "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
                "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
-               "apert_larg_w", "apert_alt_w", "auto_computo_w",
-               "cant_contratto_txt", "cant_extra_txt"):
+               "apert_larg_w", "apert_alt_w", "auto_computo_w"):
         st.session_state.pop(_k, None)
+    for _chiave in CAMPI_NUMERO_IT:
+        st.session_state.pop(f"{_chiave}_txt", None)
+    # e i segnalibri dei campi che si compilano da soli: il progetto nuovo
+    # ha i suoi mq e la sua base per gli imprevisti
+    st.session_state.pop("_mq_automatici", None)
+    st.session_state.pop("_base_imprevisti", None)
     # Una per una, non tutte insieme: un'immagine rovinata deve costare
     # quella planimetria, non l'intero elenco. Prima bastava un foglio
     # illeggibile per riaprire il progetto senza più nessun disegno, e
@@ -2550,6 +2577,7 @@ if "da_caricare" in st.session_state:
 # PRIMA che il widget bp_vendita venga creato.
 if "bp_vendita_pending" in st.session_state:
     st.session_state.bp_vendita = st.session_state.pop("bp_vendita_pending")
+    st.session_state.pop("bp_vendita_txt", None)    # la casella si rifà
     bp_ricalcola_euro()
 
 # Le quantità che la planimetria porta nel listino passano di qui. Quando si
