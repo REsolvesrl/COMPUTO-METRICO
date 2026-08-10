@@ -2618,6 +2618,16 @@ if "prezzi_pending" in st.session_state:
 # di ogni calcolo, così il valore appena scritto vale già in questo giro.
 rileggi_campi_numero_it()
 
+# E subito dopo si riallinea la colonna dei netti alle percentuali. Prima il
+# calcolo partiva SOLO quando qualcosa cambiava: se lo stato arrivava già
+# storto — un progetto salvato da una versione difettosa, un giro interrotto
+# a metà, una percentuale riscritta uguale a sé stessa (per Streamlit non è
+# un cambiamento) — restava storto per sempre. Si vedeva «9,00 %» accanto a
+# «0,00 €» senza modo di uscirne, nemmeno riscrivendo il 9.
+# Rifarlo a ogni giro costa tre moltiplicazioni e rende il difetto
+# impossibile: il netto È la percentuale del suo prezzo, sempre.
+bp_ricalcola_euro()
+
 # I comandi delle etichette stanno SOTTO il disegno, ma il disegno legge i
 # loro valori PRIMA: senza questo riallineamento userebbe quelli del giro
 # precedente (portando il cursore da 10 a 11 le etichette rimpicciolivano,
