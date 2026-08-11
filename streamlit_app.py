@@ -66,6 +66,7 @@ import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
     CATEGORIE_SPESE_EMOJI,
+    COLONNA_IVA_EUR,
     COLONNE,
     COLONNE_MCA,
     COLONNE_MISURE,
@@ -86,6 +87,7 @@ from tabelle import (
     df_vuoto,
     mca_da_df,
     misure_da_df,
+    senza_iva_derivata,
     spese_da_df,
     voci_da_df,
 )
@@ -665,23 +667,77 @@ def config_colonne_spese():
     totale sbagliato, senza un solo segnale. Il nome adesso lo dichiara.
     """
     return {
+        # Larghezze in pixel, strette e su misura del contenuto: con nove
+        # colonne le taglie "small/medium/large" di Streamlit sprecano spazio
+        # dove non serve (una data occupa 90 px, non 200) e lo tolgono
+        # all'oggetto, che è l'unica cella con del testo vero dentro. Quel
+        # che avanza va in scorrimento orizzontale, non in compressione.
         "importo": st.column_config.NumberColumn(
-            "Totale fattura (€)", format="%.2f",
+            "Totale fattura (€)", width=120, format="localized",
             help="Il LORDO, IVA compresa — il «totale documento» della "
                  "fattura. L'IVA si scorpora da qui con l'aliquota della "
                  "colonna accanto: mettendoci l'imponibile, l'IVA esce "
                  "sbagliata."),
         "aliquota_iva": st.column_config.NumberColumn(
-            "IVA %", min_value=0.0, max_value=22.0, step=1.0,
+            "IVA %", width=70, min_value=0.0, max_value=22.0, step=1.0,
             help="Aliquota della fattura, per lo scorporo (22, 10 o 0)"),
-        "data": st.column_config.TextColumn("Data", help="Es. 22/10/2025"),
+        # Derivata e NON scrivibile: è importo − importo/(1+aliquota/100).
+        # Sta accanto alla sua aliquota perché è lì che si controlla se una
+        # fattura è stata registrata con l'IVA giusta.
+        COLONNA_IVA_EUR: st.column_config.NumberColumn(
+            "di cui IVA (€)", width=105, format="localized", disabled=True,
+            help="Calcolata: l'IVA contenuta nel totale, con l'aliquota "
+                 "della colonna accanto. Non si scrive a mano — cambia il "
+                 "totale o l'aliquota e si rifà da sé."),
+        "data": st.column_config.TextColumn(
+            "Data", width=95, help="Es. 22/10/2025"),
         "nr_fattura": st.column_config.TextColumn(
-            "Nr. fattura", help="Numero/riferimento della fattura"),
-        "oggetto": st.column_config.TextColumn("Oggetto", width="large"),
+            "Nr. fattura", width=105,
+            help="Numero/riferimento della fattura. «//» quando non sono "
+                 "riuscito a leggerlo dal file."),
+        "fornitore": st.column_config.TextColumn(
+            "Fornitore", width=185,
+            help="La denominazione di chi ha emesso la fattura."),
+        "oggetto": st.column_config.TextColumn("Oggetto", width=250),
         "categoria": st.column_config.SelectboxColumn(
-            "Categoria", options=CATEGORIE_SPESE_EMOJI),
-        "note": st.column_config.TextColumn("Note"),
+            "Categoria", width=155, options=CATEGORIE_SPESE_EMOJI),
+        "note": st.column_config.TextColumn("Note", width=130),
     }
+
+
+def spese_con_iva(stabile, live=None):
+    """Le spese con la colonna derivata «di cui IVA (€)» accanto all'aliquota.
+
+    ⚠️ L'input del data_editor resta il DataFrame STABILE — ripassargli il
+    proprio ritorno gli fa perdere la prima scelta di categoria, ed è
+    spiegato dove succede. Qui cambia SOLO la colonna derivata, che guarda i
+    valori live: così l'IVA segue l'importo appena lo si corregge, invece di
+    aspettare il giro dopo. È una colonna che l'utente non tocca (è
+    `disabled`), quindi non entra nelle modifiche che Streamlit deve
+    riconciliare, e riscriverla non disturba niente.
+
+    Derivata vuol dire anche NON salvata: nel JSON del progetto un valore
+    che si ricava da altri due non ci va.
+    """
+    # idempotente: se la colonna e' gia' li' (ci arriva col ritorno di una
+    # tabella) si rifa', non si duplica
+    fuori = senza_iva_derivata(stabile.copy())
+    fonte = stabile if live is None else live
+    valori = []
+    for i in fuori.index:
+        riga = fonte.loc[i] if i in fonte.index else fuori.loc[i]
+        importo = riga.get("importo")
+        if importo is None or pd.isna(importo):
+            valori.append(None)          # riga vuota: nessuna IVA da dire
+            continue
+        aliquota = riga.get("aliquota_iva")
+        valori.append(fattibilita.iva_scorporata(
+            importo, 0.0 if aliquota is None or pd.isna(aliquota)
+            else aliquota))
+    # subito dopo importo e aliquota: è lì che si controlla se una fattura
+    # è stata registrata con l'IVA giusta
+    fuori.insert(min(2, len(fuori.columns)), COLONNA_IVA_EUR, valori)
+    return fuori
 
 
 def dati_fattura_da_file(file):
@@ -4396,12 +4452,13 @@ with tab_bp:
     # ------------------------------------------------- spese a consuntivo
     with sotto_spese:
         st.caption("Il registro delle spese reali dell'operazione, come il "
-                   "tuo foglio «Spese». In alto le spese già **sostenute** "
-                   "(le fatture); sotto, affiancati, il **riepilogo per "
-                   "categoria**, le spese ancora **da sostenere** e la "
-                   "torta. La quota **cantiere** (lavori, materiale, "
-                   "architetto) può sostituire la ristrutturazione stimata "
-                   "nello studio di fattibilità.")
+                   "tuo foglio «Spese». A sinistra le spese già "
+                   "**sostenute** (le fatture); **accanto**, senza scendere "
+                   "in fondo alla pagina, il **riepilogo per categoria**, "
+                   "le spese ancora **da sostenere** e la torta. La quota "
+                   "**cantiere** (lavori, materiale, architetto) può "
+                   "sostituire la ristrutturazione stimata nello studio di "
+                   "fattibilità.")
 
         # ---- caricamento fatture con auto-compilazione ----
         with st.expander("📎 Carica fatture (PDF o XML) e auto-compila"):
@@ -4440,7 +4497,8 @@ with tab_bp:
                 if righe_estratte:
                     st.markdown(f"**{len(righe_estratte)} fattura/e lette.** "
                                 "Correggi se serve e scegli la categoria:")
-                    df_ant = df_spese_da_righe(righe_estratte, COLONNE_SPESE)
+                    df_ant = spese_con_iva(
+                        df_spese_da_righe(righe_estratte, COLONNE_SPESE))
                     df_ant_ed = st.data_editor(
                         df_ant, hide_index=True, num_rows="fixed",
                         key=f"anteprima_fatt_{st.session_state.fatt_count}",
@@ -4451,52 +4509,94 @@ with tab_bp:
                         # include gli edit manuali) e ci aggiungo le fatture
                         corrente = st.session_state.get(
                             "df_spese_live", st.session_state.df_spese)
-                        st.session_state.df_spese = pd.concat(
-                            [corrente, df_ant_ed], ignore_index=True)
+                        # la colonna dell'IVA calcolata non e' un dato: si
+                        # toglie prima di rimettere tutto insieme, o
+                        # rientrerebbe nel progetto salvato
+                        st.session_state.df_spese = senza_iva_derivata(
+                            pd.concat([corrente, df_ant_ed],
+                                      ignore_index=True))
                         st.session_state.pop("df_spese_live", None)
                         st.session_state.fatt_count += 1
                         st.session_state.versione_bp += 1
                         st.rerun()
 
-        # Spese sostenute: tabella a PIENA LARGHEZZA della pagina, così tutte
-        # le colonne si vedono senza dover scorrere dentro la tabella.
-        st.markdown("##### 🧾 Spese sostenute")
-        df_spese_ed = st.data_editor(
-            st.session_state.df_spese,
-            num_rows="dynamic", hide_index=True, use_container_width=True,
-            key=f"editor_spese_{st.session_state.versione_bp}",
-            column_config=config_colonne_spese())
-        # il ritorno NON viene rimesso in df_spese: ripassare al data_editor un
-        # DataFrame che cambia a ogni run gli faceva "perdere" la prima
-        # selezione di categoria (da rifare due volte). df_spese resta l'input
-        # stabile; il ritorno vive a parte per calcoli e salvataggio.
-        st.session_state.df_spese_live = df_spese_ed
-        righe_spese = spese_da_df(df_spese_ed)
-        tot_sostenute = fattibilita.totale_spese(righe_spese)
-        st.metric("Totale spese sostenute", euro(tot_sostenute))
-
-        riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
-        iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
-
-        # sotto, affiancati: riepilogo · spese da sostenere · torta. Non si
-        # comprimono: su schermi stretti scorre la pagina (non le tabelle).
-        st.markdown("""
+        # Il registro a SINISTRA e tutto il resto ACCANTO, non sotto: con
+        # trenta fatture in tabella, il riepilogo e la torta finivano sotto
+        # centinaia di pixel di righe, e per guardare un totale mentre si
+        # registra una spesa bisognava perdere di vista la spesa. Quel che
+        # non entra nello schermo si raggiunge scorrendo la fascia in
+        # orizzontale — è un banco da lavoro largo, non una pagina stretta.
+        st.markdown(f"""
 <style>
-.st-key-spese_scroll { overflow-x: auto; padding-bottom: 6px; }
-.st-key-spese_scroll [data-testid="stHorizontalBlock"] { min-width: 1150px; }
-.st-key-spese_scroll [data-testid="stHorizontalBlock"]
- [data-testid="stHorizontalBlock"] { min-width: 0; }
+.st-key-spese_banco {{ overflow-x: auto; padding-top: 16px;
+                       padding-bottom: 6px; }}
+.st-key-spese_banco > div > [data-testid="stHorizontalBlock"]
+                                                    {{ min-width: 1900px; }}
+.st-key-spese_banco [data-testid="stHorizontalBlock"]
+ [data-testid="stHorizontalBlock"] {{ min-width: 0; }}
+
+/* La barra degli strumenti delle tabelle: aggiungi riga · mostra colonne ·
+   scarica CSV · cerca · schermo intero. Streamlit la tiene a opacità ZERO
+   finché non ci passi sopra col mouse, con bottoni da 22 px e icone da 16:
+   invisibile a chi non sa già che c'è, e qui «aggiungi riga» e «cerca»
+   sono gesti di tutti i giorni. Diventa un attrezzo appoggiato sul banco —
+   sempre in vista, squadrata, fondo rialzato e contorno d'ottone come i
+   pannelli della planimetria. */
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"],
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] {{
+    opacity: 1 !important;
+    /* tutta SOPRA la tabella: con lo sfondo pieno, la posizione originale
+       (top -16px) coprirebbe la prima riga di intestazione */
+    top: -56px !important;
+    background: {ARDESIA_CHIARA} !important;
+    border: 1px solid {OTTONE}73 !important;
+    border-radius: 0 !important;
+    padding: 4px !important;
+    gap: 2px !important;
+}}
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button,
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] button {{
+    width: 34px !important; height: 34px !important;
+    padding: 7px !important; border-radius: 0 !important;
+}}
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button span,
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] button span
+    {{ font-size: 20px !important; }}
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"]
+ button:hover,
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"]
+ button:hover {{ background: {OTTONE} !important; color: {ARDESIA} !important; }}
 </style>
 """, unsafe_allow_html=True)
 
-        with st.container(key="spese_scroll"):
-            col_riep, col_prev, col_torta = st.columns(
-                [1.3, 1.5, 1.2], gap="medium")
+        with st.container(key="spese_banco"):
+            col_registro, col_lato = st.columns([2.2, 1.1], gap="medium")
 
-            with col_riep:
+            with col_registro:
+                st.markdown("##### 🧾 Spese sostenute")
+                df_spese_ed = st.data_editor(
+                    spese_con_iva(st.session_state.df_spese,
+                                  st.session_state.get("df_spese_live")),
+                    num_rows="dynamic", hide_index=True, width="stretch",
+                    key=f"editor_spese_{st.session_state.versione_bp}",
+                    column_config=config_colonne_spese())
+                # il ritorno NON viene rimesso in df_spese: ripassare al
+                # data_editor un DataFrame che cambia a ogni run gli faceva
+                # "perdere" la prima selezione di categoria (da rifare due
+                # volte). df_spese resta l'input stabile; il ritorno vive a
+                # parte per calcoli e salvataggio.
+                st.session_state.df_spese_live = df_spese_ed
+                righe_spese = spese_da_df(df_spese_ed)
+                tot_sostenute = fattibilita.totale_spese(righe_spese)
+                st.metric("Totale spese sostenute", euro(tot_sostenute))
+
+            riepilogo = fattibilita.riepilogo_per_categoria(righe_spese)
+            iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
+
+            with col_lato:
                 # Il riepilogo e la torta girano sulle SOLE sostenute, la card
-                # accanto somma anche le da sostenere: tre colonne affiancate
-                # su due basi diverse, e nessuna delle tre lo diceva.
+                # più sotto somma anche le da sostenere: due basi diverse
+                # nella stessa colonna, e nessuna delle due lo diceva.
                 st.markdown("##### 📊 Riepilogo — solo le sostenute")
                 if riepilogo:
                     st.markdown(
@@ -4506,28 +4606,30 @@ with tab_bp:
                 else:
                     st.caption("Nessuna spesa sostenuta ancora.")
 
-            with col_prev:
+            with col_lato:
                 st.markdown("##### 🔮 Spese da sostenere")
                 df_prev_ed = st.data_editor(
                     st.session_state.df_spese_prev,
-                    num_rows="dynamic", hide_index=True,
-                    use_container_width=True,
+                    num_rows="dynamic", hide_index=True, width="stretch",
                     key=f"editor_spese_prev_{st.session_state.versione_bp}",
                     column_config={
                         "oggetto": st.column_config.TextColumn(
-                            "Oggetto", width="medium"),
+                            "Oggetto", width=190),
                         # Anche qui il lordo: le due tabelle si sommano nella
                         # stessa card e nella stessa quota cantiere, e una
                         # colonna chiamata solo «€» non diceva quale dei due.
                         "importo": st.column_config.NumberColumn(
-                            "Importo previsto (€)", format="%.2f",
+                            "Importo previsto (€)", width=125,
+                            format="localized",
                             help="IVA compresa, come le spese sostenute: i "
                                  "due registri si sommano."),
                         "aliquota_iva": st.column_config.NumberColumn(
-                            "IVA %", min_value=0.0, max_value=22.0, step=1.0),
+                            "IVA %", width=70, min_value=0.0, max_value=22.0,
+                            step=1.0),
                         "categoria": st.column_config.SelectboxColumn(
-                            "Categoria", options=CATEGORIE_SPESE_EMOJI),
-                        "note": st.column_config.TextColumn("Note"),
+                            "Categoria", width=150,
+                            options=CATEGORIE_SPESE_EMOJI),
+                        "note": st.column_config.TextColumn("Note", width=110),
                     })
                 st.session_state.df_spese_prev_live = df_prev_ed
                 righe_prev = spese_da_df(df_prev_ed)
@@ -4580,7 +4682,7 @@ with tab_bp:
                     "sono già contati nel prezzo d'acquisto e nei suoi "
                     "oneri. Di qua passa solo la quota **cantiere**.]")
 
-            with col_torta:
+            with col_lato:
                 st.markdown("##### 🥧 Sostenute per categoria")
                 if riepilogo:
                     st.plotly_chart(grafico_torta_spese(riepilogo),

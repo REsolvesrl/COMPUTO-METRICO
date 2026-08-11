@@ -69,7 +69,9 @@ def test_dati_da_xml_fattura():
     assert d["aliquota_iva"] == 22.0
     assert d["data"] == "15/01/2026"
     assert d["nr_fattura"] == "123/2026"
-    assert d["oggetto"] == "ACME Edilizia S.r.l. — Materiale edile"
+    # fornitore e descrizione stanno in due colonne, non incollati in una
+    assert d["fornitore"] == "ACME Edilizia S.r.l."
+    assert d["oggetto"] == "Materiale edile"
     assert d["note"] == ""
 
 
@@ -122,7 +124,7 @@ def test_dati_da_pdf_fattura_semplice():
     assert d["data"] == "03/02/2026"
     assert d["importo"] == 122.0
     assert d["aliquota_iva"] == 22.0
-    assert "Leroy Merlin Italia" in d["oggetto"]
+    assert "Leroy Merlin Italia" in d["fornitore"]
 
 
 def test_dati_da_pdf_nota_credito():
@@ -188,6 +190,15 @@ def test_niente_numeri_inventati():
     meglio il ripiego che un dato pescato a caso."""
     assert _numero_letto("Pagamento in n. 3 rate mensili") == "//"
     assert _numero_letto("Beneficiario del pagamento: Deal srls") == "//"
+
+
+def test_il_fornitore_non_sta_piu_dentro_l_oggetto():
+    """Stavano incollati («studiokennedy snc — PAGAMENTO MEDIAZIONE…») e il
+    nome restava prigioniero di una cella di testo lunga: niente ordinamento
+    per fornitore, e la descrizione troncata dove inizia a dire qualcosa."""
+    d = dati_da_pdf_testo(PDF_FATTURA)
+    assert "—" not in d["oggetto"]
+    assert d["fornitore"] and d["fornitore"] not in d["oggetto"]
 
 
 def test_il_numero_xml_batte_ogni_regola_sul_testo():

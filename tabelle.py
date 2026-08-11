@@ -32,8 +32,29 @@ COLONNE_MISURE_NUM = ["parti", "lunghezza", "larghezza", "altezza"]
 
 # Spese a consuntivo: due registri distinti (come il foglio «Spese» Excel).
 # Sostenute = fatture reali (con data e numero); da sostenere = previsioni.
+# «fornitore» sta per conto suo: stava dentro «oggetto», appiccicato alla
+# descrizione con un trattino, e cosi' non lo si poteva ne' ordinare ne'
+# leggere a colpo d'occhio — su un registro di fatture il nome di chi te le
+# manda e' meta' dell'informazione. I progetti salvati prima non ce l'hanno:
+# la colonna nasce vuota, e la descrizione resta dov'era.
 COLONNE_SPESE = ["importo", "aliquota_iva", "data", "nr_fattura",
-                 "oggetto", "categoria", "note"]
+                 "fornitore", "oggetto", "categoria", "note"]
+
+# L'IVA in euro NON e' qui dentro: si ricava da importo e aliquota, e un
+# valore derivato non si salva — si ricalcola. La colonna esiste solo nella
+# tabella a schermo, dove la mette la scheda.
+COLONNA_IVA_EUR = "iva_eur"
+
+
+def senza_iva_derivata(df):
+    """Il DataFrame ripulito dalla colonna derivata dell'IVA in euro.
+
+    Serve ogni volta che il RITORNO di una tabella a schermo torna a essere
+    dato: il data_editor restituisce anche le colonne calcolate, e se una di
+    quelle rientrasse nei dati salvati, al giro dopo ci si ritroverebbe a
+    inserire una colonna che c'e' gia'.
+    """
+    return df.drop(columns=[COLONNA_IVA_EUR], errors="ignore")
 COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
                       "note"]
 COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
@@ -200,6 +221,7 @@ def spese_da_df(df):
             "aliquota_iva": (0.0 if _mancante(aliquota) else float(aliquota)),
             "data": testo("data"),
             "nr_fattura": testo("nr_fattura"),
+            "fornitore": testo("fornitore"),
             "oggetto": testo("oggetto"),
             "categoria": cat_pulita(testo("categoria")) or "ALTRO",
             "note": testo("note"),

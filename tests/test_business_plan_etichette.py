@@ -17,6 +17,7 @@ Le tre famiglie sorvegliate qui:
 Girano sull'app vera con AppTest: le etichette vivono nell'interfaccia, e
 leggere il sorgente qui non basterebbe.
 """
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -88,6 +89,79 @@ def test_i_mq_dei_comparabili_e_del_soggetto_sono_la_stessa_grandezza():
     at = _avvia(bp_mq=120.0)
     etichette = [m.label for m in at.metric]
     assert any("Mq commerciali del soggetto" in e for e in etichette)
+
+
+# ------------------------------------------ il registro delle spese
+
+def _registro(at):
+    """La tabella delle spese sostenute: (configurazione colonne, dati)."""
+    for nodo in at.dataframe:
+        config = json.loads(nodo.proto.columns or "{}")
+        if "Totale fattura (€)" in [c.get("label") for c in config.values()]:
+            return config, nodo.value
+    raise AssertionError("tabella delle spese sostenute non trovata")
+
+
+@pytest.fixture(scope="module")
+def registro():
+    """Le due spese vere del progetto di collaudo: la provvigione
+    dell'agenzia con l'IVA dentro, e una caparra che l'IVA non ce l'ha."""
+    agenzia = dict(_spesa("🟣 AGENZIA", 7320.0), aliquota_iva=22.0,
+                   fornitore="studiokennedy snc")
+    caparra = dict(_spesa("🔴 ACQUISTO", 20000.0), aliquota_iva=0.0,
+                   oggetto="Caparra confirmatoria")
+    return _registro(_avvia(df_spese=pd.DataFrame([agenzia, caparra])))
+
+
+def test_il_fornitore_ha_una_colonna_sua(registro):
+    """Stava dentro «Oggetto», appiccicato alla descrizione."""
+    config, dati = registro
+    assert config["fornitore"]["label"] == "Fornitore"
+    assert "fornitore" in dati.columns
+
+
+def test_l_iva_in_euro_c_e_e_non_si_scrive_a_mano(registro):
+    """È importo − importo/(1+aliquota/100): un valore calcolato non si
+    digita, o le due cifre possono raccontare cose diverse."""
+    config, _ = registro
+    iva = config["iva_eur"]
+    assert iva["label"] == "di cui IVA (€)"
+    assert iva["disabled"] is True
+
+
+def test_l_iva_in_euro_e_quella_giusta(registro):
+    """7.320 € al 22% ne contengono 1.320; una caparra senza IVA, zero."""
+    _, dati = registro
+    per_importo = dict(zip(dati["importo"], dati["iva_eur"]))
+    assert per_importo[7320.0] == pytest.approx(1320.0, abs=0.01)
+    assert per_importo[20000.0] == pytest.approx(0.0)
+
+
+def test_le_cifre_hanno_il_separatore_delle_migliaia(registro):
+    """«20000.00» non si legge a colpo d'occhio: 20.000,00 sì."""
+    config, _ = registro
+    for colonna in ("importo", "iva_eur"):
+        assert config[colonna]["type_config"]["format"] == "localized"
+
+
+def test_le_colonne_sono_strette_e_su_misura(registro):
+    """Con nove colonne, le taglie di Streamlit sprecano dove non serve.
+    Quel che avanza va in scorrimento, non in compressione."""
+    config, _ = registro
+    larghezze = {c: v["width"] for c, v in config.items() if "width" in v}
+    assert larghezze["data"] <= 100          # una data non occupa 200 px
+    assert larghezze["aliquota_iva"] <= 80
+    assert larghezze["oggetto"] >= larghezze["data"] * 2
+    # niente taglie simboliche: pixel, decisi uno per uno
+    assert all(isinstance(v, int) for v in larghezze.values()), larghezze
+
+
+def test_l_iva_calcolata_non_entra_nel_progetto_salvato():
+    """Il ritorno della tabella porta anche le colonne calcolate: se una
+    rientrasse nei dati, al giro dopo si inserirebbe due volte."""
+    at = _avvia(df_spese=pd.DataFrame([_spesa("🟡 LAVORI", 1220.0)]))
+    salvato = at.session_state["df_spese"]
+    assert "iva_eur" not in salvato.columns
 
 
 # ------------------------------------------- confronto col preventivo

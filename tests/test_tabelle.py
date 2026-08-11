@@ -135,6 +135,37 @@ def test_spese_da_df_senza_iva_vale_zero_non_None():
     assert tabelle.spese_da_df(df)[0]["aliquota_iva"] == 0.0
 
 
+def test_il_fornitore_e_una_colonna_sua():
+    """Stava dentro «oggetto»: cosi' non si poteva ne' ordinare ne' leggere
+    a colpo d'occhio chi ti ha mandato la fattura."""
+    assert "fornitore" in tabelle.COLONNE_SPESE
+    df = tabelle.df_spese_da_righe(
+        [{"importo": 100.0, "fornitore": "ACME S.r.l.",
+          "oggetto": "Materiale edile"}], tabelle.COLONNE_SPESE)
+    riga = tabelle.spese_da_df(df)[0]
+    assert riga["fornitore"] == "ACME S.r.l."
+    assert riga["oggetto"] == "Materiale edile"
+
+
+def test_i_progetti_vecchi_non_hanno_il_fornitore_e_va_bene():
+    """La colonna nasce vuota, non fa cadere niente: i salvataggi fatti
+    prima non la conoscono."""
+    df = tabelle.df_spese_da_righe([{"importo": 100.0, "oggetto": "Vecchia"}],
+                                   tabelle.COLONNE_SPESE)
+    assert tabelle.spese_da_df(df)[0]["fornitore"] == ""
+
+
+def test_l_iva_calcolata_non_e_un_dato_da_salvare():
+    """Si ricava da importo e aliquota: nel JSON del progetto non ci va, e
+    se torna indietro col ritorno di una tabella si toglie."""
+    assert tabelle.COLONNA_IVA_EUR not in tabelle.COLONNE_SPESE
+    df = pd.DataFrame([{"importo": 122.0, tabelle.COLONNA_IVA_EUR: 22.0}])
+    assert tabelle.COLONNA_IVA_EUR not in tabelle.senza_iva_derivata(df).columns
+    assert tabelle.COLONNA_IVA_EUR not in tabelle.spese_da_df(df)[0]
+    # e togliere una colonna che non c'e' non e' un errore
+    tabelle.senza_iva_derivata(tabelle.df_spese_vuoto())
+
+
 def test_registro_previsioni_ha_le_sue_colonne():
     df = tabelle.df_spese_vuoto(tabelle.COLONNE_SPESE_PREV)
     assert list(df.columns) == tabelle.COLONNE_SPESE_PREV

@@ -17,7 +17,7 @@ Le funzioni qui sono pure e testabili: ricevono già i byte dell'XML o il testo
 del PDF; l'apertura del PDF (fitz) e l'upload vivono nella UI.
 
 Ogni estrazione restituisce un dizionario con le chiavi della tabella spese
-(importo, aliquota_iva, data, nr_fattura, oggetto, note) oppure None se non è
+(importo, aliquota_iva, data, nr_fattura, fornitore, oggetto, note) o None se non è
 riconosciuta nulla. L'aliquota IVA restituita è quella che RIPRODUCE l'IVA
 totale sull'imponibile (per una fattura a aliquota unica è l'aliquota esatta;
 per una mista è quella "media" che rende comunque corretto lo scorporo).
@@ -76,12 +76,16 @@ def _aliquota(imponibile, imposta):
     return round(grezza, 1)
 
 
-def _oggetto(fornitore, descrizione):
-    fornitore = (fornitore or "").strip()
-    descrizione = (descrizione or "").strip()
-    if fornitore and descrizione:
-        return f"{fornitore} — {descrizione}"[:120]
-    return (fornitore or descrizione)[:120]
+def _oggetto(descrizione):
+    """La descrizione della fattura, senza il fornitore davanti.
+
+    Prima qui si incollavano insieme («studiokennedy snc — PAGAMENTO
+    MEDIAZIONE…») e il nome del fornitore restava prigioniero di una cella
+    di testo lunga: non si poteva ordinare per fornitore, e nella tabella
+    la descrizione arrivava troncata proprio dove comincia a dire qualcosa.
+    Adesso sono due colonne.
+    """
+    return (descrizione or "").strip()[:120]
 
 
 # ---------------------------------------------------------------- XML
@@ -164,7 +168,8 @@ def _dati_da_xml(contenuto):
         "nr_fattura": ((numero.text.strip()
                         if numero is not None and numero.text else "")
                        or NUMERO_MANCANTE),
-        "oggetto": _oggetto(fornitore, descrizione),
+        "fornitore": (fornitore or "").strip()[:120],
+        "oggetto": _oggetto(descrizione),
         "note": note,
     }
 
@@ -268,6 +273,7 @@ def dati_da_pdf_testo(testo):
         "aliquota_iva": aliquota,
         "data": _norma_data(data or ""),
         "nr_fattura": numero,
-        "oggetto": _oggetto(fornitore, descrizione),
+        "fornitore": (fornitore or "").strip()[:120],
+        "oggetto": _oggetto(descrizione),
         "note": "",
     }
