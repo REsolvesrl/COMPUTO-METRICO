@@ -86,3 +86,30 @@ def test_cartella_predefinita_sotto_la_home(monkeypatch):
     monkeypatch.delenv("CME_ARCHIVIO", raising=False)
     from pathlib import Path
     assert archivio_locale.cartella() == Path.home() / "CME" / "progetti"
+
+
+# --------------------------- l'ultimo progetto, per riaprire dov'eravamo
+
+def test_ultimo_progetto_senza_archivio(tmp_path, monkeypatch):
+    monkeypatch.setenv("CME_ARCHIVIO", str(tmp_path / "mai_creata"))
+    assert archivio_locale.ultimo_progetto() == (None, None)
+
+
+def test_ultimo_progetto_e_il_piu_recente(tmp_path, monkeypatch):
+    import os
+    import time
+    monkeypatch.setenv("CME_ARCHIVIO", str(tmp_path))
+    archivio_locale.salva_progetto("Vecchio", b'{"a": 1}')
+    archivio_locale.salva_progetto("Nuovo", b'{"a": 2}')
+    # la data di modifica decide, non il nome
+    vecchio = tmp_path / "Vecchio.json"
+    os.utime(vecchio, (time.time() - 3600, time.time() - 3600))
+    nome, quando = archivio_locale.ultimo_progetto()
+    assert nome == "Nuovo"
+    assert quando is not None
+
+
+def test_ultimo_progetto_con_un_solo_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("CME_ARCHIVIO", str(tmp_path))
+    archivio_locale.salva_progetto("Unico", b'{"a": 1}')
+    assert archivio_locale.ultimo_progetto()[0] == "Unico"

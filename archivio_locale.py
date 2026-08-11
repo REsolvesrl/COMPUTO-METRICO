@@ -12,6 +12,7 @@ cartelle solo perché è partita è invadente.
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 ESTENSIONE = ".json"
@@ -56,6 +57,24 @@ def elenco_progetti():
     nomi = [f.name[:-len(ESTENSIONE)] for f in cart.glob("*" + ESTENSIONE)
             if f.is_file()]
     return sorted(nomi, key=str.lower)
+
+
+def ultimo_progetto():
+    """(nome, quando) del progetto archiviato più di recente, o (None, None).
+
+    Serve a riaprire l'app dov'era rimasta: si guarda la data di modifica
+    del file, non il nome, perché è l'unica che dice davvero quale è stato
+    l'ultimo lavoro.
+    """
+    cart = cartella()
+    if not cart.is_dir():
+        return None, None
+    file = [f for f in cart.glob("*" + ESTENSIONE) if f.is_file()]
+    if not file:
+        return None, None
+    piu_recente = max(file, key=lambda f: f.stat().st_mtime)
+    return (piu_recente.name[:-len(ESTENSIONE)],
+            datetime.fromtimestamp(piu_recente.stat().st_mtime))
 
 
 def salva_progetto(nome, contenuto):

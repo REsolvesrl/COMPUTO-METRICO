@@ -2234,7 +2234,10 @@ def firma_progetto():
 # partenza viene offerto come ripristino. Un solo slot: l'app ha un utente
 # solo, e due slot sarebbero solo una scelta in più da fare nel momento
 # peggiore.
-AUTOSALVA_FILE = Path(tempfile.gettempdir()) / "cme_ripristino.json"
+# Il percorso si può dirottare con CME_AUTOSALVA: serve ai test, che non
+# devono né leggere né sporcare il lavoro vero di chi usa il programma.
+AUTOSALVA_FILE = Path(os.environ.get(
+    "CME_AUTOSALVA", Path(tempfile.gettempdir()) / "cme_ripristino.json"))
 AUTOSALVA_SECONDI = 15
 
 
@@ -2304,6 +2307,56 @@ def segna_salvato():
     rileggi_campi_numero_it()
     st.session_state.ultimo_salvataggio = datetime.now()
     st.session_state.firma_salvata = firma_progetto()
+
+
+def riapri_ultimo_lavoro():
+    """Rimette in tavola l'ultimo lavoro. Ritorna cosa ha ripreso, o None.
+
+    All'avvio l'app riapre da sé dov'era rimasta, senza chiedere: è quello
+    che fa qualunque programma con cui si lavora tutti i giorni.
+
+    ⚠️ Si sceglie il più RECENTE fra due cose, e l'ordine conta: l'ultimo
+    progetto archiviato (quello che hai salvato tu) e il salvataggio
+    automatico (che contiene anche il lavoro che NON hai salvato). Aprire
+    sempre l'archivio sarebbe più semplice, e butterebbe via mezz'ora di
+    lavoro ogni volta che ci si dimentica di premere Salva.
+
+    Un file illeggibile non deve impedire l'avvio: in quel caso si parte da
+    un progetto vuoto, come se non ci fosse niente da riprendere.
+    """
+    # ⚠️ L'autosalvataggio va messo per PRIMO: a parità di orario vince lui,
+    # perché `max` tiene il primo dei pari e perché fra i due è l'unico che
+    # può contenere lavoro non salvato. Le date sui file hanno la
+    # risoluzione dei millesimi: salvare e chiudere nello stesso istante è
+    # tutt'altro che improbabile.
+    candidati = []
+    try:
+        if AUTOSALVA_FILE.exists():
+            candidati.append((
+                datetime.fromtimestamp(AUTOSALVA_FILE.stat().st_mtime),
+                "autosalvataggio", None))
+    except OSError:
+        pass
+    nome_arch, quando_arch = archivio_locale.ultimo_progetto()
+    if nome_arch:
+        candidati.append((quando_arch, "archivio", nome_arch))
+    if not candidati:
+        return None
+
+    quando, origine, nome = max(candidati, key=lambda c: c[0])
+    try:
+        if origine == "archivio":
+            dati = archivio_locale.carica_progetto(nome)
+            descrizione = "salvato"
+        else:
+            dati = json.loads(AUTOSALVA_FILE.read_bytes())
+            nome = ((dati.get("progetto") or {}).get("nome") or "").strip() \
+                or "Progetto senza nome"
+            descrizione = "salvato automaticamente"
+    except Exception:  # noqa: BLE001 — file illeggibile: si parte puliti
+        return None
+    st.session_state.da_caricare = dati
+    return {"nome": nome, "quando": quando, "origine": descrizione}
 
 
 def nome_archivio_corrente():
@@ -2858,31 +2911,24 @@ with tab_computo:
     # risposto, così non si trasforma in un banner che chiede sempre la stessa
     # cosa mentre si lavora.
     if (not st.session_state.get("_ripristino_valutato")
-            and progetto_e_vuoto() and AUTOSALVA_FILE.exists()):
-        try:
-            salvato_il = datetime.fromtimestamp(AUTOSALVA_FILE.stat().st_mtime)
-        except OSError:
-            salvato_il = None
-        if salvato_il is not None:
-            st.warning(
-                "C'è del lavoro della sessione precedente, salvato "
-                f"automaticamente il **{salvato_il.strftime('%d/%m')}** alle "
-                f"**{salvato_il.strftime('%H:%M')}**. Lo riprendo?")
-            r_si, r_no, _ = st.columns([1, 1, 3])
-            if r_si.button("↩️ Riprendi il lavoro", type="primary",
-                           use_container_width=True):
-                try:
-                    st.session_state.da_caricare = json.loads(
-                        AUTOSALVA_FILE.read_bytes())
-                    st.session_state._ripristino_valutato = True
-                    st.rerun()
-                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                    st.session_state._ripristino_valutato = True
-                    st.error("Il ripristino automatico non è leggibile: "
-                             "riparto da un progetto vuoto.")
-            if r_no.button("Ricomincia da capo", use_container_width=True):
-                st.session_state._ripristino_valutato = True
-                st.rerun()
+            and progetto_e_vuoto()):
+        st.session_state._ripristino_valutato = True
+        _ripreso = riapri_ultimo_lavoro()
+        if _ripreso:
+            st.session_state._ripreso = _ripreso
+            st.rerun()
+
+    # Si dice sempre COSA è stato riaperto: un'app che si apre già piena
+    # senza spiegare da dove viene quella roba è un'app che fa paura.
+    _ripreso = st.session_state.pop("_ripreso", None)
+    if _ripreso:
+        r_testo, r_nuovo = st.columns([4, 1], vertical_alignment="center")
+        r_testo.info(f"↩️ Ripreso **{_ripreso['nome']}**, "
+                     f"{_ripreso['origine']} il "
+                     f"{_ripreso['quando'].strftime('%d/%m')} alle "
+                     f"{_ripreso['quando'].strftime('%H:%M')}.")
+        r_nuovo.button("Progetto nuovo", width="stretch",
+                       key="nuovo_dopo_ripresa", on_click=azzera_progetto)
 
     # Dati del progetto e archivio (una volta erano nella barra laterale;
     # tolta per dare tutta la larghezza alla planimetria).
