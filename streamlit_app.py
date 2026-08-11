@@ -532,6 +532,7 @@ IMPOSTAZIONI_BP = {
     "bp_iva_imposta": 0.0, "bp_iva_imposte_fisse": 0.0,
     "bp_iva_notaio": 22.0, "bp_iva_mutuo": 22.0,
     "bp_iva_imprevisti": 22.0, "bp_iva_ristr": 10.0,
+    "bp_iva_ag_in": 22.0, "bp_iva_ag_out": 22.0,
     "bp_coeff_sogg": 1.0, "bp_sconto": 13.0,
 }
 
@@ -1602,6 +1603,7 @@ VOCI_CON_IVA = (
     ("bp_notaio", "bp_iva_notaio"),
     ("bp_mutuo", "bp_iva_mutuo"),
     ("bp_imprevisti", "bp_iva_imprevisti"),
+    ("bp_ag_in_eur", "bp_iva_ag_in"),
 )
 
 # chiave: (decimali, cosa ricalcolare, minimo)
@@ -1695,10 +1697,13 @@ def bp_ricalcola_euro():
     iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
     _importo_derivato("bp_imposta_eur",
                       prezzo_a * st.session_state.bp_imposta / 100)
+    # ⚠️ IMPONIBILI: l'IVA delle provvigioni sta nella sua colonna, come
+    # per tutte le altre voci. Lasciarla dentro l'importo la nascondeva
+    # proprio dove serve vederla.
     _importo_derivato("bp_ag_in_eur",
-                      prezzo_a * st.session_state.bp_ag_in / 100 * iva)
+                      prezzo_a * st.session_state.bp_ag_in / 100)
     _importo_derivato("bp_ag_out_eur",
-                      prezzo_v * st.session_state.bp_ag_out / 100 * iva)
+                      prezzo_v * st.session_state.bp_ag_out / 100)
     # Gli imprevisti dell'operazione si calcolano sull'IMPORTO DEI LAVORI,
     # non sul prezzo d'acquisto: la base la deposita la scheda quando sa
     # quale ristrutturazione sta considerando (computo, consuntivo o cifra
@@ -1726,18 +1731,16 @@ def bp_pct_da_euro_imposta():
 
 def bp_pct_da_euro_ag_in():
     prezzo = st.session_state.get("bp_acquisto") or 0.0
-    iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
     if prezzo > 0:
         st.session_state.bp_ag_in = round(
-            st.session_state.bp_ag_in_eur / (prezzo * iva) * 100, 3)
+            st.session_state.bp_ag_in_eur / prezzo * 100, 3)
 
 
 def bp_pct_da_euro_ag_out():
     prezzo = st.session_state.get("bp_vendita") or 0.0
-    iva = 1 + (st.session_state.get("bp_iva_ag") or 0.0) / 100
     if prezzo > 0:
         st.session_state.bp_ag_out = round(
-            st.session_state.bp_ag_out_eur / (prezzo * iva) * 100, 3)
+            st.session_state.bp_ag_out_eur / prezzo * 100, 3)
 
 
 @st.cache_data(show_spinner=False, max_entries=4)
@@ -4595,6 +4598,11 @@ with tab_bp:
         _iva_voci.append(fattibilita.iva_su(
             ristr_eff, st.session_state.get("bp_iva_ristr", 0.0)))
         parametri_bp["iva_costi"] = round(sum(_iva_voci), 2)
+        parametri_bp["iva_costi_vendita"] = fattibilita.iva_su(
+            st.session_state.get("bp_ag_out_eur", 0.0),
+            st.session_state.get("bp_iva_ag_out", 0.0))
+        # le provvigioni arrivano gia' imponibili: l'IVA la porta la colonna
+        parametri_bp["iva_agenzia_pct"] = 0.0
         esito = fattibilita.studio_fattibilita(parametri_bp)
         acq = esito["costi_acquisto"]
         ven = esito["costi_vendita"]
@@ -4822,11 +4830,12 @@ with tab_bp:
                             "max_value": 10.0, "step": 0.5,
                             "on_change": bp_ricalcola_euro,
                             "help": "Commissione % sul prezzo di acquisto; "
-                                    "il € a destra è IVA inclusa"},
+                                    "l'importo a destra è imponibile, "
+                                    "l'IVA sta nella sua colonna"},
                     destra={"chiave": "bp_ag_in_eur", "min_value": 0.0,
                             "step": 100.0, "format": "%.2f",
                             "on_change": bp_pct_da_euro_ag_in},
-                    iva=None)
+                    iva="bp_iva_ag_in")
                 iva_voci.append(riga_costo_bp(
                     ":orange[**Ristrutturazione stimata**] (0 = dal "
                     "computo)",
@@ -4896,11 +4905,15 @@ with tab_bp:
                             "max_value": 10.0, "step": 0.5,
                             "on_change": bp_ricalcola_euro,
                             "help": "Commissione % sul prezzo di vendita; "
-                                    "il € a destra è IVA inclusa"},
+                                    "l'importo a destra è imponibile, "
+                                    "l'IVA sta nella sua colonna"},
                     destra={"chiave": "bp_ag_out_eur", "min_value": 0.0,
                             "step": 100.0, "format": "%.2f",
-                            "on_change": bp_pct_da_euro_ag_out})
+                            "on_change": bp_pct_da_euro_ag_out},
+                    iva="bp_iva_ag_out")
                 st.markdown(righe_bp([
+                    ("di cui IVA (vendita)",
+                     euro(ven["iva"]) if ven.get("iva") else None, None),
                     ("TOTALE SPESE (acquisto + vendita)",
                      euro(acq["totale"] + ven["totale"]), "bold"),
                 ]), unsafe_allow_html=True)

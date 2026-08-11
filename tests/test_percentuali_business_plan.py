@@ -43,8 +43,9 @@ def stato_storto():
 
 @pytest.mark.parametrize("chiave, atteso", [
     ("bp_imposta_eur", 13050.0),          # 9% di 145.000
-    ("bp_ag_in_eur", 7076.0),             # 4% di 145.000 + IVA 22%
-    ("bp_ag_out_eur", 10980.0),           # 3% di 300.000 + IVA 22%
+    # le provvigioni sono IMPONIBILI: l'IVA sta nella sua colonna
+    ("bp_ag_in_eur", 5800.0),             # 4% di 145.000
+    ("bp_ag_out_eur", 9000.0),            # 3% di 300.000
 ])
 def test_un_netto_a_zero_si_ricalcola_da_solo(stato_storto, chiave, atteso):
     assert stato_storto.session_state[chiave] == atteso
@@ -90,3 +91,24 @@ def test_senza_prezzo_il_netto_e_zero_e_l_app_lo_dice():
     at.number_input(key="bp_imposta").set_value(9.0).run()
     assert at.session_state["bp_imposta_eur"] == 0.0
     assert any("restano a zero" in str(c.value) for c in at.caption)
+
+
+def test_le_provvigioni_mostrano_l_iva_a_parte():
+    """Imponibile nella colonna Netto, imposta nella colonna IVA.
+
+    Prima l'IVA stava dentro l'importo della provvigione: il totale era
+    giusto ma l'imposta non si vedeva, proprio dove serve contarla.
+    """
+    at = _app()
+    at.text_input(key="bp_acquisto_txt").set_value("145000").run()
+    assert at.session_state["bp_ag_in_eur"] == 4350.0       # 3% imponibile
+    assert at.session_state["bp_iva_ag_in"] == 22.0
+
+
+def test_l_iva_delle_provvigioni_entra_nei_totali():
+    at = _app()
+    at.text_input(key="bp_acquisto_txt").set_value("145000").run()
+    # 3% di 145.000 = 4.350 imponibile, IVA 22% = 957
+    import fattibilita
+    assert fattibilita.iva_su(at.session_state["bp_ag_in_eur"],
+                              at.session_state["bp_iva_ag_in"]) == 957.0

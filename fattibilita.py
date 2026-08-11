@@ -100,11 +100,21 @@ def costi_acquisto(prezzo, imposta_pct=9.0, imposte_fisse=0.0,
     return dettaglio
 
 
-def costi_vendita(prezzo, agenzia_pct=2.5, iva_agenzia_pct=22.0):
-    """Dettaglio dei costi di vendita; "totale" è la somma."""
+def costi_vendita(prezzo, agenzia_pct=2.5, iva_agenzia_pct=22.0, iva=0.0):
+    """Dettaglio dei costi di vendita; "totale" è la somma.
+
+    Due modi, e vanno tenuti distinti. Con `iva_agenzia_pct` la provvigione
+    esce LORDA, IVA compresa dentro l'importo: è come ha sempre funzionato
+    e come la legge il foglio Excel dell'utente. Passando invece
+    `iva_agenzia_pct=0` e l'IVA in `iva`, la provvigione resta imponibile e
+    l'imposta si vede a parte — che è quello che serve a chi la deve
+    tenere contata. Il totale non cambia: imponibile + IVA = lordo.
+    """
     agenzia = round(prezzo * agenzia_pct / 100
                     * (1 + iva_agenzia_pct / 100), 2)
-    return {"agenzia": agenzia, "totale": agenzia}
+    iva = round(float(iva or 0.0), 2)
+    return {"agenzia": agenzia, "iva": iva,
+            "totale": round(agenzia + iva, 2)}
 
 
 def studio_fattibilita(parametri):
@@ -133,6 +143,7 @@ def studio_fattibilita(parametri):
         vendita,
         agenzia_pct=parametri.get("agenzia_out_pct", 2.5),
         iva_agenzia_pct=parametri.get("iva_agenzia_pct", 22.0),
+        iva=parametri.get("iva_costi_vendita", 0.0),
     )
     entry = round(acquisto + acq["totale"], 2)
     uscita = round(vendita - ven["totale"], 2)
