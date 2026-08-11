@@ -1,10 +1,10 @@
 """All'avvio l'app riprende da sola dov'era rimasta.
 
-Due sorgenti, e la scelta fra loro è il punto delicato: l'ultimo progetto
-ARCHIVIATO (quello salvato apposta) e il SALVATAGGIO AUTOMATICO, che
-contiene anche il lavoro che nessuno ha salvato. Vince il più recente —
-aprire sempre l'archivio sarebbe più semplice e butterebbe via mezz'ora di
-lavoro ogni volta che ci si dimentica di premere Salva.
+⚠️ SOLO i salvataggi fatti col tasto Salva. Il ripristino automatico resta
+la rete di sicurezza per il blocco o la chiusura per sbaglio — si prende a
+mano dal pannello del progetto — ma non si apre mai da solo: sono arrivati
+ripristini automatici incompleti (la planimetria che non tornava), e un
+avvio che riapre qualcosa di monco è peggio di un avvio vuoto.
 """
 import json
 import os
@@ -57,38 +57,41 @@ def test_lo_dice_che_cosa_ha_ripreso():
                for i in at.info)
 
 
-def test_fra_archivio_e_autosalvataggio_vince_il_piu_recente(tmp_path):
-    """Il lavoro NON salvato non deve essere buttato via."""
+def test_l_autosalvataggio_non_si_apre_mai_da_solo(tmp_path):
+    """Nemmeno se e' piu' recente del progetto salvato a mano."""
     import time
     archivio_locale.salva_progetto(
-        "Vecchio", json.dumps(_progetto("Vecchio", 1.0)).encode("utf-8"))
+        "Salvato a mano",
+        json.dumps(_progetto("Salvato a mano", 1.0)).encode("utf-8"))
     time.sleep(0.01)      # le date sui file hanno la risoluzione dei millesimi
-    autosalva = Path(os.environ["CME_AUTOSALVA"])
-    autosalva.write_text(json.dumps(_progetto("Lavoro non salvato", 99.0)),
-                         encoding="utf-8")
-    # l'autosalvataggio è stato scritto dopo: è lui il più recente
+    Path(os.environ["CME_AUTOSALVA"]).write_text(
+        json.dumps(_progetto("Automatico", 99.0)), encoding="utf-8")
     at = _avvia()
-    assert at.session_state["prg_nome"] == "Lavoro non salvato"
-    assert at.session_state["q_1.02"] == 99.0
+    assert at.session_state["prg_nome"] == "Salvato a mano"
 
 
-def test_se_l_archivio_e_piu_recente_vince_lui():
-    autosalva = Path(os.environ["CME_AUTOSALVA"])
-    autosalva.write_text(json.dumps(_progetto("Bozza vecchia", 5.0)),
-                         encoding="utf-8")
+def test_col_solo_autosalvataggio_si_parte_puliti():
+    """C'e' un ripristino automatico ma nessun salvataggio: non si apre."""
+    Path(os.environ["CME_AUTOSALVA"]).write_text(
+        json.dumps(_progetto("Solo automatico", 5.0)), encoding="utf-8")
+    at = _avvia()
+    assert at.session_state["prg_nome"] == ""
+
+
+def test_fra_due_salvataggi_vince_il_piu_recente():
     import time
+    archivio_locale.salva_progetto(
+        "Prima", json.dumps(_progetto("Prima", 5.0)).encode("utf-8"))
     time.sleep(0.01)
     archivio_locale.salva_progetto(
-        "Salvato dopo",
-        json.dumps(_progetto("Salvato dopo", 8.0)).encode("utf-8"))
+        "Dopo", json.dumps(_progetto("Dopo", 8.0)).encode("utf-8"))
     at = _avvia()
-    assert at.session_state["prg_nome"] == "Salvato dopo"
+    assert at.session_state["prg_nome"] == "Dopo"
 
 
 def test_un_file_illeggibile_non_impedisce_l_avvio():
     """Meglio partire vuoti che non partire."""
-    Path(os.environ["CME_AUTOSALVA"]).write_text("{non e' json",
-                                                 encoding="utf-8")
+    archivio_locale.salva_progetto("Rovinato", b"{non e' json")
     at = _avvia()
     assert at.session_state["prg_nome"] == ""
 
@@ -112,20 +115,12 @@ def test_il_progetto_ripreso_e_completo(chiave):
     assert at.session_state[chiave] == atteso
 
 
-def test_a_parita_di_orario_vince_il_lavoro_non_salvato():
-    """Salvare e chiudere nello stesso istante non deve costare il lavoro.
-
-    Le date sui file hanno la risoluzione dei millesimi: se archivio e
-    autosalvataggio risultano coetanei, deve vincere l'autosalvataggio —
-    e' l'unico dei due che puo' contenere qualcosa in piu'.
-    """
-    autosalva = Path(os.environ["CME_AUTOSALVA"])
-    autosalva.write_text(json.dumps(_progetto("Non salvato", 4.0)),
-                         encoding="utf-8")
-    archivio_locale.salva_progetto(
-        "Archiviato", json.dumps(_progetto("Archiviato", 2.0)).encode("utf-8"))
-    # stessa identica data su entrambi
-    quando = autosalva.stat().st_mtime
-    os.utime(archivio_locale.percorso("Archiviato"), (quando, quando))
+def test_il_ripristino_automatico_resta_disponibile_a_mano():
+    """La rete di sicurezza c'e' ancora: si prende dal pannello progetto."""
+    Path(os.environ["CME_AUTOSALVA"]).write_text(
+        json.dumps(_progetto("Da recuperare", 6.0)), encoding="utf-8")
     at = _avvia()
-    assert at.session_state["prg_nome"] == "Non salvato"
+    assert any("salvataggio automatico" in str(c.value) for c in at.caption)
+    at.button(key="recupera_autosalva").click().run()
+    assert at.session_state["prg_nome"] == "Da recuperare"
+    assert at.session_state["q_1.02"] == 6.0

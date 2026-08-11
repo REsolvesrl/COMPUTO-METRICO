@@ -2315,48 +2315,26 @@ def riapri_ultimo_lavoro():
     All'avvio l'app riapre da sé dov'era rimasta, senza chiedere: è quello
     che fa qualunque programma con cui si lavora tutti i giorni.
 
-    ⚠️ Si sceglie il più RECENTE fra due cose, e l'ordine conta: l'ultimo
-    progetto archiviato (quello che hai salvato tu) e il salvataggio
-    automatico (che contiene anche il lavoro che NON hai salvato). Aprire
-    sempre l'archivio sarebbe più semplice, e butterebbe via mezz'ora di
-    lavoro ogni volta che ci si dimentica di premere Salva.
+    ⚠️ SOLO i salvataggi fatti col tasto Salva. Il file di ripristino
+    automatico resta al suo posto e si può riprendere a mano dal pannello
+    del progetto, ma non si apre da sé: l'utente ha visto ripristini
+    automatici arrivare incompleti — la planimetria che non tornava — e un
+    avvio che riapre da solo qualcosa di monco è peggio di un avvio vuoto.
+    Un salvataggio manuale invece è un gesto: quel momento lì l'ha scelto
+    una persona, e quello che c'era dentro andava bene.
 
     Un file illeggibile non deve impedire l'avvio: in quel caso si parte da
     un progetto vuoto, come se non ci fosse niente da riprendere.
     """
-    # ⚠️ L'autosalvataggio va messo per PRIMO: a parità di orario vince lui,
-    # perché `max` tiene il primo dei pari e perché fra i due è l'unico che
-    # può contenere lavoro non salvato. Le date sui file hanno la
-    # risoluzione dei millesimi: salvare e chiudere nello stesso istante è
-    # tutt'altro che improbabile.
-    candidati = []
-    try:
-        if AUTOSALVA_FILE.exists():
-            candidati.append((
-                datetime.fromtimestamp(AUTOSALVA_FILE.stat().st_mtime),
-                "autosalvataggio", None))
-    except OSError:
-        pass
-    nome_arch, quando_arch = archivio_locale.ultimo_progetto()
-    if nome_arch:
-        candidati.append((quando_arch, "archivio", nome_arch))
-    if not candidati:
+    nome, quando = archivio_locale.ultimo_progetto()
+    if not nome:
         return None
-
-    quando, origine, nome = max(candidati, key=lambda c: c[0])
     try:
-        if origine == "archivio":
-            dati = archivio_locale.carica_progetto(nome)
-            descrizione = "salvato"
-        else:
-            dati = json.loads(AUTOSALVA_FILE.read_bytes())
-            nome = ((dati.get("progetto") or {}).get("nome") or "").strip() \
-                or "Progetto senza nome"
-            descrizione = "salvato automaticamente"
+        dati = archivio_locale.carica_progetto(nome)
     except Exception:  # noqa: BLE001 — file illeggibile: si parte puliti
         return None
     st.session_state.da_caricare = dati
-    return {"nome": nome, "quando": quando, "origine": descrizione}
+    return {"nome": nome, "quando": quando, "origine": "salvato"}
 
 
 def nome_archivio_corrente():
@@ -2952,6 +2930,35 @@ with tab_computo:
                              "dal contratto d'appalto**; quando avrai "
                              "chiuso qualche cantiere, la scheda Cantiere "
                              "potrà tararlo sul tuo sforamento reale.")
+
+        st.divider()
+        # Il ripristino automatico resta la rete di sicurezza per il blocco
+        # o la chiusura per sbaglio, ma si prende a mano: all'avvio l'app
+        # riapre solo i salvataggi fatti col tasto Salva.
+        try:
+            _autosalva_il = (datetime.fromtimestamp(
+                AUTOSALVA_FILE.stat().st_mtime)
+                if AUTOSALVA_FILE.exists() else None)
+        except OSError:
+            _autosalva_il = None
+        if _autosalva_il is not None:
+            a_txt, a_btn = st.columns([3, 1], vertical_alignment="bottom")
+            a_txt.caption(
+                "🛟 C'è un salvataggio automatico del "
+                f"**{_autosalva_il.strftime('%d/%m')}** alle "
+                f"**{_autosalva_il.strftime('%H:%M')}**: serve solo a "
+                "recuperare dopo un blocco o una chiusura per sbaglio, e "
+                "non viene mai aperto da solo.")
+            if a_btn.button("🛟 Recupera", key="recupera_autosalva",
+                            width="stretch",
+                            help="Sostituisce il lavoro in corso con il "
+                                 "ripristino automatico."):
+                try:
+                    st.session_state.da_caricare = json.loads(
+                        AUTOSALVA_FILE.read_bytes())
+                    st.rerun()
+                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                    st.error("Il ripristino automatico non è leggibile.")
 
         st.divider()
         if not progetto_e_vuoto():
