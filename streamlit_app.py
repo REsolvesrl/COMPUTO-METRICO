@@ -2295,7 +2295,13 @@ def progetto_e_vuoto():
 
 
 def segna_salvato():
-    """Registra che il progetto attuale è stato messo al sicuro."""
+    """Registra che il progetto attuale è stato messo al sicuro.
+
+    Gira come callback, cioè PRIMA dello script: le caselle di testo vanno
+    convertite qui, o la firma nasce dai valori del giro precedente e l'app
+    dichiara «sei in pari» su un file che l'ultima cifra non ce l'ha.
+    """
+    rileggi_campi_numero_it()
     st.session_state.ultimo_salvataggio = datetime.now()
     st.session_state.firma_salvata = firma_progetto()
 
@@ -2968,9 +2974,17 @@ with tab_computo:
             o_sel.caption("Nessun progetto ancora archiviato.")
 
         s_nome, s_btn = st.columns([3, 1], vertical_alignment="bottom")
+        # La casella segue il nome del progetto, ma appena ci scrivi sopra
+        # comanda quello che hai scritto. ⚠️ Passare `value=` non bastava:
+        # a widget già esistente Streamlit lo ignora, e chi rinominava il
+        # progetto si ritrovava qui il nome di prima — archiviandolo col
+        # nome sbagliato senza accorgersene.
+        _nome_progetto = (st.session_state.prg_nome or "").strip()
+        if st.session_state.get("_nome_archivio_auto") != _nome_progetto:
+            st.session_state._nome_archivio_auto = _nome_progetto
+            st.session_state.nome_salva_online = _nome_progetto
         nome_archivio = s_nome.text_input(
             "Nome con cui archiviare",
-            value=st.session_state.prg_nome or "",
             key="nome_salva_online",
             placeholder="Es. Ristrutturazione Via Roma 1")
         nome_pulito = (nome_archivio or "").strip()
