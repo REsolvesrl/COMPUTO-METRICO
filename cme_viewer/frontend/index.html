@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>cme_viewer</title>
   <script src="./streamlit-component-lib.js"></script>
-  <script src="./main.js"></script>
+  <!-- ⚠️ Il numero in coda serve a scavalcare la cache del browser: questo
+       file è statico e il browser se lo tiene, quindi una modifica al
+       disegno può restare invisibile anche dopo aver riavviato l'app.
+       CAMBIARLO A OGNI MODIFICA DI main.js. -->
+  <script src="./main.js?v=2026-08-11-perimetro"></script>
   <style>
     html, body { margin: 0; padding: 0; overflow: hidden;
                  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
