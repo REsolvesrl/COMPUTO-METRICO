@@ -1669,6 +1669,22 @@ def rileggi_campi_numero_it():
             st.session_state.pop(f"{chiave}_txt")
 
 
+def _percentuale_da_importo(chiave_pct, chiave_euro, base):
+    """Ricava la percentuale da un importo scritto a mano.
+
+    ⚠️ SEI decimali, non tre. Con tre, l'importo rifatto all'indietro non
+    tornava: 6.000 € su 145.000 fanno il 4,137931%, che arrotondato a 4,138
+    ridà 6.000,10 — e l'utente vedeva comparire dieci centesimi dal nulla.
+
+    E per quel giro l'importo non si tocca: l'ha appena scritto una persona,
+    e nessun ricalcolo deve permettersi di correggerla di un centesimo.
+    """
+    st.session_state[chiave_pct] = round(
+        float(st.session_state.get(chiave_euro) or 0.0) / base * 100, 6)
+    st.session_state.setdefault("_importi_scritti_a_mano", set()).add(
+        chiave_euro)
+
+
 def _importo_derivato(chiave, valore):
     """Scrive un importo calcolato e BUTTA VIA la sua casella di testo.
 
@@ -1681,6 +1697,8 @@ def _importo_derivato(chiave, valore):
     Buttandola via qui — dentro una callback, prima che i widget del giro
     nuovo nascano — la casella rinasce dal valore giusto.
     """
+    if chiave in st.session_state.get("_importi_scritti_a_mano", ()):
+        return          # l'ha scritto l'utente in questo giro: comanda lui
     st.session_state[chiave] = round(valore, 2)
     st.session_state.pop(f"{chiave}_txt", None)
 
@@ -1718,29 +1736,25 @@ def bp_pct_da_euro_imprevisti():
     """Se scrivi l'importo, la percentuale si adegua (come per le agenzie)."""
     base = st.session_state.get("_base_imprevisti") or 0.0
     if base > 0:
-        st.session_state.bp_imprevisti_pct = round(
-            st.session_state.bp_imprevisti / base * 100, 3)
+        _percentuale_da_importo("bp_imprevisti_pct", "bp_imprevisti", base)
 
 
 def bp_pct_da_euro_imposta():
     prezzo = st.session_state.get("bp_acquisto") or 0.0
     if prezzo > 0:
-        st.session_state.bp_imposta = round(
-            st.session_state.bp_imposta_eur / prezzo * 100, 3)
+        _percentuale_da_importo("bp_imposta", "bp_imposta_eur", prezzo)
 
 
 def bp_pct_da_euro_ag_in():
     prezzo = st.session_state.get("bp_acquisto") or 0.0
     if prezzo > 0:
-        st.session_state.bp_ag_in = round(
-            st.session_state.bp_ag_in_eur / prezzo * 100, 3)
+        _percentuale_da_importo("bp_ag_in", "bp_ag_in_eur", prezzo)
 
 
 def bp_pct_da_euro_ag_out():
     prezzo = st.session_state.get("bp_vendita") or 0.0
     if prezzo > 0:
-        st.session_state.bp_ag_out = round(
-            st.session_state.bp_ag_out_eur / prezzo * 100, 3)
+        _percentuale_da_importo("bp_ag_out", "bp_ag_out_eur", prezzo)
 
 
 @st.cache_data(show_spinner=False, max_entries=4)
@@ -2683,6 +2697,9 @@ if "prezzi_pending" in st.session_state:
 # Gli importi si scrivono in caselle di testo (le migliaia vogliono il punto,
 # e il campo numerico di Streamlit non lo sa fare): qui si rileggono, PRIMA
 # di ogni calcolo, così il valore appena scritto vale già in questo giro.
+# Il registro degli importi scritti a mano vale un giro solo: si azzera qui
+# e lo riempie la rilettura, se in questo giro qualcuno ne ha battuto uno.
+st.session_state._importi_scritti_a_mano = set()
 rileggi_campi_numero_it()
 
 # E subito dopo si riallinea la colonna dei netti alle percentuali. Prima il
@@ -4917,6 +4934,19 @@ with tab_bp:
                     ("TOTALE SPESE (acquisto + vendita)",
                      euro(acq["totale"] + ven["totale"]), "bold"),
                 ]), unsafe_allow_html=True)
+                # L'IVA pagata sui costi è un CREDITO, non una spesa: per una
+                # società torna indietro. Tenerla in fondo, sommata e da
+                # sola, è il numero che serve quando si guarda la cassa —
+                # nelle righe qui sopra è sparsa voce per voce.
+                iva_credito = round(acq["iva"] + ven["iva"], 2)
+                if iva_credito:
+                    st.markdown(righe_bp([
+                        ("TOTALE IVA A CREDITO", euro(iva_credito), "buono"),
+                    ]), unsafe_allow_html=True)
+                    st.caption(
+                        ":gray[L'IVA pagata su queste voci è **a credito**: "
+                        "resta nel totale delle spese perché va anticipata, "
+                        "ma per la società rientra con la liquidazione.]")
 
     # --------------------------------------------- MCA prezzo di vendita
     # ============================ CANTIERE: contratto, SAL, extra finali

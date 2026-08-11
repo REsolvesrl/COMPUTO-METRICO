@@ -112,3 +112,20 @@ def test_l_iva_delle_provvigioni_entra_nei_totali():
     import fattibilita
     assert fattibilita.iva_su(at.session_state["bp_ag_in_eur"],
                               at.session_state["bp_iva_ag_in"]) == 957.0
+
+
+def test_un_importo_scritto_a_mano_non_si_muove_di_un_centesimo():
+    """6.000 devono restare 6.000, anche dopo altri giri di pagina.
+
+    La percentuale ricavata all'indietro (4,137931% su 145.000) veniva
+    conservata con tre decimali: rifacendo il conto tornavano 6.000,10, e
+    l'utente vedeva comparire dieci centesimi dal nulla.
+    """
+    at = _app()
+    at.text_input(key="bp_acquisto_txt").set_value("145000").run()
+    at.text_input(key="bp_ag_in_eur_txt").set_value("6000").run()
+    assert at.session_state["bp_ag_in_eur"] == 6000.0
+    assert at.text_input(key="bp_ag_in_eur_txt").value == "6.000,00"
+    at.run()
+    at.run()
+    assert at.session_state["bp_ag_in_eur"] == 6000.0
