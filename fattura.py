@@ -8,6 +8,11 @@ Due strade, entrambe senza servizi esterni (tutto in locale):
   estratto (da PyMuPDF, a monte) con alcune regole; funziona bene sui PDF
   "stile SdI", best-effort sugli altri (i campi non trovati restano vuoti).
 
+Un'eccezione al «restano vuoti»: il **numero di fattura**, quando non si
+riconosce, esce come `NUMERO_MANCANTE` (`//`). Una riga senza numero e una
+riga il cui numero non è stato letto si somigliano troppo in tabella, e solo
+la seconda è da andare a completare a mano.
+
 Le funzioni qui sono pure e testabili: ricevono già i byte dell'XML o il testo
 del PDF; l'apertura del PDF (fitz) e l'upload vivono nella UI.
 
@@ -154,8 +159,11 @@ def _dati_da_xml(contenuto):
         "importo": lordo,
         "aliquota_iva": _aliquota(imponibile_tot, imposta_tot),
         "data": _norma_data(data.text if data is not None else ""),
-        "nr_fattura": (numero.text.strip()
-                       if numero is not None and numero.text else ""),
+        # In FatturaPA il numero è obbligatorio, ma un file monco esiste
+        # sempre: anche qui si scrive il ripiego invece di una casella vuota.
+        "nr_fattura": ((numero.text.strip()
+                        if numero is not None and numero.text else "")
+                       or NUMERO_MANCANTE),
         "oggetto": _oggetto(fornitore, descrizione),
         "note": note,
     }
@@ -172,6 +180,37 @@ def _cerca(testo, pattern, flags=re.IGNORECASE):
     return m.group(1).strip() if m else None
 
 
+# Un numero di fattura: comincia SEMPRE con una cifra (è la regola che tiene
+# fuori la spazzatura tipo «beneficiario del …»), poi può contenere lettere,
+# barre, punti e trattini — «55/2026», «412616027839», «2026-A/17».
+_NUMERO = r"([0-9][0-9A-Za-z/_.\-]*)"
+
+# In ordine di affidabilità: prima le diciture che nominano il documento, poi
+# le forme discorsive. La prima che aggancia vince, e nessuna è un catch-all
+# (un `n. 3` qualsiasi in mezzo al testo non deve diventare un numero
+# fattura: meglio il ripiego che un dato inventato).
+_PATTERN_NUMERO = (
+    r"Numero\s+(?:del\s+)?documento\s*:?\s*\n?\s*" + _NUMERO,
+    r"Numero\s+fattura\s*:?\s*\n?\s*" + _NUMERO,
+    r"Fattura\s+n[r°.]{0,2}\.?\s*:?\s*" + _NUMERO,
+    r"\bn[r°.]{0,2}\.?\s*" + _NUMERO + r"\s+del\s",
+)
+
+# Quello che si scrive quando il numero non c'è. Non una casella vuota: una
+# riga senza numero e una riga che il programma non è riuscito a leggere si
+# somigliano troppo, e la seconda è quella da andare a completare a mano.
+NUMERO_MANCANTE = "//"
+
+
+def _numero_fattura(testo):
+    """Il numero del documento, o NUMERO_MANCANTE se non si riconosce."""
+    for pattern in _PATTERN_NUMERO:
+        numero = _cerca(testo, pattern)
+        if numero:
+            return numero
+    return NUMERO_MANCANTE
+
+
 def dati_da_pdf_testo(testo):
     """Estrae i dati dal testo di un PDF di cortesia (best-effort).
 
@@ -183,11 +222,10 @@ def dati_da_pdf_testo(testo):
     """
     if not testo:
         return None
-    # numero e data: "nr. 412616027839 del 08/07/2026". Il numero deve
-    # iniziare con una cifra ed essere introdotto da n/nr (word boundary): così
-    # non si cattura la coda di parole come "beneficiario del ...".
-    numero = _cerca(
-        testo, r"\bn[r°.]{0,2}\.?\s*([0-9][0-9A-Za-z/_.\-]*)\s+del\s")
+    # numero: «Numero documento 123», «Fattura n. 55/2026», «nr. 4126 del …».
+    # Il numero deve sempre iniziare con una cifra, così non si cattura la
+    # coda di parole come «beneficiario del ...».
+    numero = _numero_fattura(testo)
     data = _cerca(testo, r"\bdel\s+(\d{1,2}/\d{1,2}/\d{4})")
 
     # totale documento (lordo) — vari sinonimi del foglio di stile SdI
@@ -229,7 +267,7 @@ def dati_da_pdf_testo(testo):
         "importo": lordo,
         "aliquota_iva": aliquota,
         "data": _norma_data(data or ""),
-        "nr_fattura": numero or "",
+        "nr_fattura": numero,
         "oggetto": _oggetto(fornitore, descrizione),
         "note": "",
     }

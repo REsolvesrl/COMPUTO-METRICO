@@ -656,10 +656,21 @@ TIPI_PARETE_SCELTA = ["demolire", "costruire"]
 
 
 def config_colonne_spese():
-    """Configurazione colonne condivisa tra editor spese e anteprima fatture."""
+    """Configurazione colonne condivisa tra editor spese e anteprima fatture.
+
+    ⚠️ L'importo è il LORDO, IVA compresa: `fattibilita.iva_scorporata` la
+    tira fuori da lì, e l'auto-compilazione ci mette
+    `ImportoTotaleDocumento`. La colonna si chiamava «Importo (€)» e non lo
+    diceva: chi digitava a mano l'imponibile otteneva un'IVA sbagliata e un
+    totale sbagliato, senza un solo segnale. Il nome adesso lo dichiara.
+    """
     return {
         "importo": st.column_config.NumberColumn(
-            "Importo (€)", format="%.2f"),
+            "Totale fattura (€)", format="%.2f",
+            help="Il LORDO, IVA compresa — il «totale documento» della "
+                 "fattura. L'IVA si scorpora da qui con l'aliquota della "
+                 "colonna accanto: mettendoci l'imponibile, l'IVA esce "
+                 "sbagliata."),
         "aliquota_iva": st.column_config.NumberColumn(
             "IVA %", min_value=0.0, max_value=22.0, step=1.0,
             help="Aliquota della fattura, per lo scorporo (22, 10 o 0)"),
@@ -4409,8 +4420,15 @@ with tab_bp:
                 righe_estratte, non_letti = [], []
                 for f in file_fatture:
                     dati = dati_fattura_da_file(f)
+                    # ⚠️ Il numero non è più una prova di riuscita: da quando
+                    # vale «//» quando non si legge, è sempre pieno. Vale
+                    # solo se è un numero VERO — altrimenti questo controllo
+                    # accetterebbe qualunque cosa l'estrazione restituisca.
+                    numero_letto = (dati or {}).get("nr_fattura")
                     if dati and (dati.get("importo") is not None
-                                 or dati.get("nr_fattura")):
+                                 or (numero_letto
+                                     and numero_letto
+                                     != fattura.NUMERO_MANCANTE)):
                         righe_estratte.append(
                             {col: dati.get(col) for col in COLONNE_SPESE})
                     else:
@@ -4476,7 +4494,10 @@ with tab_bp:
                 [1.3, 1.5, 1.2], gap="medium")
 
             with col_riep:
-                st.markdown("##### 📊 Riepilogo per categoria")
+                # Il riepilogo e la torta girano sulle SOLE sostenute, la card
+                # accanto somma anche le da sostenere: tre colonne affiancate
+                # su due basi diverse, e nessuna delle tre lo diceva.
+                st.markdown("##### 📊 Riepilogo — solo le sostenute")
                 if riepilogo:
                     st.markdown(
                         tabella_riepilogo_spese_html(
@@ -4495,8 +4516,13 @@ with tab_bp:
                     column_config={
                         "oggetto": st.column_config.TextColumn(
                             "Oggetto", width="medium"),
+                        # Anche qui il lordo: le due tabelle si sommano nella
+                        # stessa card e nella stessa quota cantiere, e una
+                        # colonna chiamata solo «€» non diceva quale dei due.
                         "importo": st.column_config.NumberColumn(
-                            "€", format="%.2f"),
+                            "Importo previsto (€)", format="%.2f",
+                            help="IVA compresa, come le spese sostenute: i "
+                                 "due registri si sommano."),
                         "aliquota_iva": st.column_config.NumberColumn(
                             "IVA %", min_value=0.0, max_value=22.0, step=1.0),
                         "categoria": st.column_config.SelectboxColumn(
@@ -4515,6 +4541,12 @@ with tab_bp:
                 # stimata. La card dice entrambe le cifre: prima l'etichetta
                 # prometteva «→ business plan» su un numero che nessuno
                 # leggeva.
+                # ⚠️ E non si chiama più «Costi totali dell'operazione»:
+                # ACQUISTO e AGENZIA qui dentro, di là, sono già contati nel
+                # prezzo d'acquisto e nei suoi oneri (l'«entry»). Erano due
+                # totali che si sovrapponevano senza mai incontrarsi, e
+                # quello col nome più grosso non era il costo dell'operazione
+                # ma il totale di questo registro.
                 quota_cantiere = round(sum(
                     r["importo"] for r in righe_spese + righe_prev
                     if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
@@ -4528,7 +4560,7 @@ with tab_bp:
                     f'<div style="font-size:.7rem;color:{ARDESIA};'
                     'font-weight:700;text-transform:uppercase;'
                     'letter-spacing:.12em;opacity:.85;">'
-                    'Costi totali dell\'operazione</div>'
+                    'Totale del registro spese</div>'
                     f'<div style="font-size:1.8rem;font-weight:700;'
                     f'color:{ARDESIA};line-height:1.2;">'
                     f'{euro(costi_totali)}</div>'
@@ -4542,9 +4574,14 @@ with tab_bp:
                     f'<b>{euro(quota_cantiere)}</b>'
                     ' — riportabile nello studio di fattibilità</div></div>',
                     unsafe_allow_html=True)
+                st.caption(
+                    ":gray[Non è il costo dell'operazione: **ACQUISTO** e "
+                    "**AGENZIA** qui dentro, nello studio di fattibilità, "
+                    "sono già contati nel prezzo d'acquisto e nei suoi "
+                    "oneri. Di qua passa solo la quota **cantiere**.]")
 
             with col_torta:
-                st.markdown("##### 🥧 Spese per categoria")
+                st.markdown("##### 🥧 Sostenute per categoria")
                 if riepilogo:
                     st.plotly_chart(grafico_torta_spese(riepilogo),
                                     config={"displayModeBar": False})
@@ -4552,26 +4589,58 @@ with tab_bp:
                     st.caption("La torta comparirà con le prime spese.")
 
         # confronto col preventivo del computo (su sostenute + da sostenere)
-        righe_cantiere = righe_spese + righe_prev
+        # ⚠️ Solo le righe di CANTIERE aprono il confronto. Bastava una
+        # spesa qualsiasi — un acconto, la provvigione dell'agenzia — e il
+        # blocco compariva con «Scostamento −100,0 %» in rosso: il computo
+        # intero dato per non speso, su una scheda dove non si era ancora
+        # aperto il cantiere. È lo stesso difetto del «ROE −100 %» prima di
+        # digitare qualcosa, e va evitato allo stesso modo: finché non c'è
+        # una spesa di cantiere non c'è niente da confrontare.
+        righe_cantiere = [r for r in righe_spese + righe_prev
+                          if r["categoria"] in fattibilita.CATEGORIE_CANTIERE]
         # Costo cantiere a consuntivo, sulle categorie che il computo
         # preventiva. Vive qui perché è qui che le tabelle delle spese
         # restituiscono i valori aggiornati; lo studio di fattibilità lo
         # riusa ed è scritto DOPO nel codice apposta, così legge i numeri di
         # questo giro e non quelli del precedente.
-        cantiere_consuntivo = round(sum(
-            r["importo"] for r in righe_cantiere
-            if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
+        # ⚠️ Le due metà si tengono separate. «Consuntivo» ha una definizione
+        # sola in questo mestiere — soldi usciti — e qui dentro ci finivano
+        # anche le spese DA SOSTENERE, che sono previsioni. Il totale che
+        # serve allo studio di fattibilità le comprende entrambe (è il costo
+        # atteso del cantiere), ma la scheda deve dire quale pezzo è già
+        # fattura e quale è ancora una stima.
+        def _quota_cantiere(righe):
+            return round(sum(r["importo"] for r in righe
+                             if r["categoria"]
+                             in fattibilita.CATEGORIE_CANTIERE), 2)
+
+        cantiere_sostenuto = _quota_cantiere(righe_spese)
+        cantiere_previsto = _quota_cantiere(righe_prev)
+        cantiere_consuntivo = round(cantiere_sostenuto + cantiere_previsto, 2)
         if righe_cantiere:
             st.divider()
-            st.subheader("⚖️ Preventivo vs consuntivo (cantiere)")
-            scostamento = cantiere_consuntivo - ristr_da_computo
-            c1, c2, c3 = st.columns(3)
+            st.subheader("⚖️ Il computo alla prova del cantiere")
+            scostamento = round(cantiere_consuntivo - ristr_da_computo, 2)
+            # La percentuale è il numero che conta davvero: è la stessa
+            # grandezza con cui lo storico tara gli imprevisti del computo.
+            # Prima il valore grande e il delta erano la stessa cifra in €,
+            # scritta due volte, e la percentuale non c'era.
+            scost_pct = (round(scostamento / ristr_da_computo * 100, 2)
+                         if ristr_da_computo else None)
+            c1, c2, c3, c4 = st.columns(4)
             c1.metric("Preventivo (computo, senza imprevisti)",
                       euro(ristr_da_computo))
-            c2.metric("Consuntivo cantiere (lavori+materiali+architetto)",
-                      euro(cantiere_consuntivo))
-            c3.metric("Scostamento", euro(scostamento),
+            c2.metric("Speso davvero (fatture)", euro(cantiere_sostenuto))
+            c3.metric("Ancora da sostenere (stime)", euro(cantiere_previsto))
+            c4.metric("Scostamento sul preventivo",
+                      (numero_it(scost_pct, 1) + " %"
+                       if scost_pct is not None else "—"),
                       delta=euro(scostamento), delta_color="inverse")
+            st.caption(
+                ":gray[Lavori, materiale e architetto. Il confronto usa "
+                "**entrambe** le colonne — speso più da sostenere — perché è "
+                "il costo atteso del cantiere; finché la seconda non è "
+                "vuota, lo scostamento è in parte una previsione.]")
 
     # ------------------------------------------------ studio di fattibilità
     with sotto_fatt:
@@ -5087,13 +5156,39 @@ with tab_bp:
                                    ["pagato"] else "—",
             } for s in stato["piano"]]), hide_index=True, width="stretch")
 
+            # «Residuo» e «ancora da pagare» differiscono SOLO per gli extra:
+            # finché non ce ne sono è lo stesso numero sotto due nomi, e due
+            # nomi sullo stesso numero si leggono come due conferme
+            # indipendenti. Stessa cura già usata per ROE e rendimento annuo
+            # a 12 mesi: l'etichetta lo dichiara.
+            etichetta_da_pagare = ("Ancora da pagare" if stato["extra"]
+                                   else "Ancora da pagare (= il residuo: "
+                                        "nessun extra)")
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Pagato", euro(stato["pagato"]))
+            # «Saldato» in tutta la scheda: è la parola della colonna
+            # dell'editor e della tabella del piano.
+            m1.metric("Saldato", euro(stato["pagato"]))
             m2.metric("Residuo di contratto", euro(stato["residuo"]))
-            m3.metric("Totale finale", euro(stato["totale_finale"]),
+            # Non «Totale finale»: nel computo quella è la card d'ottone del
+            # totale lavori, un'altra cosa.
+            m3.metric("Totale a fine cantiere", euro(stato["totale_finale"]),
                       delta=(f"+{euro(stato['extra'])} extra"
                              if stato["extra"] else None), delta_color="off")
-            m4.metric("Ancora da pagare", euro(stato["da_pagare"]))
+            m4.metric(etichetta_da_pagare, euro(stato["da_pagare"]))
+
+            # Il residuo negativo adesso si vede (cantiere.stato_cantiere non
+            # lo azzera più): qui si dice cosa significa.
+            if stato["residuo"] < 0:
+                somma_saldate = cantiere.somma_percentuali(
+                    [q["percento"] for q in st.session_state.cant_sal
+                     if q["pagato"]])
+                st.warning(
+                    f"⚠️ Hai saldato **{euro(-stato['residuo'])} in più** "
+                    "dell'importo di contratto: i SAL spuntati fanno "
+                    f"**{numero_it(somma_saldate, 1)}%** di un contratto che "
+                    "ne vale 100. O il contratto è stato integrato e "
+                    "l'importo qui sopra va aggiornato, oppure c'è una "
+                    "spunta di troppo.")
 
             if stato["extra"]:
                 segno = "+" if stato["scostamento"] >= 0 else ""
@@ -5158,32 +5253,52 @@ with tab_bp:
             media_mq = storico.media(storico.costi_al_mq(chiuse))
             s1, s2 = st.columns(2)
             if consigliati is not None:
-                s1.metric(f"Sforamento medio su {len(chiuse)} "
+                # Il segno lo porta il numero: negativo = chiuso sotto
+                # contratto, e l'etichetta non deve smentirlo.
+                s1.metric(f"Scostamento medio su {len(chiuse)} "
                           f"{'operazione' if len(chiuse) == 1 else 'operazioni'}",
                           f"{numero_it(consigliati, 2)} %")
             if media_mq:
                 s2.metric("Costo medio dei lavori",
                           f"{numero_it(media_mq, 0)} €/mq")
-            if (consigliati is not None
-                    and abs(consigliati - st.session_state.imprevisti) > 0.5):
-                st.info(
-                    f"Nel computo gli imprevisti sono al "
-                    f"**{numero_it(st.session_state.imprevisti, 1)}%**, ma i "
-                    f"tuoi cantieri chiusi dicono "
-                    f"**{numero_it(consigliati, 2)}%**. Quella percentuale "
-                    "gonfia il computo, che a sua volta è il costo di "
-                    "ristrutturazione del business plan: è lì che decidi se "
-                    "l'affare sta in piedi.")
-                # ⚠️ La riscrittura va in una callback: il campo «imprevisti»
-                # nasce nella scheda Computo, molto più in alto, e scriverci
-                # sopra qui pianterebbe l'app («cannot be modified after the
-                # widget is instantiated»). Dentro on_click Streamlit lo
-                # consente.
-                st.button(f"Porta gli imprevisti a "
-                          f"{numero_it(consigliati, 2)}%",
-                          key="applica_imprevisti",
-                          on_click=applica_imprevisti,
-                          args=(consigliati,))
+            if consigliati is not None:
+                # La MISURA e la PROPOSTA sono due cose diverse, e prima erano
+                # la stessa: `imprevisti_consigliati` troncava a zero, così
+                # chi chiude sotto contratto si sentiva dire «i tuoi cantieri
+                # dicono 0,00%» invece di «−3%». Adesso la misura dice il
+                # vero; è qui che si decide cosa proporne, e una riserva
+                # negativa non esiste.
+                proposta = max(0.0, consigliati)
+                if consigliati < 0:
+                    st.info(
+                        f"I tuoi cantieri chiusi hanno chiuso in media "
+                        f"**sotto contratto** "
+                        f"({numero_it(consigliati, 2)}%): la riserva del "
+                        f"computo, oggi al "
+                        f"**{numero_it(st.session_state.imprevisti, 1)}%**, "
+                        "non è tarata sui tuoi fatti — è prudenza. Tienila "
+                        "se la vuoi, ma sappi che la stai pagando nel "
+                        "business plan.")
+                elif abs(consigliati - st.session_state.imprevisti) > 0.5:
+                    st.info(
+                        f"Nel computo gli imprevisti sono al "
+                        f"**{numero_it(st.session_state.imprevisti, 1)}%**, "
+                        f"ma i tuoi cantieri chiusi dicono "
+                        f"**{numero_it(consigliati, 2)}%**. Quella "
+                        "percentuale gonfia il computo, che a sua volta è il "
+                        "costo di ristrutturazione del business plan: è lì "
+                        "che decidi se l'affare sta in piedi.")
+                if abs(proposta - st.session_state.imprevisti) > 0.5:
+                    # ⚠️ La riscrittura va in una callback: il campo
+                    # «imprevisti» nasce nella scheda Computo, molto più in
+                    # alto, e scriverci sopra qui pianterebbe l'app («cannot
+                    # be modified after the widget is instantiated»). Dentro
+                    # on_click Streamlit lo consente.
+                    st.button(f"Porta gli imprevisti a "
+                              f"{numero_it(proposta, 2)}%",
+                              key="applica_imprevisti",
+                              on_click=applica_imprevisti,
+                              args=(proposta,))
 
     with sotto_mca:
         st.caption("Stima del prezzo di vendita col **metodo comparativo** "
@@ -5203,7 +5318,17 @@ with tab_bp:
                     "Comparabile", help="Es. C1 — via Roma 10"),
                 "prezzo": st.column_config.NumberColumn(
                     "Prezzo richiesto (€)", format="%.0f"),
-                "mq": st.column_config.NumberColumn("Mq", format="%.0f"),
+                # ⚠️ Il soggetto porta i mq COMMERCIALI (dalla planimetria o
+                # scritti a mano nello studio di fattibilità). Se qui si
+                # copiano i calpestabili di un annuncio, il €/mq dei
+                # comparabili e quello del soggetto non sono la stessa
+                # grandezza — e l'errore non si vede mai: si porta dentro il
+                # prezzo di vendita. La colonna lo dice.
+                "mq": st.column_config.NumberColumn(
+                    "Mq commerciali", format="%.0f",
+                    help="La stessa grandezza dei mq del soggetto: "
+                         "superficie commerciale, non calpestabile. È quella "
+                         "che scrivono gli annunci."),
                 "coeff": st.column_config.NumberColumn(
                     "Coeff. di merito", format="%.3f",
                     help="Prodotto dei coefficienti (vetustà, piano, "
@@ -5221,7 +5346,9 @@ with tab_bp:
                         max_value=30.0, step=0.5, key="bp_sconto",
                         help="Differenza media tra prezzo richiesto e "
                              "prezzo di vendita reale (~13%)")
-        m3.metric("Mq del soggetto", numero_it(mq_eff, 0) + " m²")
+        m3.metric("Mq commerciali del soggetto", numero_it(mq_eff, 0) + " m²")
+        m3.caption(":gray[Dal campo **Mq commerciali** dello studio di "
+                   "fattibilità.]")
 
         esito_mca = fattibilita.stima_mca(
             mca_da_df(df_mca_ed), st.session_state.bp_coeff_sogg,
@@ -5236,8 +5363,25 @@ with tab_bp:
                 "Coeff.": numero_it(d["coeff"], 3),
                 "€/mq normalizzato": numero_it(d["eur_mq_normalizzato"], 0),
             } for d in esito_mca["dettaglio"]]), hide_index=True)
+            # ⚠️ Le righe incomplete sparivano in silenzio: con cinque
+            # comparabili in tabella e due senza coefficiente, la stima era
+            # su tre e nessuna etichetta lo diceva. Qui si dichiarano il
+            # numero e il metodo — media aritmetica, non ponderata sui mq.
+            usati = esito_mca["usati"]
+            if esito_mca["scartati"]:
+                st.warning(
+                    f"⚠️ **{esito_mca['scartati']} comparabile/i** "
+                    f"incompleto/i **non entra/entrano** nella stima: serve "
+                    "che prezzo, mq e coefficiente siano tutti maggiori di "
+                    f"zero. La media qui sotto è su **{usati}**.")
+            st.caption(
+                f":gray[Media **aritmetica** dei €/mq normalizzati di "
+                f"**{usati}** "
+                f"{'comparabile' if usati == 1 else 'comparabili'}: un "
+                "bilocale pesa quanto un quadrilocale — a riproporzionare "
+                "ci pensa il coefficiente di merito, non la superficie.]")
             n1, n2, n3, n4 = st.columns(4)
-            n1.metric("€/mq medio normalizzato",
+            n1.metric(f"€/mq medio normalizzato (su {usati})",
                       numero_it(esito_mca["eur_mq_media"], 0))
             n2.metric("€/mq del soggetto",
                       numero_it(esito_mca["eur_mq_soggetto"], 0))

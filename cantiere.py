@@ -60,20 +60,29 @@ def stato_cantiere(importo_contratto, percentuali, pagati=(), extra=0.0):
     avanzato già saldato; «residuo» è quel che manca al contratto. Gli extra
     stanno fuori dal residuo perché non sono un pagamento in ritardo: sono
     lavoro in più che il contratto non conosceva.
+
+    ⚠️ Il residuo può essere NEGATIVO, e deve poterlo essere: se le quote
+    sommano più di 100 e i SAL sono saldati, hai pagato più di quanto hai
+    firmato. Prima qui c'era un `max(0.0, ...)` che quel caso lo azzerava —
+    la stessa correzione di nascosto che `piano_sal` rifiuta di fare sulle
+    percentuali, fatta un passo più in là. Un contratto sforato in
+    pagamento è esattamente il genere di cosa per cui si guarda questa
+    schermata.
     """
     piano = piano_sal(importo_contratto, percentuali)
     pagati = {int(n) for n in (pagati or [])}
     pagato = round(sum(s["importo"] for s in piano if s["n"] in pagati), 2)
     contratto = round(float(importo_contratto or 0.0), 2)
     extra = round(float(extra or 0.0), 2)
+    residuo = round(contratto - pagato, 2)
     return {
         "piano": piano,
         "contratto": contratto,
         "pagato": pagato,
-        "residuo": round(max(0.0, contratto - pagato), 2),
+        "residuo": residuo,
         "extra": extra,
         "totale_finale": round(contratto + extra, 2),
-        "da_pagare": round(max(0.0, contratto - pagato) + extra, 2),
+        "da_pagare": round(residuo + extra, 2),
         "scostamento": scostamento_percentuale(contratto, contratto + extra),
     }
 
@@ -93,7 +102,7 @@ def scostamento_percentuale(contratto, totale_finale):
                  2)
 
 
-def imprevisti_consigliati(scostamenti, minimo=0.0):
+def imprevisti_consigliati(scostamenti):
     """La percentuale di imprevisti suggerita dai cantieri già chiusi.
 
     È la media degli sforamenti passati: dopo tre operazioni non è più una
@@ -102,8 +111,16 @@ def imprevisti_consigliati(scostamenti, minimo=0.0):
 
     Gli sforamenti negativi (hai speso meno del contratto) contano: sono
     altrettanto veri, e tenerli fuori gonfierebbe la media.
+
+    ⚠️ E il risultato resta negativo se la media lo è. C'era un
+    `max(minimo, …)` che lo riportava a zero, e diceva una cosa falsa
+    proprio dopo la riga di documentazione che spiega perché i negativi
+    contano: chi chiude sotto contratto si sentiva rispondere «i tuoi
+    cantieri dicono 0,00%» invece di «−3%». Chi legge il numero decide poi
+    cosa farne — una riserva non può essere negativa, ma sapere che non
+    serve è un'informazione, non un errore da nascondere.
     """
     valori = [float(s) for s in (scostamenti or []) if s is not None]
     if not valori:
         return None
-    return round(max(minimo, sum(valori) / len(valori)), 2)
+    return round(sum(valori) / len(valori), 2)

@@ -82,6 +82,28 @@ def test_gli_extra_non_entrano_nel_residuo():
     assert stato["da_pagare"] == 35000.0         # residuo + extra
 
 
+def test_il_sovrapagamento_si_vede():
+    """Quote che fanno 110 e tutte saldate: il residuo va SOTTO zero.
+
+    C'era un `max(0.0, ...)` che quel caso lo azzerava — la stessa
+    correzione di nascosto che `piano_sal` rifiuta di fare sulle
+    percentuali, spostata un passo più in là. Aver pagato più del contratto
+    è precisamente il genere di cosa per cui si guarda questa schermata.
+    """
+    stato = stato_cantiere(CONTRATTO, [20.0, 30.0, 30.0, 30.0],
+                           pagati=[1, 2, 3, 4])
+    assert stato["pagato"] == 66000.0
+    assert stato["residuo"] == -6000.0
+    assert stato["da_pagare"] == -6000.0
+
+
+def test_il_sovrapagamento_si_somma_agli_extra():
+    """Il credito verso l'impresa e gli extra si compensano: è una cassa."""
+    stato = stato_cantiere(CONTRATTO, [20.0, 30.0, 30.0, 30.0],
+                           pagati=[1, 2, 3, 4], extra=2000.0)
+    assert stato["da_pagare"] == -4000.0     # 6.000 pagati in più − 2.000
+
+
 def test_stato_senza_niente():
     stato = stato_cantiere(0.0, [], pagati=[], extra=0.0)
     assert stato["contratto"] == 0.0
@@ -118,8 +140,15 @@ def test_imprevisti_senza_storia_non_si_consigliano():
     assert imprevisti_consigliati([None, None]) is None
 
 
-def test_imprevisti_non_scendono_sotto_il_minimo():
-    assert imprevisti_consigliati([-8.0, -6.0], minimo=0.0) == 0.0
+def test_imprevisti_negativi_restano_negativi():
+    """Chi chiude sotto contratto deve leggerlo, non un finto zero.
+
+    Prima un `max(0.0, ...)` riportava la media a zero, e la scheda diceva
+    «i tuoi cantieri chiusi dicono 0,00%» a chi risparmia sistematicamente.
+    Che una riserva non possa essere negativa è vero, ma è una decisione di
+    chi la propone: qui si misura, e basta.
+    """
+    assert imprevisti_consigliati([-8.0, -6.0]) == -7.0
 
 
 def test_imprevisti_ignorano_i_buchi():

@@ -219,14 +219,27 @@ def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0):
     normalizzati, moltiplicata per il coeff del soggetto, dà il €/mq del
     soggetto; lo sconto di trattativa porta al probabile venduto.
 
+    ⚠️ La media è ARITMETICA, non ponderata sui mq: un bilocale da 45 mq
+    pesa quanto un quadrilocale da 190. È il metodo del foglio «MCA sell» e
+    la prassi della stima comparativa (i comparabili si scelgono simili, e
+    la ponderazione la fa già il coefficiente di merito) — ma chi legge il
+    numero deve saperlo, quindi la scheda lo dichiara.
+
+    Le righe incomplete (prezzo, mq o coefficiente a zero) NON entrano nella
+    media. Quante ne sono state lasciate fuori si legge in `scartati`: una
+    stima fatta su tre comparabili quando in tabella ce ne sono cinque è un
+    altro numero, e tacerlo lo faceva sembrare lo stesso.
+
     Ritorna None se non c'è nessun comparabile valido.
     """
     dettaglio = []
+    scartati = 0
     for c in comparabili:
         prezzo = float(c.get("prezzo") or 0.0)
         mq = float(c.get("mq") or 0.0)
         coeff = float(c.get("coeff") or 0.0)
         if prezzo <= 0 or mq <= 0 or coeff <= 0:
+            scartati += 1
             continue
         eur_mq = prezzo / mq
         dettaglio.append({
@@ -244,6 +257,8 @@ def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0):
     mq_sog = float(mq_soggetto or 0.0)
     return {
         "dettaglio": dettaglio,
+        "usati": len(dettaglio),
+        "scartati": scartati,
         "eur_mq_media": round(media, 2),
         "eur_mq_soggetto": round(eur_mq_soggetto, 2),
         "eur_mq_probabile": round(eur_mq_probabile, 2),

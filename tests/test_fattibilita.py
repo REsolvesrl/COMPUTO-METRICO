@@ -118,6 +118,27 @@ def test_stima_mca_ignora_comparabili_non_validi():
     assert esito["valore"] == 300000.0
 
 
+def test_stima_mca_dichiara_quanti_ne_ha_scartati():
+    """Una stima su tre comparabili quando in tabella ce ne sono cinque e'
+    un altro numero: tacerlo la faceva sembrare la stessa."""
+    comparabili = [
+        {"nome": "C1", "prezzo": 300000, "mq": 100, "coeff": 1.0},
+        {"nome": "C2", "prezzo": 260000, "mq": 100, "coeff": 1.0},
+        {"nome": "senza coeff", "prezzo": 300000, "mq": 100, "coeff": 0},
+        {"nome": "vuoto", "prezzo": None, "mq": None, "coeff": None},
+    ]
+    esito = stima_mca(comparabili, 1.0, 100, sconto_pct=0.0)
+    assert esito["usati"] == 2
+    assert esito["scartati"] == 2
+
+
+def test_stima_mca_senza_scarti_lo_dice_lo_stesso():
+    comparabili = [{"nome": "C1", "prezzo": 300000, "mq": 100, "coeff": 1.0}]
+    esito = stima_mca(comparabili, 1.0, 100, sconto_pct=0.0)
+    assert esito["usati"] == 1
+    assert esito["scartati"] == 0
+
+
 def test_stima_mca_senza_comparabili():
     assert stima_mca([], 1.0, 100) is None
 

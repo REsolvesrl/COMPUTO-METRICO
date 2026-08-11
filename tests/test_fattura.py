@@ -153,4 +153,43 @@ def test_dati_da_pdf_numero_deve_iniziare_con_cifra():
              "Totale documento\n100,00 €\n")
     d = dati_da_pdf_testo(testo)
     assert d is not None            # c'è il totale
-    assert d["nr_fattura"] == ""    # ma nessun numero-spazzatura
+    # nessun numero-spazzatura: si dichiara di non averlo trovato
+    assert d["nr_fattura"] == "//"
+
+
+# ------------------------------------------------- il numero della fattura
+
+TOTALE = "Totale documento\n1.220,00 €\n"
+
+
+def _numero_letto(intestazione):
+    return dati_da_pdf_testo(intestazione + "\n" + TOTALE)["nr_fattura"]
+
+
+def test_numero_dalle_diciture_del_foglio_sdi():
+    """Il «nr. X del …» non è l'unica forma in cui i PDF scrivono il numero:
+    prima ne veniva riconosciuta una sola, e su tutto il resto la colonna
+    restava vuota senza spiegare perché."""
+    assert _numero_letto("Numero documento\n412616027839") == "412616027839"
+    assert _numero_letto("Numero documento: 55/2026") == "55/2026"
+    assert _numero_letto("Numero del documento 2026-A/17") == "2026-A/17"
+    assert _numero_letto("Numero fattura  88/B") == "88/B"
+    assert _numero_letto("Fattura n. 55/2026") == "55/2026"
+    assert _numero_letto("FATTURA nr 7 del 03/02/2026") == "7"
+
+
+def test_numero_non_trovato_si_dichiara():
+    """Una casella vuota non distingue «non ce l'ha» da «non l'ho letto»."""
+    assert _numero_letto("Ricevuta di pagamento") == "//"
+
+
+def test_niente_numeri_inventati():
+    """Un «n. 3» qualunque in mezzo al testo non è un numero di fattura:
+    meglio il ripiego che un dato pescato a caso."""
+    assert _numero_letto("Pagamento in n. 3 rate mensili") == "//"
+    assert _numero_letto("Beneficiario del pagamento: Deal srls") == "//"
+
+
+def test_il_numero_xml_batte_ogni_regola_sul_testo():
+    """Nell'XML il campo è strutturato: si legge, non si indovina."""
+    assert dati_da_xml(XML_FATTURA)["nr_fattura"] == "123/2026"
