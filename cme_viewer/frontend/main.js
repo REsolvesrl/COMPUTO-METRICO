@@ -30,6 +30,14 @@ let misure = [];             // misure "al volo": SOLO locali, mai inviate
 let labelRects = [];         // rettangoli (schermo) delle etichette disegnate
 let seqN = 0;
 let mostraAree = true;       // aree dei locali + etichette a schermo
+
+// Le zone da disegnare adesso: con «AREE» spento restano solo i perimetri
+// commerciali, che non sono locali ma l'ingombro dell'immobile.
+function zoneVisibili(elenco) {
+  return mostraAree ? elenco : elenco.filter(function (z) {
+    return z.senza_sfondo;
+  });
+}
 let editor = null;           // <input> di rinomina sovrapposto all'etichetta
 
 const COL_SCALA = "#111111";       // nero — vettore di scala
@@ -319,7 +327,11 @@ function render() {
 
   // I perimetri commerciali (senza sfondo) si disegnano PRIMA: restano
   // sotto le altre aree, così ci si può disegnare sopra liberamente.
-  for (const z of (mostraAree ? zoneOrdinate() : [])) {
+  // E restano visibili anche a locali nascosti: nascondere le aree serve a
+  // togliere il velo colorato delle stanze mentre si tracciano i muri, non
+  // a perdere di vista l'ingombro dell'immobile — che è un contorno
+  // tratteggiato e non copre niente.
+  for (const z of zoneVisibili(zoneOrdinate())) {
     const sel = (z.id === selZona);
     ctx.beginPath();
     z.punti.forEach(function (p, i) {
@@ -395,7 +407,7 @@ function render() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   labelRects = [];
 
-  for (const z of (mostraAree ? zone : [])) {
+  for (const z of zoneVisibili(zone)) {
     const pos = posEtichettaZona(z);
     // linea di richiamo quando l'etichetta sta fuori dalla sua area
     if (z.etichetta && z.etichetta_pos && z.punti.length >= 3 &&
@@ -883,8 +895,9 @@ function init() {
   bAree.addEventListener("click", function () {
     mostraAree = !mostraAree;
     bAree.classList.toggle("spento", !mostraAree);
-    bAree.title = mostraAree ? "Nascondi le aree dei locali e le etichette"
-                             : "Mostra di nuovo le aree dei locali";
+    bAree.title = mostraAree
+      ? "Nascondi le aree dei locali (il perimetro commerciale resta)"
+      : "Mostra di nuovo le aree dei locali";
     chiudiEditor();
     render();
   });
