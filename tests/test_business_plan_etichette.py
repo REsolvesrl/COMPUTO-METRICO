@@ -97,7 +97,7 @@ def _registro(at):
     """La tabella delle spese sostenute: (configurazione colonne, dati)."""
     for nodo in at.dataframe:
         config = json.loads(nodo.proto.columns or "{}")
-        if "Totale fattura (€)" in [c.get("label") for c in config.values()]:
+        if "Totale fattura" in [c.get("label") for c in config.values()]:
             return config, nodo.value
     raise AssertionError("tabella delle spese sostenute non trovata")
 
@@ -125,7 +125,7 @@ def test_l_iva_in_euro_c_e_e_non_si_scrive_a_mano(registro):
     digita, o le due cifre possono raccontare cose diverse."""
     config, _ = registro
     iva = config["iva_eur"]
-    assert iva["label"] == "di cui IVA (€)"
+    assert iva["label"] == "di cui IVA"
     assert iva["disabled"] is True
 
 
@@ -138,10 +138,39 @@ def test_l_iva_in_euro_e_quella_giusta(registro):
 
 
 def test_le_cifre_hanno_il_separatore_delle_migliaia(registro):
-    """«20000.00» non si legge a colpo d'occhio: 20.000,00 sì."""
+    """«20000.00» non si legge a colpo d'occhio: «20.000,00 €» sì.
+
+    Il formato è «euro», NON «localized»: «localized» conserva i decimali
+    del numero, e su una colonna di soldi significa perdere i centesimi a
+    schermo (20000 scritto «20.000»). «euro» ne tiene sempre due.
+    """
     config, _ = registro
     for colonna in ("importo", "iva_eur"):
-        assert config[colonna]["type_config"]["format"] == "localized"
+        assert config[colonna]["type_config"]["format"] == "euro"
+
+
+def test_i_centesimi_non_si_perdono_per_strada():
+    """Il formato è come si SCRIVE il numero, mai quanto vale: i centesimi
+    restano nel dato, nei totali e nell'IVA scorporata.
+
+    Vale la pena provarlo e non darlo per buono: se un formato arrotondasse
+    davvero il valore, su un registro di fatture l'errore si accumulerebbe
+    riga per riga senza che nessuna singola cifra sembri sbagliata.
+    """
+    at = _avvia(df_spese=pd.DataFrame([
+        dict(_spesa("🟡 LAVORI", 1234.56), aliquota_iva=22.0),
+        dict(_spesa("🟢 MATERIALE", 99.99), aliquota_iva=10.0),
+    ]))
+    config, dati = _registro(at)
+    # il dato che torna dalla tabella ha ancora i suoi centesimi
+    assert sorted(dati["importo"]) == [99.99, 1234.56]
+    # e anche l'IVA calcolata, al centesimo
+    per_importo = dict(zip(dati["importo"], dati["iva_eur"]))
+    assert per_importo[1234.56] == pytest.approx(222.63, abs=0.01)
+    assert per_importo[99.99] == pytest.approx(9.09, abs=0.01)
+    # il totale li somma tutti e due, centesimi compresi
+    metriche = {m.label: m.value for m in at.metric}
+    assert metriche["Totale spese sostenute"] == "1.334,55 €"
 
 
 def test_le_colonne_sono_strette_e_su_misura(registro):

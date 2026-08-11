@@ -405,6 +405,97 @@ def css_mondo():
    caratteri, ben oltre la misura in cui l'occhio ritrova l'inizio della riga
    dopo. Il limite non allarga nulla, taglia solo le righe troppo lunghe. */
 [data-testid="stCaptionContainer"] {{ max-width: 82ch; }}
+
+/* ---- La barra degli strumenti delle tabelle ------------------------ */
+/* Aggiungi riga · mostra colonne · scarica CSV · cerca · schermo intero.
+   Streamlit la tiene a opacità ZERO finché non ci passi sopra col mouse,
+   con bottoni da 22 px e icone da 16: invisibile a chi non sa già che
+   c'è, mentre «aggiungi riga» e «cerca» sono gesti di tutti i giorni.
+   Diventa un attrezzo appoggiato sul banco — sempre in vista, squadrata,
+   fondo rialzato e contorno d'ottone come i pannelli della planimetria.
+
+   ⚠️ Vale per le tabelle NOMINATE qui sotto, non per tutte. I libretti
+   delle misure (`med_*`) restano com'erano di proposito: ce n'è uno per
+   voce di listino, stanno appoggiati subito sotto la riga dei comandi —
+   e una barra alta 52 px andrebbe a coprire proprio quelli. Su tabelline
+   da tre colonne peserebbe più della tabella. Lì il nascondere fino al
+   passaggio del mouse, per una volta, è la scelta giusta. */
+.st-key-editor_sal [data-testid="stElementToolbar"],
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"],
+[class*="st-key-editor_voci"] [data-testid="stElementToolbar"],
+[class*="st-key-editor_mca"] [data-testid="stElementToolbar"],
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] {{
+    opacity: 1;
+    /* tutta SOPRA la tabella: con lo sfondo pieno, la posizione originale
+       (top -16px) coprirebbe la riga delle intestazioni */
+    top: -56px;
+    background: var(--ardesia-chiara);
+    border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+    border-radius: 0;
+    padding: 4px;
+    gap: 2px;
+}}
+.st-key-editor_sal [data-testid="stElementToolbar"] button,
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button,
+[class*="st-key-editor_voci"] [data-testid="stElementToolbar"] button,
+[class*="st-key-editor_mca"] [data-testid="stElementToolbar"] button,
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] button {{
+    width: 34px;
+    height: 34px;
+    padding: 7px;
+    border-radius: 0;
+}}
+/* L'icona si prende per il suo identificativo, non con «button span»: la
+   regola di Streamlit la fissa a 14,4 px e vince di specificità, quindi
+   i bottoni diventavano grandi e i disegni dentro restavano piccoli.
+   Il `!important` qui è la scorciatoia onesta — l'alternativa sarebbe una
+   catena di selettori che si rompe al prossimo aggiornamento. */
+.st-key-editor_sal [data-testid="stElementToolbarButtonIcon"],
+[class*="st-key-editor_spese"] [data-testid="stElementToolbarButtonIcon"],
+[class*="st-key-editor_voci"] [data-testid="stElementToolbarButtonIcon"],
+[class*="st-key-editor_mca"] [data-testid="stElementToolbarButtonIcon"],
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbarButtonIcon"] {{
+    font-size: 20px !important;
+    width: 20px !important;
+    height: 20px !important;
+}}
+.st-key-editor_sal [data-testid="stElementToolbar"] button:hover,
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button:hover,
+[class*="st-key-editor_voci"] [data-testid="stElementToolbar"] button:hover,
+[class*="st-key-editor_mca"] [data-testid="stElementToolbar"] button:hover,
+[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"]
+ button:hover {{
+    background: var(--ottone);
+    color: var(--ardesia);
+}}
+/* ⚠️ E le tabelle DEVONO essere larghe quanto il loro posto, o la barra
+   non ci sta. Streamlit misura la tela al momento in cui nasce: quelle
+   che nascono dentro una scheda ancora chiusa la misurano a zero e
+   restano un moncone largo 52 px (misurato dal vivo su MCA e SAL, e non
+   si riprendono più nemmeno riaprendo la scheda). Finché la barra era
+   invisibile la cosa passava; adesso una barra da 188 px appesa al bordo
+   destro di una tabella da 52 finisce fuori dallo schermo, a sinistra.
+   Il `!important` serve perché la misura sbagliata Streamlit la scrive
+   nello stile in riga, e solo così si vince. */
+.st-key-editor_sal [data-testid="stDataFrameResizable"],
+[class*="st-key-editor_spese"] [data-testid="stDataFrameResizable"],
+[class*="st-key-editor_voci"] [data-testid="stDataFrameResizable"],
+[class*="st-key-editor_mca"] [data-testid="stDataFrameResizable"],
+[class*="st-key-anteprima_fatt"] [data-testid="stDataFrameResizable"] {{
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+}}
+
+/* Accanto al titolo, non orfana in fondo a destra: nella colonna larga
+   del registro spese la barra finiva a un metro dal nome della tabella su
+   cui agisce. I due titoli misurano 195 e 220 px, quindi da 236 px in poi
+   si è liberi in entrambe. Vale solo dove SOPRA c'è un titolo corto: le
+   altre tabelle hanno didascalie lunghe, e lì la barra resta a destra. */
+[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] {{
+    left: 236px;
+    right: auto;
+}}
 </style>
 """
 
@@ -672,8 +763,13 @@ def config_colonne_spese():
         # dove non serve (una data occupa 90 px, non 200) e lo tolgono
         # all'oggetto, che è l'unica cella con del testo vero dentro. Quel
         # che avanza va in scorrimento orizzontale, non in compressione.
+        # ⚠️ format="euro" e non "localized": «localized» conserva i decimali
+        # del numero, e su una colonna di soldi vuol dire perdere i centesimi
+        # (20000 diventerebbe «20.000», non «20.000,00»). «euro» tiene sempre
+        # due decimali, la virgola italiana e il simbolo — la stessa cosa che
+        # scrive euro() nel resto dell'app.
         "importo": st.column_config.NumberColumn(
-            "Totale fattura (€)", width=120, format="localized",
+            "Totale fattura", width=120, format="euro",
             help="Il LORDO, IVA compresa — il «totale documento» della "
                  "fattura. L'IVA si scorpora da qui con l'aliquota della "
                  "colonna accanto: mettendoci l'imponibile, l'IVA esce "
@@ -685,7 +781,7 @@ def config_colonne_spese():
         # Sta accanto alla sua aliquota perché è lì che si controlla se una
         # fattura è stata registrata con l'IVA giusta.
         COLONNA_IVA_EUR: st.column_config.NumberColumn(
-            "di cui IVA (€)", width=105, format="localized", disabled=True,
+            "di cui IVA", width=105, format="euro", disabled=True,
             help="Calcolata: l'IVA contenuta nel totale, con l'aliquota "
                  "della colonna accanto. Non si scrive a mano — cambia il "
                  "totale o l'aliquota e si rifà da sé."),
@@ -3200,6 +3296,7 @@ with tab_computo:
                 st.session_state.df_voci,
                 num_rows="dynamic",
                 hide_index=True,
+                width="stretch",
                 key=f"editor_voci_{st.session_state.versione_editor}",
                 column_config={
                     "categoria": st.column_config.TextColumn(
@@ -3223,11 +3320,15 @@ with tab_computo:
                     "quantita_manuale": st.column_config.NumberColumn(
                         "Quantità (manuale)",
                         help="Compilala solo se lasci vuote le dimensioni"),
+                    # Un prezzo al metro raramente supera le quattro cifre,
+                    # ma le voci «a corpo» sì: stesso formato del resto.
                     "prezzo": st.column_config.NumberColumn(
-                        "Prezzo unit. (€)", format="%.2f"),
+                        "Prezzo unit.", format="euro"),
                 },
             )
-            st.session_state.df_voci = df_editato
+            # come per l'MCA: il ritorno rientra come dato di partenza, e
+            # senza intestazioni la tabella non si riprende più
+            st.session_state.df_voci = df_editato.reindex(columns=COLONNE)
 
     # --------------------------------------------------- riepilogo costi
     with col_dx:
@@ -4534,38 +4635,6 @@ with tab_bp:
                                                     {{ min-width: 1900px; }}
 .st-key-spese_banco [data-testid="stHorizontalBlock"]
  [data-testid="stHorizontalBlock"] {{ min-width: 0; }}
-
-/* La barra degli strumenti delle tabelle: aggiungi riga · mostra colonne ·
-   scarica CSV · cerca · schermo intero. Streamlit la tiene a opacità ZERO
-   finché non ci passi sopra col mouse, con bottoni da 22 px e icone da 16:
-   invisibile a chi non sa già che c'è, e qui «aggiungi riga» e «cerca»
-   sono gesti di tutti i giorni. Diventa un attrezzo appoggiato sul banco —
-   sempre in vista, squadrata, fondo rialzato e contorno d'ottone come i
-   pannelli della planimetria. */
-[class*="st-key-editor_spese"] [data-testid="stElementToolbar"],
-[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] {{
-    opacity: 1 !important;
-    /* tutta SOPRA la tabella: con lo sfondo pieno, la posizione originale
-       (top -16px) coprirebbe la prima riga di intestazione */
-    top: -56px !important;
-    background: {ARDESIA_CHIARA} !important;
-    border: 1px solid {OTTONE}73 !important;
-    border-radius: 0 !important;
-    padding: 4px !important;
-    gap: 2px !important;
-}}
-[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button,
-[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] button {{
-    width: 34px !important; height: 34px !important;
-    padding: 7px !important; border-radius: 0 !important;
-}}
-[class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button span,
-[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] button span
-    {{ font-size: 20px !important; }}
-[class*="st-key-editor_spese"] [data-testid="stElementToolbar"]
- button:hover,
-[class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"]
- button:hover {{ background: {OTTONE} !important; color: {ARDESIA} !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -4619,8 +4688,7 @@ with tab_bp:
                         # stessa card e nella stessa quota cantiere, e una
                         # colonna chiamata solo «€» non diceva quale dei due.
                         "importo": st.column_config.NumberColumn(
-                            "Importo previsto (€)", width=125,
-                            format="localized",
+                            "Importo previsto", width=125, format="euro",
                             help="IVA compresa, come le spese sostenute: i "
                                  "due registri si sommano."),
                         "aliquota_iva": st.column_config.NumberColumn(
@@ -5226,6 +5294,7 @@ with tab_bp:
                            "Pagato": bool(q.get("pagato"))}
                           for i, q in enumerate(quote, start=1)]),
             hide_index=True, num_rows="dynamic", key="editor_sal",
+            width="stretch",
             column_config={
                 "SAL": st.column_config.TextColumn("Stato", disabled=True),
                 "%": st.column_config.NumberColumn(
@@ -5411,15 +5480,24 @@ with tab_bp:
                    ">1 = immobile migliore della media, <1 = peggiore). "
                    "Il €/mq viene normalizzato, mediato e riproporzionato "
                    "sul tuo immobile.")
+        # ⚠️ width="stretch" non è cosmesi: senza, una tabella VUOTA si
+        # stringe alla larghezza delle sue intestazioni (52 px misurati) e
+        # la barra degli strumenti, che sta appesa al bordo destro, le esce
+        # a sinistra e finisce fuori dallo schermo. Finché la barra era
+        # invisibile non se ne accorgeva nessuno.
         df_mca_ed = st.data_editor(
             st.session_state.df_mca,
-            num_rows="dynamic", hide_index=True,
+            num_rows="dynamic", hide_index=True, width="stretch",
             key=f"editor_mca_{st.session_state.versione_bp}",
             column_config={
                 "nome": st.column_config.TextColumn(
                     "Comparabile", help="Es. C1 — via Roma 10"),
+                # I prezzi dei comparabili si confrontano FRA LORO: è tutto il
+                # senso della tabella, ed è il posto dove il separatore delle
+                # migliaia smette di essere estetica («310000» si contava con
+                # il dito). Stesso formato del registro spese.
                 "prezzo": st.column_config.NumberColumn(
-                    "Prezzo richiesto (€)", format="%.0f"),
+                    "Prezzo richiesto", width=145, format="euro"),
                 # ⚠️ Il soggetto porta i mq COMMERCIALI (dalla planimetria o
                 # scritti a mano nello studio di fattibilità). Se qui si
                 # copiano i calpestabili di un annuncio, il €/mq dei
@@ -5438,7 +5516,14 @@ with tab_bp:
                 "note": st.column_config.TextColumn(
                     "Note / link annuncio", width="large"),
             })
-        st.session_state.df_mca = df_mca_ed
+        # ⚠️ Le colonne non si perdono per strada. Il ritorno della tabella
+        # torna a essere il dato di partenza del giro dopo: basta che una
+        # volta arrivi senza intestazioni e la tabella resta per sempre un
+        # moncone largo 52 px — misurato dal vivo su un progetto reale — con
+        # la barra degli strumenti, appesa al bordo destro, che finisce
+        # fuori dallo schermo. Il reindex ristabilisce le colonne e non
+        # tocca i dati.
+        st.session_state.df_mca = df_mca_ed.reindex(columns=COLONNE_MCA)
 
         m1, m2, m3 = st.columns(3)
         m1.number_input("Coeff. di merito del TUO immobile",
