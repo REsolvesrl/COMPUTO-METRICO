@@ -2450,6 +2450,41 @@ def autosalva(firma):
     st.session_state._autosalva_firma = firma
 
 
+def salva_e_ripristina_bp(stato, copia, predefiniti=None):
+    """Tiene in vita i valori del business plan scritti a mano.
+
+    Aggiorna `copia` con quello che c'è in `stato`, e rimette in `stato`
+    quello che manca — prima da `copia`, poi dai predefiniti.
+
+    ⚠️ Perché serve: molti campi del business plan sono `st.number_input`
+    che usano la chiave come valore, e quella chiave è dello WIDGET.
+    **Streamlit cancella lo stato dei widget che non ridisegna**: basta che
+    un errore fermi lo script prima della scheda fattibilità e quei valori
+    spariscono, per poi tornare ai predefiniti al giro successivo — senza
+    ricaricare niente e senza che nessuno lo dica. È successo davvero: 6.000 €
+    forzati su Agenzia IN tornati a 3,00%, due volte.
+
+    Gli importi scritti con `campo_numero_it` non ne soffrivano, perché lì il
+    valore vero sta in `chiave` e il widget è `chiave_txt` — la stessa
+    separazione che il computo usa da sempre per quantità e prezzi
+    (le «chiavi di verità»). Questa funzione la porta anche qui.
+
+    La copia insegue i valori, non li congela: se il campo cambia, cambia
+    anche lei. Altrimenti dopo un «Progetto nuovo» rimetterebbe in tavola i
+    numeri di prima, che sarebbe un difetto peggiore di quello che cura.
+    """
+    if predefiniti is None:
+        # la spunta del consuntivo sta fuori da IMPOSTAZIONI_BP (lì i valori
+        # sono numerici e il caricamento li converte in int/float, che per una
+        # casella non va bene) ma è un widget come gli altri
+        predefiniti = dict(IMPOSTAZIONI_BP, bp_usa_consuntivo=False)
+    for chiave, valore in predefiniti.items():
+        if chiave in stato:
+            copia[chiave] = stato[chiave]
+        else:
+            stato[chiave] = copia.get(chiave, valore)
+
+
 def autosalva_trovato():
     """Quando è stato scritto il ripristino automatico TROVATO all'apertura.
 
@@ -2760,10 +2795,29 @@ st.session_state.setdefault("df_mca", df_mca_vuoto())
 st.session_state.setdefault("versione_bp", 0)
 # tenuto fuori da IMPOSTAZIONI_BP: lì i valori sono numerici e il
 # caricamento li converte in int/float, che per una checkbox non va bene
-st.session_state.setdefault("bp_usa_consuntivo", False)
 st.session_state.setdefault("fatt_count", 0)  # svuota l'uploader fatture
-for _chiave, _valore in IMPOSTAZIONI_BP.items():
-    st.session_state.setdefault(_chiave, _valore)
+# ⚠️⚠️ CHIAVI DI VERITÀ ANCHE QUI, come per quantità e prezzi del computo.
+# Molti campi del business plan (le percentuali, le aliquote, la durata)
+# sono `st.number_input` cheusano la chiave come valore: quella chiave è
+# dello WIDGET, e **Streamlit cancella lo stato dei widget che non
+# ridisegna**. Basta che un errore fermi lo script prima della scheda
+# fattibilità — o che quella scheda per un giro non venga disegnata — e
+# quei valori spariscono; al giro dopo `setdefault` rimette i predefiniti
+# e uno si ritrova «Agenzia IN 3,00%» dove aveva scritto 6.000 €, senza
+# aver ricaricato niente e senza che nessuno gliel'abbia detto.
+#
+# Riprodotto: scritto 6,5 in un campo, un errore che ferma lo script, e al
+# giro seguente il campo vale di nuovo 3,0. Gli importi scritti con
+# `campo_numero_it` non ne soffrivano — lì il valore vero sta in `chiave` e
+# il widget è `chiave_txt`, che è appunto la differenza — ed è il motivo per
+# cui la ristrutturazione restava al suo posto mentre le agenzie tornavano
+# ai predefiniti.
+#
+# La copia vive in un dizionario normale, che non è di nessun widget e
+# quindi non viene mai raccolto: si aggiorna con quello che c'è, e rimette
+# quello che manca.
+salva_e_ripristina_bp(st.session_state,
+                      st.session_state.setdefault("_bp_copia", {}))
 # campi € derivati dalle percentuali (modificabili in due direzioni)
 if "bp_imposta_eur" not in st.session_state:
     st.session_state.bp_imposta_eur = 0.0
