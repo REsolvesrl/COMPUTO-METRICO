@@ -1,13 +1,18 @@
 """All'avvio l'app riprende da sola dov'era rimasta.
 
-⚠️ SOLO i salvataggi fatti col tasto Salva. Il ripristino automatico resta
-la rete di sicurezza per il blocco o la chiusura per sbaglio — si prende a
-mano dal pannello del progetto — ma non si apre mai da solo: sono arrivati
-ripristini automatici incompleti (la planimetria che non tornava), e un
-avvio che riapre qualcosa di monco è peggio di un avvio vuoto.
+⚠️ SOLO i salvataggi fatti col tasto Salva, che dal 12/08/2026 sono anche
+gli unici che esistono: il salvataggio automatico è stato tolto del tutto.
+Scriveva un'istantanea presa in un momento qualunque, e quel momento poteva
+essere uno in cui i valori dei widget erano già stati cancellati da
+Streamlit — così il «ripristino» rimetteva in tavola i predefiniti al posto
+dei numeri scritti a mano. Una rete di sicurezza che restituisce dati
+sbagliati è peggio di nessuna rete: quella la si guarda con sospetto,
+questa convince di aver recuperato.
+
+Un salvataggio è un gesto: quel momento lo sceglie una persona, e quello
+che c'era dentro andava bene.
 """
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -57,25 +62,6 @@ def test_lo_dice_che_cosa_ha_ripreso():
                for i in at.info)
 
 
-def test_l_autosalvataggio_non_si_apre_mai_da_solo(tmp_path):
-    """Nemmeno se e' piu' recente del progetto salvato a mano."""
-    import time
-    archivio_locale.salva_progetto(
-        "Salvato a mano",
-        json.dumps(_progetto("Salvato a mano", 1.0)).encode("utf-8"))
-    time.sleep(0.01)      # le date sui file hanno la risoluzione dei millesimi
-    Path(os.environ["CME_AUTOSALVA"]).write_text(
-        json.dumps(_progetto("Automatico", 99.0)), encoding="utf-8")
-    at = _avvia()
-    assert at.session_state["prg_nome"] == "Salvato a mano"
-
-
-def test_col_solo_autosalvataggio_si_parte_puliti():
-    """C'e' un ripristino automatico ma nessun salvataggio: non si apre."""
-    Path(os.environ["CME_AUTOSALVA"]).write_text(
-        json.dumps(_progetto("Solo automatico", 5.0)), encoding="utf-8")
-    at = _avvia()
-    assert at.session_state["prg_nome"] == ""
 
 
 def test_fra_due_salvataggi_vince_il_piu_recente():
@@ -115,85 +101,32 @@ def test_il_progetto_ripreso_e_completo(chiave):
     assert at.session_state[chiave] == atteso
 
 
-# ------------------------------- il lavoro non salvato non si distrugge
+# --------------------------- il salvataggio automatico non deve tornare
 
-def _con_lavoro_non_salvato():
-    """Un salvataggio a mano, e un ripristino automatico piu' recente.
+def test_l_app_non_scrive_nessun_file_di_ripristino(tmp_path, monkeypatch):
+    """Non basta aver tolto la fascia: deve sparire la SCRITTURA.
 
-    E' la fotografia di chi stava lavorando senza premere Salva quando la
-    pagina si e' ricaricata: i suoi ultimi numeri stanno solo li' dentro.
+    Finche' un file di appoggio esiste, prima o poi qualcuno lo ripropone —
+    e quel file puo' contenere una fotografia gia' svuotata, che e' come il
+    difetto si e' manifestato. Qui l'app lavora, si guarda la cartella
+    temporanea, e non deve esserci comparso niente.
     """
-    import time
-    archivio_locale.salva_progetto(
-        "Salvato a mano",
-        json.dumps(_progetto("Salvato a mano", 1.0)).encode("utf-8"))
-    time.sleep(0.01)
-    Path(os.environ["CME_AUTOSALVA"]).write_text(
-        json.dumps(_progetto("Lavoro non salvato", 99.0)), encoding="utf-8")
-
-
-def test_il_lavoro_non_salvato_viene_offerto_subito():
-    """Prima lo diceva solo una didascalia dentro un pannello chiuso: chi ha
-    appena perso mezz'ora di numeri li' dentro non ci va a guardare."""
-    _con_lavoro_non_salvato()
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setenv("TEMP", str(tmp_path))
+    monkeypatch.setenv("TMP", str(tmp_path))
     at = _avvia()
-    avvisi = "\n".join(str(a.value) for a in at.warning)
-    assert "lavoro più recente" in avvisi, avvisi
-
-
-def test_il_lavoro_non_salvato_non_viene_sovrascritto_mentre_si_decide():
-    """⚠️ Era il difetto peggiore della rete di sicurezza: riaperto il
-    salvataggio a mano, quindici secondi dopo l'autosalvataggio scriveva
-    QUELLO — piu' vecchio — sopra il file di ripristino. Il lavoro non
-    salvato veniva distrutto dal meccanismo che esiste per proteggerlo."""
-    _con_lavoro_non_salvato()
-    file_ripristino = Path(os.environ["CME_AUTOSALVA"])
-    at = _avvia()
-    for _ in range(3):                    # qualche giro dell'app
+    at.text_input(key="bp_acquisto_txt").set_value("140.000").run()
+    at.number_input(key="bp_durata").set_value(8).run()
+    for _ in range(3):
         at.run()
-    dentro = json.loads(file_ripristino.read_text(encoding="utf-8"))
-    assert dentro["progetto"]["nome"] == "Lavoro non salvato"
+    comparsi = [f.name for f in tmp_path.rglob("*") if f.is_file()]
+    assert comparsi == [], comparsi
 
 
-def test_riprendendolo_torna_in_tavola():
-    _con_lavoro_non_salvato()
-    at = _avvia()
-    at.button(key="riprendi_non_salvato").click().run()
-    assert at.session_state["prg_nome"] == "Lavoro non salvato"
-    assert at.session_state["q_1.02"] == 99.0
+def test_nel_sorgente_non_c_e_piu_nessun_autosalvataggio():
+    """La guardia contro il ripensamento distratto: se qualcuno rimette in
+    piedi il meccanismo, questo test glielo dice."""
+    sorgente = SORGENTE.read_text(encoding="utf-8")
+    for parola in ("AUTOSALVA_FILE", "def autosalva", "cme_ripristino"):
+        assert parola not in sorgente, parola
 
-
-def test_scartandolo_l_autosalvataggio_riprende_a_seguire_il_lavoro():
-    """«Tengo questo» e' una risposta: da li' in poi il file torna a
-    inseguire il lavoro in corso, altrimenti resterebbe in pausa per
-    sempre."""
-    _con_lavoro_non_salvato()
-    at = _avvia()
-    at.button(key="scarta_non_salvato").click().run()
-    assert not any("lavoro più recente" in str(a.value) for a in at.warning)
-    assert at.session_state["_recupero_deciso"] is True
-
-
-def test_senza_niente_di_piu_recente_non_si_chiede_niente():
-    """Un ripristino piu' VECCHIO del salvataggio riaperto non e' lavoro
-    perduto: e' la copia di quello che si e' gia' salvato."""
-    import time
-    Path(os.environ["CME_AUTOSALVA"]).write_text(
-        json.dumps(_progetto("Vecchio", 2.0)), encoding="utf-8")
-    time.sleep(0.01)
-    archivio_locale.salva_progetto(
-        "Salvato dopo",
-        json.dumps(_progetto("Salvato dopo", 3.0)).encode("utf-8"))
-    at = _avvia()
-    assert not any("lavoro più recente" in str(a.value) for a in at.warning)
-
-
-def test_il_ripristino_automatico_resta_disponibile_a_mano():
-    """La rete di sicurezza c'e' ancora: si prende dal pannello progetto."""
-    Path(os.environ["CME_AUTOSALVA"]).write_text(
-        json.dumps(_progetto("Da recuperare", 6.0)), encoding="utf-8")
-    at = _avvia()
-    assert any("salvataggio automatico" in str(c.value) for c in at.caption)
-    at.button(key="recupera_autosalva").click().run()
-    assert at.session_state["prg_nome"] == "Da recuperare"
-    assert at.session_state["q_1.02"] == 6.0

@@ -42,8 +42,6 @@ import hmac
 import io
 import json
 import os
-import tempfile
-import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -2392,65 +2390,35 @@ def firma_progetto():
                        .encode("utf-8")).hexdigest()
 
 
-# ------------------------------------------------------ rete di sicurezza
-# Streamlit tiene il lavoro nella memoria della sessione: un F5, un tab
-# chiuso per sbaglio o il server che si riavvia azzeravano ore di computo e
-# planimetrie calibrate, senza preavviso. Il progetto finisce quindi anche in
-# un file di appoggio, riscritto al massimo ogni AUTOSALVA_SECONDI, che alla
-# partenza viene offerto come ripristino. Un solo slot: l'app ha un utente
-# solo, e due slot sarebbero solo una scelta in più da fare nel momento
-# peggiore.
-# Il percorso si può dirottare con CME_AUTOSALVA: serve ai test, che non
-# devono né leggere né sporcare il lavoro vero di chi usa il programma.
-AUTOSALVA_FILE = Path(os.environ.get(
-    "CME_AUTOSALVA", Path(tempfile.gettempdir()) / "cme_ripristino.json"))
-AUTOSALVA_SECONDI = 15
+# ----------------------------------------- il salvataggio è solo manuale
+# ⚠️ Qui c'era un salvataggio automatico su un file di appoggio, riscritto
+# ogni quindici secondi e offerto come ripristino alla partenza. È stato
+# TOLTO, e non per semplificare: faceva danno.
+#
+# Il file conteneva una fotografia dello stato in un momento qualunque, e
+# quello stato poteva essere già svuotato — Streamlit cancella i valori dei
+# widget che non ridisegna, quindi bastava un errore a metà pagina perché
+# la fotografia successiva contenesse i predefiniti al posto dei numeri
+# scritti a mano. Riprendendo quel file si rimettevano in tavola proprio i
+# valori che si volevano recuperare, ma di fabbrica. È l'utente ad averlo
+# riconosciuto, dopo esserci incappato tre volte.
+#
+# Un salvataggio è un gesto: quel momento lo sceglie una persona, e quello
+# che c'era dentro andava bene. Un'istantanea presa da sola non ha nessuno
+# che risponda della sua correttezza — e su un'app che decide acquisti da
+# centinaia di migliaia di euro, una rete di sicurezza che restituisce dati
+# sbagliati è peggio di nessuna rete: quella la si guarda con sospetto,
+# questa ti convince di aver recuperato.
+#
+# Resta il tasto Salva, che scrive in archivio e funziona; resta la
+# riapertura automatica dell'ultimo salvataggio MANUALE; e resta l'avviso
+# di modifiche non salvate, che adesso è l'unica cosa fra il lavoro e un
+# F5 — motivo per cui sta in testata e non in fondo alla pagina.
 
 
 def impronta(dati):
     """Firma breve del progetto, per capire se è cambiato dall'ultimo salvataggio."""
     return hashlib.md5(dati or b"").hexdigest()
-
-
-def autosalva(firma):
-    """Aggiorna il file di ripristino, non più spesso del necessario.
-
-    Riceve la FIRMA, non i dati: così il progetto viene serializzato solo nel
-    momento in cui si scrive davvero (al più ogni AUTOSALVA_SECONDI e solo se
-    è cambiato), invece che a ogni riesecuzione dell'app.
-
-    La scrittura passa da un file temporaneo e poi rinomina: un'interruzione
-    a metà lascia intatto il ripristino precedente invece di troncarlo.
-    """
-    # Una sessione ancora vuota non ha niente da proteggere, e sovrascrivere
-    # il file la cancellerebbe proprio sotto il naso di chi ha appena perso il
-    # lavoro e non ha ancora risposto alla proposta di ripristino.
-    if progetto_e_vuoto():
-        return
-    # ⚠️⚠️ E NEMMENO finché c'è un recupero da decidere. Questo era il
-    # difetto peggiore di tutta la rete di sicurezza: ricaricando la pagina
-    # la sessione riparte, l'app riapre l'ultimo salvataggio MANUALE, e
-    # quindici secondi dopo scriveva quello stesso stato — più vecchio —
-    # sopra il file di ripristino. Il lavoro non salvato veniva distrutto
-    # dal meccanismo che esiste per proteggerlo, prima ancora che a
-    # qualcuno venisse offerto di riprenderlo. Finché la domanda è aperta,
-    # quel file non si tocca.
-    if recupero_in_sospeso():
-        return
-    adesso = time.time()
-    if adesso - st.session_state.get("_autosalva_ora", 0.0) < AUTOSALVA_SECONDI:
-        return
-    if firma == st.session_state.get("_autosalva_firma"):
-        return
-    dati = progetto_json_bytes()
-    try:
-        provvisorio = AUTOSALVA_FILE.with_suffix(".tmp")
-        provvisorio.write_bytes(dati)
-        provvisorio.replace(AUTOSALVA_FILE)
-    except OSError:
-        return          # disco pieno o cartella in sola lettura: si prosegue
-    st.session_state._autosalva_ora = adesso
-    st.session_state._autosalva_firma = firma
 
 
 def salva_e_ripristina_bp(stato, copia, predefiniti=None):
@@ -2488,91 +2456,11 @@ def salva_e_ripristina_bp(stato, copia, predefiniti=None):
             stato[chiave] = copia.get(chiave, valore)
 
 
-def autosalva_trovato():
-    """Quando è stato scritto il ripristino automatico TROVATO all'apertura.
-
-    Si legge una volta per sessione e si tiene da parte: dopo, a scriverci
-    sopra siamo noi, e l'ora del file non direbbe più niente su quello che
-    c'era prima. None se non c'è nessun file o non è leggibile.
-    """
-    if "_autosalva_trovato" not in st.session_state:
-        try:
-            st.session_state._autosalva_trovato = (
-                datetime.fromtimestamp(AUTOSALVA_FILE.stat().st_mtime)
-                if AUTOSALVA_FILE.exists() else None)
-        except OSError:
-            st.session_state._autosalva_trovato = None
-    return st.session_state._autosalva_trovato
-
-
-def impronta_dati(dati):
-    """Firma del contenuto di un progetto, indipendente dall'ordine delle chiavi."""
-    try:
-        return impronta(json.dumps(dati, sort_keys=True,
-                                   default=str).encode("utf-8"))
-    except (TypeError, ValueError):
-        return None
-
-
-def recupero_in_sospeso():
-    """C'è del lavoro nel ripristino che non è in quello riaperto.
-
-    Ricaricando la pagina la sessione riparte da zero e l'app riapre
-    l'ultimo salvataggio fatto col tasto Salva. Ma se nel frattempo si era
-    lavorato senza salvare — parametri forzati a mano, una percentuale
-    cambiata — quel lavoro sta solo nel ripristino automatico. Finora lo
-    diceva una didascalia dentro un pannello chiuso, e chi ha appena perso
-    mezz'ora di numeri lì dentro non ci va a guardare.
-
-    ⚠️ Il confronto è sul CONTENUTO, non sull'orario. Con l'orario non si
-    distingue il lavoro perduto dalla copia di quello che si è appena
-    salvato: il ripristino viene riscritto anche subito dopo un Salva, e a
-    guardare i minuti quei due casi sono lo stesso. A guardare i byte, no.
-
-    La risposta si calcola una volta per sessione: il file può pesare
-    parecchio (le planimetrie ci stanno dentro) e va letto il meno
-    possibile.
-    """
-    if st.session_state.get("_recupero_deciso"):
-        return False
-    if "_recupero_confronto" not in st.session_state:
-        st.session_state._recupero_confronto = _c_e_lavoro_da_recuperare()
-    return st.session_state._recupero_confronto
-
-
-def _c_e_lavoro_da_recuperare():
-    """Due condizioni, e servono ENTRAMBE.
-
-    **Più recente** del salvataggio riaperto: un ripristino più vecchio non
-    è lavoro perduto, è roba che il salvataggio ha già superato, e
-    riproporlo sarebbe un invito a tornare indietro.
-
-    **Diverso** nel contenuto: se dice esattamente quello che si è appena
-    riaperto, non c'è niente da recuperare — è la copia di sicurezza che ha
-    fatto il suo mestiere e basta.
-    """
-    trovato = autosalva_trovato()
-    if trovato is None:
-        return False
-    riaperto_quando = st.session_state.get("_riaperto_quando")
-    if riaperto_quando is not None and trovato <= riaperto_quando:
-        return False
-    try:
-        automatico = json.loads(AUTOSALVA_FILE.read_bytes())
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return False            # illeggibile: non c'è niente da proporre
-    riaperto = st.session_state.get("_riaperto_impronta")
-    if riaperto is None:
-        # nessun salvataggio a mano da riaprire: tutto quello che esiste sta lì
-        return True
-    return impronta_dati(automatico) != riaperto
-
-
 def progetto_e_vuoto():
     """True se in sessione non c'è ancora nulla da perdere.
 
-    Serve a proporre il ripristino solo all'apertura di una sessione pulita:
-    chiederlo mentre si lavora sarebbe un invito a sovrascriversi da soli.
+    Serve a riaprire l'ultimo lavoro solo su una sessione pulita: farlo
+    mentre si lavora sarebbe un invito a sovrascriversi da soli.
     """
     if st.session_state.piante:
         return False
@@ -2625,11 +2513,6 @@ def riapri_ultimo_lavoro():
     except Exception:  # noqa: BLE001 — file illeggibile: si parte puliti
         return None
     st.session_state.da_caricare = dati
-    # ci si annota COSA è arrivato in tavola: serve a riconoscere un
-    # ripristino automatico che contenga qualcosa di diverso, cioè lavoro
-    # non salvato da proporre invece che perdere
-    st.session_state._riaperto_impronta = impronta_dati(dati)
-    st.session_state._riaperto_quando = quando
     return {"nome": nome, "quando": quando, "origine": "salvato"}
 
 
@@ -3223,41 +3106,6 @@ with tab_computo:
         r_nuovo.button("Progetto nuovo", width="stretch",
                        key="nuovo_dopo_ripresa", on_click=azzera_progetto)
 
-    # C'è del lavoro più recente di quello riaperto? Si dice subito, e in
-    # grande. Non si apre da sé — resta la regola: quello che torna in
-    # tavola da solo è solo un salvataggio fatto col tasto Salva — ma la
-    # domanda si fa qui, non dentro un pannello chiuso. Finché non si
-    # risponde, `autosalva` non tocca il file: è l'unica cosa che tiene in
-    # vita quel lavoro.
-    if recupero_in_sospeso():
-        _quando_auto = autosalva_trovato()
-        st.warning(
-            "🛟 **C'è del lavoro più recente di quello riaperto**, del "
-            f"**{_quando_auto.strftime('%d/%m')}** alle "
-            f"**{_quando_auto.strftime('%H:%M')}**, che non era stato "
-            "salvato col tasto Salva — di solito è quello che stavi "
-            "facendo prima di un aggiornamento della pagina o di un blocco. "
-            "Finché non scegli resta al sicuro dov'è, e per non "
-            "sovrascriverlo il salvataggio automatico è **in pausa**.")
-        _r_si, _r_no, _ = st.columns([1.6, 1.4, 3])
-        if _r_si.button("🛟 Riprendi quel lavoro", type="primary",
-                        width="stretch", key="riprendi_non_salvato"):
-            try:
-                st.session_state.da_caricare = json.loads(
-                    AUTOSALVA_FILE.read_bytes())
-                st.session_state._recupero_deciso = True
-                st.rerun()
-            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                st.error("Il ripristino automatico non è leggibile: resta "
-                         "quello che c'è adesso.")
-                st.session_state._recupero_deciso = True
-        if _r_no.button("Tengo questo", width="stretch",
-                        key="scarta_non_salvato",
-                        help="Da qui in poi il ripristino automatico "
-                             "ricomincia a seguire il lavoro in corso."):
-            st.session_state._recupero_deciso = True
-            st.rerun()
-
     # Dati del progetto e archivio (una volta erano nella barra laterale;
     # tolta per dare tutta la larghezza alla planimetria).
     with st.expander("📋 Dati del progetto · Apri / Nuovo"):
@@ -3280,35 +3128,6 @@ with tab_computo:
                              "dal contratto d'appalto**; quando avrai "
                              "chiuso qualche cantiere, la scheda Cantiere "
                              "potrà tararlo sul tuo sforamento reale.")
-
-        st.divider()
-        # Il ripristino automatico resta la rete di sicurezza per il blocco
-        # o la chiusura per sbaglio, ma si prende a mano: all'avvio l'app
-        # riapre solo i salvataggi fatti col tasto Salva.
-        try:
-            _autosalva_il = (datetime.fromtimestamp(
-                AUTOSALVA_FILE.stat().st_mtime)
-                if AUTOSALVA_FILE.exists() else None)
-        except OSError:
-            _autosalva_il = None
-        if _autosalva_il is not None:
-            a_txt, a_btn = st.columns([3, 1], vertical_alignment="bottom")
-            a_txt.caption(
-                "🛟 C'è un salvataggio automatico del "
-                f"**{_autosalva_il.strftime('%d/%m')}** alle "
-                f"**{_autosalva_il.strftime('%H:%M')}**: serve solo a "
-                "recuperare dopo un blocco o una chiusura per sbaglio, e "
-                "non viene mai aperto da solo.")
-            if a_btn.button("🛟 Recupera", key="recupera_autosalva",
-                            width="stretch",
-                            help="Sostituisce il lavoro in corso con il "
-                                 "ripristino automatico."):
-                try:
-                    st.session_state.da_caricare = json.loads(
-                        AUTOSALVA_FILE.read_bytes())
-                    st.rerun()
-                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                    st.error("Il ripristino automatico non è leggibile.")
 
         st.divider()
         if not progetto_e_vuoto():
@@ -3662,9 +3481,9 @@ with tab_computo:
         ], ignore_index=True)
 
     # La firma costa millesimi di secondo; il file intero costa secondi e
-    # attraversa il collegamento col browser. Qui gira solo la firma.
+    # attraversa il collegamento col browser. Qui gira solo la firma, che
+    # serve a dire se ci sono modifiche non salvate.
     st.session_state._firma_progetto = firma_progetto()
-    autosalva(st.session_state._firma_progetto)
     # Tre bottoni grigi identici non dicevano che solo il primo mette al
     # sicuro il lavoro: quello resta in evidenza, con accanto il suo stato.
     st.markdown(stato_salvataggio(st.session_state._firma_progetto))
