@@ -143,6 +143,84 @@ def test_stima_mca_senza_comparabili():
     assert stima_mca([], 1.0, 100) is None
 
 
+# I cinque comparabili del foglio MCA.xlsx reale (Vomero): normalizzati
+# danno 3336, 2226, 2029, 1813, 2187 €/mq. Il primo e' l'unico bilocale del
+# gruppo — 80 mq contro 110-200 — e i tagli piccoli costano di piu' al
+# metro: la griglia dei coefficienti non ha un fattore per la superficie,
+# quindi quel 3336 entra nella media come se fosse valore di zona.
+VOMERO = [
+    {"nome": "C1", "prezzo": 300000, "mq": 80, "coeff": 1.12421925},
+    {"nome": "C2", "prezzo": 245000, "mq": 110, "coeff": 1.000604745},
+    {"nome": "C3", "prezzo": 430000, "mq": 160, "coeff": 1.324832355},
+    {"nome": "C4", "prezzo": 280000, "mq": 110, "coeff": 1.40390971875},
+    {"nome": "C5", "prezzo": 500000, "mq": 200, "coeff": 1.1431836281},
+]
+COEFF_VOMERO = 1.3222040832
+MQ_VOMERO = 134
+
+
+def test_stima_mca_misura_quanto_convergono_i_normalizzati():
+    """Dopo la normalizzazione i €/mq devono convergere: e' il controllo di
+    qualita' incorporato nel metodo. Sul foglio reale non convergono."""
+    esito = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO)
+    assert esito["cv"] == pytest.approx(25.5, abs=0.1)
+
+
+def test_stima_mca_segnala_il_comparabile_fuori_scala():
+    esito = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO)
+    assert esito["outlier"] == ["C1"]
+    scarti = {d["nome"]: d["scarto_pct"] for d in esito["dettaglio"]}
+    assert scarti["C1"] == pytest.approx(52.5, abs=0.1)
+    assert scarti["C5"] == pytest.approx(0.0, abs=0.1)   # e' la mediana
+
+
+def test_stima_mca_la_mediana_non_si_fa_spostare():
+    """20.215 € di differenza fra media e mediana su un immobile da 134 mq,
+    tutti farina di un solo comparabile."""
+    con_media = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO)
+    con_mediana = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO,
+                            statistica="mediana")
+    assert con_media["valore"] == pytest.approx(357306, abs=5)
+    assert con_mediana["valore"] == pytest.approx(337091, abs=5)
+    assert con_media["eur_mq_media"] == pytest.approx(2318.03, abs=0.05)
+    assert con_mediana["eur_mq_mediana"] == pytest.approx(2186.88, abs=0.05)
+
+
+def test_stima_mca_lasciare_fuori_l_outlier_pesa_ancora_di_piu():
+    """La mediana lo neutralizza, escluderlo lo cancella: sono due numeri
+    diversi, e la scelta e' di chi stima, non del software."""
+    senza_c1 = stima_mca([c for c in VOMERO if c["nome"] != "C1"],
+                         COEFF_VOMERO, MQ_VOMERO)
+    assert senza_c1["valore"] == pytest.approx(318092, abs=5)
+    # ed e' li' che i normalizzati finalmente convergono
+    assert senza_c1["cv"] == pytest.approx(9.1, abs=0.1)
+    assert senza_c1["outlier"] == []
+
+
+def test_stima_mca_di_default_resta_la_media_del_foglio():
+    """Il numero non cambia sotto i piedi di chi apre un progetto vecchio."""
+    esito = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO)
+    assert esito["statistica"] == "media"
+    assert esito["eur_mq_soggetto"] == pytest.approx(3064.90, abs=0.05)
+
+
+def test_stima_mca_un_solo_comparabile_non_ha_dispersione():
+    esito = stima_mca([VOMERO[0]], 1.0, 100)
+    assert esito["cv"] == 0.0
+    assert esito["outlier"] == []
+
+
+def test_stima_mca_con_due_comparabili_nessuno_e_outlier():
+    """La mediana di due valori sta in mezzo ai due: senza un terzo valore
+    non c'e' un centro da cui scostarsi, e li dichiarerebbe outlier
+    entrambi."""
+    esito = stima_mca([
+        {"nome": "A", "prezzo": 100000, "mq": 100, "coeff": 1.0},
+        {"nome": "B", "prezzo": 300000, "mq": 100, "coeff": 1.0},
+    ], 1.0, 100)
+    assert esito["outlier"] == []
+
+
 # ------------------------------------------------ spese a consuntivo
 
 def test_iva_scorporata():

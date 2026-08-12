@@ -17,6 +17,8 @@ in funzioni pure e testate coi numeri esatti di quel file:
   scontata della trattativa → valore stimato di vendita.
 """
 
+import statistics
+
 CATEGORIE_SPESE = ["ACQUISTO", "LAVORI", "MATERIALE", "ARCHITETTO",
                    "COSTI INDIRETTI", "AGENZIA", "ALTRO"]
 STATI_SPESA = ["Sostenuta", "Da sostenere"]
@@ -209,21 +211,44 @@ def matrice_sensitivita(parametri, passo, metrica="multiplo",
     return prezzi_a, prezzi_v, matrice
 
 
-def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0):
+def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0,
+              statistica="media", soglia_outlier_pct=25.0):
     """Valore di vendita col metodo comparativo (MCA).
 
     comparabili: [{"nome", "prezzo", "mq", "coeff"}] — coeff è il
     coefficiente di merito complessivo dell'immobile comparabile (prodotto
-    dei fattori: vetustà, finiture, piano, luminosità…). Il €/mq di ognuno
-    viene NORMALIZZATO dividendolo per il suo coeff; la media dei
-    normalizzati, moltiplicata per il coeff del soggetto, dà il €/mq del
-    soggetto; lo sconto di trattativa porta al probabile venduto.
+    dei fattori: vetustà, finiture, piano, luminosità…, vedi `merito.py`).
+    Il €/mq di ognuno viene NORMALIZZATO dividendolo per il suo coeff; la
+    media (o la mediana) dei normalizzati, moltiplicata per il coeff del
+    soggetto, dà il €/mq del soggetto; lo sconto di trattativa porta al
+    probabile venduto.
 
     ⚠️ La media è ARITMETICA, non ponderata sui mq: un bilocale da 45 mq
     pesa quanto un quadrilocale da 190. È il metodo del foglio «MCA sell» e
     la prassi della stima comparativa (i comparabili si scelgono simili, e
     la ponderazione la fa già il coefficiente di merito) — ma chi legge il
     numero deve saperlo, quindi la scheda lo dichiara.
+
+    `statistica` sceglie fra "media" (il foglio) e "mediana". La mediana
+    non si fa spostare da un comparabile fuori scala: sul foglio reale
+    l'unico bilocale del gruppo — 3.336 €/mq normalizzati contro i
+    1.813-2.226 degli altri quattro — vale 20.215 € di stima in piu' se si
+    fa la media, e 39.215 € se lo si conta invece di lasciarlo fuori. La
+    mediana non lo esclude: gli toglie il potere di spostare il centro.
+
+    DISPERSIONE. Dopo la normalizzazione i €/mq devono CONVERGERE: è il
+    controllo di qualità incorporato nel metodo. Se i comparabili sono
+    scelti bene e i coefficienti sono giusti, tolti piano, finiture e
+    stato, quello che resta è il valore della zona — e la zona è una sola.
+    `cv` (coefficiente di variazione, in %) misura quanto convergono: sotto
+    il 15% la stima regge, sopra il 25% il numero non è pronto e o i
+    comparabili o i coefficienti sono da rivedere. Nel foglio questo
+    controllo non c'era e una dispersione del 25,5% passava inosservata.
+
+    Ogni comparabile porta il suo `scarto_pct` dalla mediana; quelli oltre
+    `soglia_outlier_pct` finiscono anche in `outlier`. Non vengono esclusi
+    da soli — è chi stima che decide se un immobile è fuori mercato o solo
+    diverso — ma smettono di essere invisibili.
 
     Le righe incomplete (prezzo, mq o coefficiente a zero) NON entrano nella
     media. Quante ne sono state lasciate fuori si legge in `scartati`: una
@@ -244,22 +269,47 @@ def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0):
         eur_mq = prezzo / mq
         dettaglio.append({
             "nome": c.get("nome") or f"C{len(dettaglio) + 1}",
+            "mq": mq,
             "eur_mq": round(eur_mq, 2),
             "coeff": coeff,
             "eur_mq_normalizzato": round(eur_mq / coeff, 2),
         })
     if not dettaglio:
         return None
-    media = (sum(d["eur_mq_normalizzato"] for d in dettaglio)
-             / len(dettaglio))
-    eur_mq_soggetto = media * float(coeff_soggetto or 1.0)
+
+    normalizzati = [d["eur_mq_normalizzato"] for d in dettaglio]
+    media = sum(normalizzati) / len(normalizzati)
+    mediana = statistics.median(normalizzati)
+    # ⚠️ stdev vuole almeno due valori: con un solo comparabile non c'è
+    # dispersione da misurare (e nemmeno stima da fidarsi, ma quello lo
+    # dice già `usati`).
+    cv = (statistics.stdev(normalizzati) / media * 100
+          if len(normalizzati) > 1 and media else 0.0)
+
+    outlier = []
+    for d in dettaglio:
+        scarto = ((d["eur_mq_normalizzato"] - mediana) / mediana * 100
+                  if mediana else 0.0)
+        d["scarto_pct"] = round(scarto, 1)
+        # con due soli comparabili la mediana sta in mezzo ai due e li
+        # dichiarerebbe outlier entrambi: senza un terzo valore non c'è un
+        # "centro" da cui scostarsi.
+        if len(dettaglio) > 2 and abs(scarto) > float(soglia_outlier_pct):
+            outlier.append(d["nome"])
+
+    riferimento = mediana if statistica == "mediana" else media
+    eur_mq_soggetto = riferimento * float(coeff_soggetto or 1.0)
     eur_mq_probabile = eur_mq_soggetto * (1 - float(sconto_pct) / 100)
     mq_sog = float(mq_soggetto or 0.0)
     return {
         "dettaglio": dettaglio,
         "usati": len(dettaglio),
         "scartati": scartati,
+        "statistica": statistica,
         "eur_mq_media": round(media, 2),
+        "eur_mq_mediana": round(mediana, 2),
+        "cv": round(cv, 1),
+        "outlier": outlier,
         "eur_mq_soggetto": round(eur_mq_soggetto, 2),
         "eur_mq_probabile": round(eur_mq_probabile, 2),
         "valore": round(eur_mq_probabile * mq_sog, 2) if mq_sog else None,
