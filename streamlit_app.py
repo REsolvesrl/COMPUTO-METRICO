@@ -622,9 +622,12 @@ IMPOSTAZIONI_BP = {
     "bp_ristr": 0.0, "bp_passo": 10000.0,
     # Aliquote IVA, una per voce: l'imposta di registro non ne ha (e' gia'
     # un'imposta), notaio e servizi stanno al 22%, i lavori edili al 10%.
+    # Imprevisti e condominio partono da ZERO: e' una riserva, non una
+    # fattura, e le spese condominiali non portano IVA da scorporare. Chi ci
+    # mette dentro qualcosa che ce l'ha cambia l'aliquota sulla riga.
     "bp_iva_imposta": 0.0, "bp_iva_imposte_fisse": 0.0,
     "bp_iva_notaio": 22.0, "bp_iva_mutuo": 22.0,
-    "bp_iva_imprevisti": 22.0, "bp_iva_ristr": 10.0,
+    "bp_iva_imprevisti": 0.0, "bp_iva_ristr": 10.0,
     "bp_iva_ag_in": 22.0, "bp_iva_ag_out": 22.0,
     "bp_coeff_sogg": 1.0, "bp_sconto": 13.0,
 }

@@ -97,12 +97,33 @@ def test_i_predefiniti_veri_dell_app_sono_tutti_coperti():
 @pytest.mark.parametrize("chiave, scritto", [
     ("bp_ag_out", 2.0), ("bp_ag_in", 4.285714), ("bp_imposta", 2.0),
     ("bp_imprevisti_pct", 5.0), ("bp_iva_notaio", 4.0),
+    ("bp_durata", 8),            # anche la durata: e' un widget come gli altri
+    ("bp_mq", 131.73), ("bp_coeff_sogg", 1.35), ("bp_sconto", 8.0),
 ])
 def test_l_app_tiene_da_parte_quello_che_scrivi(chiave, scritto):
     at = _avvia()
     at.session_state[chiave] = scritto
     at.run()
     assert at.session_state["_bp_copia"][chiave] == scritto
+
+
+def test_la_durata_resta_quella_che_imposti():
+    """Segnalata a parte: «torna automaticamente a 12». È lo stesso difetto
+    delle percentuali — `bp_durata` è un `number_input` che usa la chiave
+    come valore — ma va provata dal vivo, perché è un intero e i predefiniti
+    la convertono con `int()`."""
+    at = _avvia()
+    at.number_input(key="bp_durata").set_value(8).run()
+    for _ in range(3):
+        at.run()
+    assert at.session_state["bp_durata"] == 8
+    assert at.session_state["_bp_copia"]["bp_durata"] == 8
+
+
+def test_l_iva_di_imprevisti_e_condominio_parte_da_zero():
+    """Una riserva non è una fattura, e le spese condominiali non portano
+    IVA da scorporare."""
+    assert streamlit_app.IMPOSTAZIONI_BP["bp_iva_imprevisti"] == 0.0
 
 
 def test_un_progetto_nuovo_riporta_i_predefiniti():
