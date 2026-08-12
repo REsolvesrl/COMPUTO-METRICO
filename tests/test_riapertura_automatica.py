@@ -115,6 +115,79 @@ def test_il_progetto_ripreso_e_completo(chiave):
     assert at.session_state[chiave] == atteso
 
 
+# ------------------------------- il lavoro non salvato non si distrugge
+
+def _con_lavoro_non_salvato():
+    """Un salvataggio a mano, e un ripristino automatico piu' recente.
+
+    E' la fotografia di chi stava lavorando senza premere Salva quando la
+    pagina si e' ricaricata: i suoi ultimi numeri stanno solo li' dentro.
+    """
+    import time
+    archivio_locale.salva_progetto(
+        "Salvato a mano",
+        json.dumps(_progetto("Salvato a mano", 1.0)).encode("utf-8"))
+    time.sleep(0.01)
+    Path(os.environ["CME_AUTOSALVA"]).write_text(
+        json.dumps(_progetto("Lavoro non salvato", 99.0)), encoding="utf-8")
+
+
+def test_il_lavoro_non_salvato_viene_offerto_subito():
+    """Prima lo diceva solo una didascalia dentro un pannello chiuso: chi ha
+    appena perso mezz'ora di numeri li' dentro non ci va a guardare."""
+    _con_lavoro_non_salvato()
+    at = _avvia()
+    avvisi = "\n".join(str(a.value) for a in at.warning)
+    assert "lavoro più recente" in avvisi, avvisi
+
+
+def test_il_lavoro_non_salvato_non_viene_sovrascritto_mentre_si_decide():
+    """⚠️ Era il difetto peggiore della rete di sicurezza: riaperto il
+    salvataggio a mano, quindici secondi dopo l'autosalvataggio scriveva
+    QUELLO — piu' vecchio — sopra il file di ripristino. Il lavoro non
+    salvato veniva distrutto dal meccanismo che esiste per proteggerlo."""
+    _con_lavoro_non_salvato()
+    file_ripristino = Path(os.environ["CME_AUTOSALVA"])
+    at = _avvia()
+    for _ in range(3):                    # qualche giro dell'app
+        at.run()
+    dentro = json.loads(file_ripristino.read_text(encoding="utf-8"))
+    assert dentro["progetto"]["nome"] == "Lavoro non salvato"
+
+
+def test_riprendendolo_torna_in_tavola():
+    _con_lavoro_non_salvato()
+    at = _avvia()
+    at.button(key="riprendi_non_salvato").click().run()
+    assert at.session_state["prg_nome"] == "Lavoro non salvato"
+    assert at.session_state["q_1.02"] == 99.0
+
+
+def test_scartandolo_l_autosalvataggio_riprende_a_seguire_il_lavoro():
+    """«Tengo questo» e' una risposta: da li' in poi il file torna a
+    inseguire il lavoro in corso, altrimenti resterebbe in pausa per
+    sempre."""
+    _con_lavoro_non_salvato()
+    at = _avvia()
+    at.button(key="scarta_non_salvato").click().run()
+    assert not any("lavoro più recente" in str(a.value) for a in at.warning)
+    assert at.session_state["_recupero_deciso"] is True
+
+
+def test_senza_niente_di_piu_recente_non_si_chiede_niente():
+    """Un ripristino piu' VECCHIO del salvataggio riaperto non e' lavoro
+    perduto: e' la copia di quello che si e' gia' salvato."""
+    import time
+    Path(os.environ["CME_AUTOSALVA"]).write_text(
+        json.dumps(_progetto("Vecchio", 2.0)), encoding="utf-8")
+    time.sleep(0.01)
+    archivio_locale.salva_progetto(
+        "Salvato dopo",
+        json.dumps(_progetto("Salvato dopo", 3.0)).encode("utf-8"))
+    at = _avvia()
+    assert not any("lavoro più recente" in str(a.value) for a in at.warning)
+
+
 def test_il_ripristino_automatico_resta_disponibile_a_mano():
     """La rete di sicurezza c'e' ancora: si prende dal pannello progetto."""
     Path(os.environ["CME_AUTOSALVA"]).write_text(
