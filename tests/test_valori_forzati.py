@@ -138,3 +138,45 @@ def test_un_progetto_nuovo_riporta_i_predefiniti():
     assert at.session_state["bp_ag_out"] == 2.5
     at.run()                                      # e non torna indietro dopo
     assert at.session_state["bp_ag_out"] == 2.5
+
+
+# --------------------------- i comandi del computo restano raggiungibili
+
+def test_iva_e_imprevisti_si_comandano_dal_riepilogo_costi():
+    """Sono usciti dal pannello «Dati del progetto» — non erano anagrafica —
+    e sono andati accanto alle righe che governano. Restano gli UNICI due
+    comandi di quelle percentuali: se sparissero, la coda del computo
+    (imprevisti, IVA, totale finale) si congelerebbe sui predefiniti e il
+    tasto «Porta gli imprevisti a X%» della scheda Cantiere resterebbe
+    senza effetto visibile."""
+    at = _avvia()
+    chiavi = [w.key for w in at.number_input]
+    assert "imprevisti" in chiavi
+    assert "iva" in chiavi
+
+
+def test_cambiare_gli_imprevisti_muove_il_totale():
+    """La prova che il comando e' ancora collegato ai conti, non solo
+    presente sullo schermo.
+
+    Serve un computo con dentro qualcosa: su un totale di zero, lo 0% e il
+    20% danno lo stesso numero e la prova non proverebbe niente.
+    """
+    import pandas as pd
+    at = _avvia()
+    at.session_state["df_voci"] = pd.DataFrame([{
+        "categoria": "1 · Demolizioni", "codice": "X.01",
+        "descrizione": "voce di prova", "um": "a corpo",
+        "parti": None, "lunghezza": None, "larghezza": None, "altezza": None,
+        "quantita_manuale": 1.0, "prezzo": 10000.0,
+    }])
+    at.run()
+    at.number_input(key="imprevisti").set_value(10.0).run()
+    dieci = {m.label: m.value for m in at.metric}
+    at.number_input(key="imprevisti").set_value(20.0).run()
+    venti = {m.label: m.value for m in at.metric}
+    assert dieci["Imprevisti 10%"] == "1.000,00 €"
+    assert venti["Imprevisti 20%"] == "2.000,00 €"
+    # e il totale lavori si muove con loro
+    assert dieci["Totale lavori (IVA esclusa)"] == "11.000,00 €"
+    assert venti["Totale lavori (IVA esclusa)"] == "12.000,00 €"

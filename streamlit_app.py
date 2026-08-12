@@ -3113,60 +3113,16 @@ with tab_computo:
         d1.text_input("Nome del computo", key="prg_nome",
                       placeholder="Es. Ristrutturazione app.to Via Roma 1")
         d2.text_input("Committente", key="prg_committente")
-        d3, d4, d5, d6 = st.columns([2, 1, 1, 1])
+        # Qui sta l'anagrafica del progetto, e basta: aliquota IVA e
+        # imprevisti sono andati nel riepilogo costi, accanto alle righe che
+        # governano. Stavano fra il committente e la data come se fossero
+        # dati del committente, e per vedere l'effetto di cambiarli bisognava
+        # chiudere il pannello.
+        d3, d4 = st.columns([3, 1])
         d3.text_input("Oggetto dei lavori", key="prg_oggetto")
         d4.date_input("Data", key="prg_data", format="DD/MM/YYYY")
-        d5.number_input("Aliquota IVA (%)", min_value=0.0, max_value=100.0,
-                        step=1.0, key="iva",
-                        help="10% ristrutturazioni (predefinita), "
-                             "22% ordinaria, 4% prima casa")
-        d6.number_input("Imprevisti (%)", min_value=0.0, max_value=50.0,
-                        step=1.0, key="imprevisti",
-                        help="Accantonamento sul totale lavori per le "
-                             "sorprese di cantiere, applicato prima "
-                             "dell'IVA. Il predefinito è il **10% previsto "
-                             "dal contratto d'appalto**; quando avrai "
-                             "chiuso qualche cantiere, la scheda Cantiere "
-                             "potrà tararlo sul tuo sforamento reale.")
 
         st.divider()
-        # Le versioni precedenti dello stesso progetto. Non è un
-        # salvataggio automatico travestito: ogni versione qui dentro è uno
-        # stato che hai deciso tu di salvare, e che il salvataggio dopo
-        # avrebbe cancellato. Rimedia all'errore che il tasto Salva non
-        # poteva coprire — salvare sopra il lavoro buono.
-        _versioni = archivio_locale.versioni(nome_archivio_corrente())
-        if _versioni:
-            st.markdown(f"**🕘 Versioni precedenti di "
-                        f"«{nome_archivio_corrente()}»**")
-            st.caption(
-                f"Le ultime {archivio_locale.VERSIONI_TENUTE} restano a "
-                "disposizione, questa compresa: a ogni salvataggio la più "
-                "vecchia esce di scena. Riaprirne una **sostituisce** il "
-                "lavoro in corso.")
-            for _n, _v in enumerate(_versioni):
-                _quando = archivio_locale.quando_versione(_v)
-                _c_txt, _c_btn = st.columns([3, 1],
-                                            vertical_alignment="center")
-                # coi secondi: due versioni dello stesso minuto sono
-                # frequenti (si salva, si cambia una cifra, si risalva) e
-                # senza secondi diventano due righe identiche fra cui non
-                # si può scegliere
-                _c_txt.caption(
-                    f"salvata il **{_quando.strftime('%d/%m')}** alle "
-                    f"**{_quando.strftime('%H:%M:%S')}** · "
-                    f"{round(_v.stat().st_size / 1024)} KB")
-                if _c_btn.button("↩️ Riapri", key=f"versione_{_n}",
-                                 width="stretch"):
-                    try:
-                        st.session_state.da_caricare = (
-                            archivio_locale.carica_versione(_v))
-                        st.rerun()
-                    except (OSError, json.JSONDecodeError,
-                            UnicodeDecodeError):
-                        st.error("Questa versione non è leggibile.")
-            st.divider()
-
         if not progetto_e_vuoto():
             st.caption("⚠️ Aprire un progetto **sostituisce** il lavoro in "
                        "corso: se ti serve ancora, salvalo prima.")
@@ -3288,6 +3244,45 @@ with tab_computo:
         n_btn.button("🗑️ Svuota tutto", key="nuovo_progetto", width="stretch",
                      disabled=not conferma_nuovo, on_click=azzera_progetto)
 
+        # ------------------------------------------- versioni precedenti
+        # In fondo al pannello: è la cosa che si cerca di rado — quando si
+        # è sovrascritto il lavoro buono — e non deve stare fra i piedi
+        # tutte le altre volte. Non è un salvataggio automatico
+        # travestito: ogni versione qui dentro è uno stato che una persona
+        # ha deciso di salvare, e che il salvataggio dopo avrebbe
+        # cancellato.
+        _versioni = archivio_locale.versioni(nome_archivio_corrente())
+        if _versioni:
+            st.divider()
+            # Tutto su una riga per versione, didascalia compresa: prima
+            # ogni voce si prendeva tre righe fra testo, bottone e aria in
+            # mezzo, per un pannello che si apre già lungo.
+            st.markdown(
+                f"**🕘 Versioni precedenti** :gray[— le ultime "
+                f"{archivio_locale.VERSIONI_TENUTE} contando questa; "
+                "riaprirne una **sostituisce** il lavoro in corso]")
+            for _n, _v in enumerate(_versioni):
+                _quando = archivio_locale.quando_versione(_v)
+                _c_txt, _c_btn = st.columns([4, 1],
+                                            vertical_alignment="center")
+                # coi secondi: due versioni dello stesso minuto sono
+                # frequenti (si salva, si cambia una cifra, si risalva) e
+                # senza secondi diventano due righe identiche fra cui non
+                # si può scegliere
+                _c_txt.markdown(
+                    f":gray[{_quando.strftime('%d/%m')} alle "
+                    f"**{_quando.strftime('%H:%M:%S')}** · "
+                    f"{round(_v.stat().st_size / 1024)} KB]")
+                if _c_btn.button("↩️ Riapri", key=f"versione_{_n}",
+                                 width="stretch"):
+                    try:
+                        st.session_state.da_caricare = (
+                            archivio_locale.carica_versione(_v))
+                        st.rerun()
+                    except (OSError, json.JSONDecodeError,
+                            UnicodeDecodeError):
+                        st.error("Questa versione non è leggibile.")
+
     # ------------------------------------------------------ listino guida
     # -------------------------------------- categorie (sx) e riepilogo (dx)
     st.markdown(css_schede_computo(), unsafe_allow_html=True)
@@ -3402,16 +3397,34 @@ with tab_computo:
         st.markdown(html_dot, unsafe_allow_html=True)
         st.divider()
 
+        # ⚠️ Le due percentuali si comandano DA QUI, non più dal pannello
+        # «Dati del progetto». Là stavano fra il nome del committente e la
+        # data, come se fossero anagrafica; sono invece i due parametri che
+        # decidono la coda del computo, e stanno accanto alle righe che
+        # governano — dove si vede subito l'effetto di cambiarle.
         imp_importo, totale_imprevisti = calcoli.totale_con_imprevisti(
             totale, st.session_state.imprevisti)
         iva_importo, totale_ivato = calcoli.totale_con_iva(
             totale_imprevisti, st.session_state.iva)
 
         st.metric("Somma parziali", euro(totale))
+        st.number_input(
+            "Imprevisti (%)", min_value=0.0, max_value=50.0, step=1.0,
+            key="imprevisti",
+            help="Accantonamento sul totale lavori per le sorprese di "
+                 "cantiere, applicato prima dell'IVA. Il predefinito è il "
+                 "**10% previsto dal contratto d'appalto**; quando avrai "
+                 "chiuso qualche cantiere, la scheda Cantiere potrà "
+                 "tararlo sul tuo sforamento reale.")
         st.metric(
             f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
             euro(imp_importo))
         st.metric("Totale lavori (IVA esclusa)", euro(totale_imprevisti))
+        st.number_input(
+            "Aliquota IVA (%)", min_value=0.0, max_value=100.0, step=1.0,
+            key="iva",
+            help="10% ristrutturazioni (predefinita), 22% ordinaria, "
+                 "4% prima casa")
         st.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",
                   euro(iva_importo))
         # La card d'oro incoronava il totale PRIMA dell'IVA, mentre l'export
