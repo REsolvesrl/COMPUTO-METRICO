@@ -3130,6 +3130,43 @@ with tab_computo:
                              "potrà tararlo sul tuo sforamento reale.")
 
         st.divider()
+        # Le versioni precedenti dello stesso progetto. Non è un
+        # salvataggio automatico travestito: ogni versione qui dentro è uno
+        # stato che hai deciso tu di salvare, e che il salvataggio dopo
+        # avrebbe cancellato. Rimedia all'errore che il tasto Salva non
+        # poteva coprire — salvare sopra il lavoro buono.
+        _versioni = archivio_locale.versioni(nome_archivio_corrente())
+        if _versioni:
+            st.markdown(f"**🕘 Versioni precedenti di "
+                        f"«{nome_archivio_corrente()}»**")
+            st.caption(
+                f"Le ultime {archivio_locale.VERSIONI_TENUTE} restano a "
+                "disposizione, questa compresa: a ogni salvataggio la più "
+                "vecchia esce di scena. Riaprirne una **sostituisce** il "
+                "lavoro in corso.")
+            for _n, _v in enumerate(_versioni):
+                _quando = archivio_locale.quando_versione(_v)
+                _c_txt, _c_btn = st.columns([3, 1],
+                                            vertical_alignment="center")
+                # coi secondi: due versioni dello stesso minuto sono
+                # frequenti (si salva, si cambia una cifra, si risalva) e
+                # senza secondi diventano due righe identiche fra cui non
+                # si può scegliere
+                _c_txt.caption(
+                    f"salvata il **{_quando.strftime('%d/%m')}** alle "
+                    f"**{_quando.strftime('%H:%M:%S')}** · "
+                    f"{round(_v.stat().st_size / 1024)} KB")
+                if _c_btn.button("↩️ Riapri", key=f"versione_{_n}",
+                                 width="stretch"):
+                    try:
+                        st.session_state.da_caricare = (
+                            archivio_locale.carica_versione(_v))
+                        st.rerun()
+                    except (OSError, json.JSONDecodeError,
+                            UnicodeDecodeError):
+                        st.error("Questa versione non è leggibile.")
+            st.divider()
+
         if not progetto_e_vuoto():
             st.caption("⚠️ Aprire un progetto **sostituisce** il lavoro in "
                        "corso: se ti serve ancora, salvalo prima.")
