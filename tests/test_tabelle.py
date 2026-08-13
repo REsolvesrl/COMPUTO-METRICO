@@ -192,12 +192,12 @@ def test_mca_giro_completo():
 def test_mca_giro_completo_con_la_griglia():
     righe = [{"nome": "C1", "prezzo": 300000.0, "mq": 80.0,
               "stato_edificio": "Normale", "eta_edificio": "20-40 anni",
-              "finiture": "Civili", "condizioni": "Finemente ristrutturato",
-              "degrado": "Assente/ottima", "piano": "Primo",
+              "stato_unita": "Finemente ristrutturato",
+              "finiture": "Civili", "piano": "Primo",
               "ascensore": True, "balconi": "Sì", "giardino": "No",
-              "terrazzo": "Sì", "luminosita": "Mediamente luminoso",
+              "terrazzo": "Sì", "luce_vista": "Nella media",
               "spazi_comuni": "Assenti", "parcheggio": "Posto auto per UI",
-              "esposizione": "Mista", "riscaldamento": "Autonomo",
+              "riscaldamento": "Autonomo",
               "coeff": None, "note": ""}]
     tornate = tabelle.mca_da_df(pd.DataFrame(righe))
     assert tornate[0]["ascensore"] is True
@@ -207,7 +207,7 @@ def test_mca_giro_completo_con_la_griglia():
     esito = merito.coefficiente_effettivo(
         merito.scelte_da_riga(tornate[0]), tornate[0]["coeff"])
     assert esito["fonte"] == "griglia"
-    assert esito["totale"] == pytest.approx(1.298593, abs=1e-6)
+    assert esito["totale"] == pytest.approx(1.294053, abs=1e-6)
 
 
 def test_mca_la_sola_spunta_dell_ascensore_non_fa_una_riga():

@@ -666,16 +666,14 @@ IMPOSTAZIONI_BP = {
 PREDEFINITI_SOGGETTO = {
     "stato_edificio": "Normale",
     "eta_edificio": "20-40 anni",
+    "stato_unita": "Finemente ristrutturato",
     "finiture": "Civili",
-    "condizioni": "Finemente ristrutturato",
-    "degrado": "Assente/ottima",
     "balconi": "Sì",
     "giardino": "No",
     "terrazzo": "No",
-    "luminosita": "Luminoso",
+    "luce_vista": "Esterna e luminosa",
     "spazi_comuni": "Assenti",
     "parcheggio": "Assente",
-    "esposizione": "Esterna",
     "riscaldamento": "Autonomo",
 }
 
@@ -696,17 +694,15 @@ SOGGETTO_MCA = {
 TENDINE_MERITO = {
     "stato_edificio": ("Stato edificio", merito.STATI_EDIFICIO),
     "eta_edificio": ("Età edificio", merito.FASCE_ETA),
+    "stato_unita": ("Stato dell'unità", tuple(merito.STATO_UNITA)),
     "finiture": ("Finiture", tuple(merito.FINITURE)),
-    "condizioni": ("Condizioni", tuple(merito.CONDIZIONI)),
-    "degrado": ("Manutenzione", tuple(merito.DEGRADO)),
     "piano": ("Piano", merito.LIVELLI_PIANO),
     "balconi": ("Balconi", tuple(merito.BALCONI)),
     "giardino": ("Giardino", tuple(merito.GIARDINO)),
     "terrazzo": ("Terrazzo", tuple(merito.TERRAZZO)),
-    "luminosita": ("Luminosità", tuple(merito.LUMINOSITA)),
+    "luce_vista": ("Luce e vista", tuple(merito.LUCE_VISTA)),
     "spazi_comuni": ("Spazi comuni", tuple(merito.SPAZI_COMUNI)),
     "parcheggio": ("Parcheggio", tuple(merito.PARCHEGGIO)),
-    "esposizione": ("Esposizione", tuple(merito.ESPOSIZIONE)),
     "riscaldamento": ("Riscaldamento", tuple(merito.RISCALDAMENTO)),
 }
 
@@ -2999,7 +2995,15 @@ if "da_caricare" in st.session_state:
     # incrementato, gli editor ripartono dai dati appena caricati)
     st.session_state.pop("df_spese_live", None)
     st.session_state.pop("df_spese_prev_live", None)
-    df_mc = pd.DataFrame(dati.get("mca_comparabili") or []).reindex(
+    # ⚠️ La traduzione dalla griglia di prima va fatta QUI, prima del
+    # reindex: le colonne vecchie («condizioni», «degrado», «luminosità»,
+    # «esposizione») non sono più in COLONNE_MCA, e il reindex le butta.
+    # Dopo non ci sarebbe più niente da tradurre — e le tendine vuote non
+    # sono un errore visibile: la stima uscirebbe lo stesso, solo più
+    # bassa, senza che nessuno lo dica.
+    df_mc = pd.DataFrame(
+        [merito.migra_scelte(riga)
+         for riga in (dati.get("mca_comparabili") or [])]).reindex(
         columns=COLONNE_MCA)
     for col in ("prezzo", "mq", "coeff"):
         df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
@@ -3015,6 +3019,8 @@ if "da_caricare" in st.session_state:
     # In tutti e due i casi il coefficiente battuto a mano, se c'è, resta
     # al comando: i numeri dei progetti vecchi non si muovono.
     sog_salvato = dati.get("mca_soggetto")
+    if sog_salvato is not None:
+        sog_salvato = merito.migra_scelte(sog_salvato)
     for _campo in merito.CAMPI:
         _chiave = f"sog_{_campo}"
         if sog_salvato is None:

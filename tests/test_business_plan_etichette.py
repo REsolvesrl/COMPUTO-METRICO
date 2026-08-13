@@ -130,11 +130,11 @@ def test_un_comparabile_senza_niente_resta_scartato():
 
 def test_i_predefiniti_sono_l_immobile_tipo_a_lavori_finiti():
     """Palazzina normale di 20-40 anni, finiture civili, finemente
-    ristrutturato, manutenzione ottima, balconi, luminoso, esterno,
-    riscaldamento autonomo: 1,144 × 1,215506 = 1,391."""
+    ristrutturato, balconi, esterna e luminosa, riscaldamento autonomo:
+    1,14 × 1,157625 = 1,320."""
     at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0)
     etichette = {m.label: m.value for m in at.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,391"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,320"
 
 
 def test_la_correzione_del_taglio_si_regola_anche_senza_comparabili():
@@ -158,11 +158,11 @@ def test_il_piano_resta_da_indicare():
 
 def test_il_coefficiente_del_soggetto_segue_le_tendine():
     """Cambiando una voce cambia il numero: attico con ascensore (1,20)
-    invece del piano non indicato (1,00) porta 1,391 a 1,669."""
+    invece del piano non indicato (1,00) porta 1,320 a 1,584."""
     at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0, sog_piano="Attico",
                 sog_ascensore=True)
     etichette = {m.label: m.value for m in at.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,669"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,584"
 
 
 def test_svuotando_la_griglia_il_soggetto_vale_uno_e_lo_dichiara():
@@ -184,7 +184,7 @@ def test_un_progetto_vecchio_riceve_i_predefiniti():
     predefiniti non li vede mai."""
     at = _avvia(da_caricare={"progetto": {"nome": "vecchio"},
                              "business_plan": {"bp_coeff_sogg": 1.4}})
-    assert at.session_state["sog_condizioni"] == "Finemente ristrutturato"
+    assert at.session_state["sog_stato_unita"] == "Finemente ristrutturato"
     assert at.session_state["sog_riscaldamento"] == "Autonomo"
     # ma il coefficiente battuto a mano resta al comando: i numeri di un
     # progetto vecchio non si muovono da soli
@@ -197,10 +197,27 @@ def test_una_voce_svuotata_apposta_resta_svuotata():
     Rimetterci il predefinito sarebbe riempire una casella svuotata."""
     at = _avvia(da_caricare={
         "progetto": {"nome": "nuovo"},
-        "mca_soggetto": {"condizioni": None, "riscaldamento": "Autonomo"},
+        "mca_soggetto": {"stato_unita": None, "riscaldamento": "Autonomo"},
     })
-    assert at.session_state["sog_condizioni"] == "—"
+    assert at.session_state["sog_stato_unita"] == "—"
     assert at.session_state["sog_riscaldamento"] == "Autonomo"
+
+
+def test_un_progetto_con_la_griglia_di_prima_si_traduce():
+    """Chi aveva compilato «condizioni», «degrado», «luminosità» ed
+    «esposizione» non deve ritrovarsi le tendine vuote: la stima uscirebbe
+    lo stesso, solo più bassa, senza che nessuno lo dica."""
+    at = _avvia(da_caricare={
+        "progetto": {"nome": "griglia vecchia"},
+        "mca_soggetto": {
+            "condizioni": "Da ristrutturare oltre 50 anni",
+            "degrado": "Alto/scadente",
+            "luminosita": "Luminoso", "esposizione": "Esterna",
+            "riscaldamento": "Autonomo",
+        },
+    })
+    assert at.session_state["sog_stato_unita"] == "Da ristrutturare integralmente"
+    assert at.session_state["sog_luce_vista"] == "Esterna e luminosa"
 
 
 def test_la_tabella_dei_comparabili_scorre_di_lato():

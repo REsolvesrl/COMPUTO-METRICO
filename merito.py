@@ -38,9 +38,61 @@ FASCE_ETA = ("1-20 anni", "20-40 anni", "oltre 40 anni")
 
 FINITURE = {"Signorili": 1.05, "Civili": 1.0, "Economiche": 0.9}
 
-# ----------------------------------------------- caratteristiche dell'unita'
+# ------------------------------------------------------- stato complessivo
 
-CONDIZIONI = {
+# ⚠️ QUI stava il difetto piu' costoso della griglia. Lo stato era contato
+# TRE volte — vetusta' dell'edificio (0,85-1,10) x condizioni dell'unita'
+# (0,80-1,15) x degrado/manutenzione (0,80-1,04) — e le tre si
+# moltiplicavano, per un'escursione complessiva da 0,54 a 1,32. Nessuna
+# delle tabelle in circolazione fa cosi': idealista e RockAgent usano UN
+# coefficiente di stato a +/-10%, RealAdvisor arriva a 0,65-1,25. Non era
+# sbagliata nessuna delle tre voci: erano tre misure della stessa cosa
+# moltiplicate fra loro, e moltiplicando la stessa informazione non se ne
+# aggiunge, se ne conta tre volte.
+#
+# Adesso e' una voce sola, 0,75-1,25, che e' il range largo — per chi compra
+# da ristrutturare e rivende finemente ristrutturato lo stato E' la
+# variabile, e schiacciarlo a +/-10% avrebbe tolto il mestiere dalla stima.
+#
+# Le due domande restano DUE, pero', perche' un'unita' a posto in un
+# edificio che cade e' un'altra cosa dal contrario: l'unita' porta la scala,
+# l'edificio uno scostamento. Si SOMMANO, non si moltiplicano — e' lo stesso
+# trucco della vetusta' del foglio, dove due tendine davano un coefficiente
+# solo.
+STATO_UNITA = {
+    "Nuova costruzione": 1.2,
+    "Finemente ristrutturato": 1.14,
+    "Nuovo o ristrutturato": 1.08,
+    "Ristrutturato <10 anni": 1.04,
+    "Abitabile": 1.0,
+    "Da ristrutturare": 0.88,
+    "Da ristrutturare integralmente": 0.8,
+}
+
+# Lo scostamento dell'edificio, entro +/-0,05: sommato alla scala qui sopra
+# da' esattamente 0,75-1,25.
+#
+# ⚠️ Il segno dell'eta' NON e' quello che verrebbe da pensare, ed e' voluto:
+# nel foglio un edificio in OTTIMO stato valeva di piu' se vecchio (1,10
+# oltre i 40 anni contro 1,00 sotto i 20), mentre in stato SCADENTE valeva
+# di meno. Non e' una svista: un palazzo d'epoca tenuto bene e' un pregio,
+# lo stesso palazzo malandato e' una spesa. E' un'interazione, non un
+# effetto dell'eta' da sola, e si conserva.
+SCARTO_EDIFICIO = {
+    ("Ottimo", "1-20 anni"): 0.0,
+    ("Ottimo", "20-40 anni"): 0.03,
+    ("Ottimo", "oltre 40 anni"): 0.05,
+    ("Normale", "1-20 anni"): 0.0,
+    ("Normale", "20-40 anni"): 0.0,
+    ("Normale", "oltre 40 anni"): 0.0,
+    ("Scadente", "1-20 anni"): -0.02,
+    ("Scadente", "20-40 anni"): -0.04,
+    ("Scadente", "oltre 40 anni"): -0.05,
+}
+
+# Le tabelle di prima, tenute SOLO per rileggere i progetti salvati con la
+# griglia vecchia (vedi `migra_scelte`). Non entrano piu' nel calcolo.
+CONDIZIONI_STORICHE = {
     "Nuova costruzione": 1.15,
     "Finemente ristrutturato": 1.1,
     "Nuovo o ristrutturato": 1.05,
@@ -49,8 +101,7 @@ CONDIZIONI = {
     "Da ristrutturare 30-50 anni": 0.9,
     "Da ristrutturare oltre 50 anni": 0.8,
 }
-
-DEGRADO = {
+DEGRADO_STORICO = {
     "Assente/ottima": 1.04,
     "Modesto/discreta": 1.03,
     "Ordinaria/sufficiente": 1.0,
@@ -96,11 +147,17 @@ BALCONI = {"Sì": 1.05, "No": 0.9}
 GIARDINO = {"Sì": 1.05, "No": 1.0}
 TERRAZZO = {"Sì": 1.1, "No": 1.0}
 
-LUMINOSITA = {
-    "Molto luminoso": 1.1,
-    "Luminoso": 1.05,
-    "Mediamente luminoso": 1.0,
-    "Poco luminoso": 0.95,
+# ⚠️ Anche qui c'erano due voci per una cosa sola: luminosita' (0,95-1,10) ed
+# esposizione/vista (0,90-1,10), moltiplicate fra loro per un 0,855-1,21. Ma
+# un appartamento e' luminoso PERCHE' e' esterno e ben esposto: sono la
+# stessa informazione chiesta due volte. Adesso e' una voce sola, 0,90-1,10,
+# che e' quello che dicono idealista e RockAgent per la vista.
+LUCE_VISTA = {
+    "Panoramica e molto luminosa": 1.1,
+    "Esterna e luminosa": 1.05,
+    "Nella media": 1.0,
+    "Poco luminosa o interna": 0.95,
+    "Interna e buia": 0.9,
 }
 
 SPAZI_COMUNI = {"Parco": 1.06, "Giardino": 1.04, "Cortile": 1.02,
@@ -108,7 +165,14 @@ SPAZI_COMUNI = {"Parco": 1.06, "Giardino": 1.04, "Cortile": 1.02,
 
 PARCHEGGIO = {"Posto auto per UI": 1.04, "Assente": 1.0}
 
-ESPOSIZIONE = {
+# Tenute per rileggere i progetti vecchi, come sopra: fuori dal calcolo.
+LUMINOSITA_STORICA = {
+    "Molto luminoso": 1.1,
+    "Luminoso": 1.05,
+    "Mediamente luminoso": 1.0,
+    "Poco luminoso": 0.95,
+}
+ESPOSIZIONE_STORICA = {
     "Esterna panoramica": 1.1,
     "Esterna": 1.05,
     "Mista": 1.0,
@@ -127,25 +191,22 @@ RISCALDAMENTO = {
 # all'unita' ai complementi, come le tre fasce del foglio. La maschera legge
 # di qui, cosi' aggiungere un fattore non vuol dire ricordarsi di aggiungerlo
 # anche a mano da un'altra parte.
-CAMPI = ("stato_edificio", "eta_edificio", "finiture",
-         "condizioni", "degrado", "piano", "ascensore",
-         "balconi", "giardino", "terrazzo", "luminosita",
-         "spazi_comuni", "parcheggio", "esposizione", "riscaldamento")
+CAMPI = ("stato_edificio", "eta_edificio", "stato_unita", "finiture",
+         "piano", "ascensore",
+         "balconi", "giardino", "terrazzo", "luce_vista",
+         "spazi_comuni", "parcheggio", "riscaldamento")
 
 # I fattori a scelta singola, nell'ordine in cui li mostra la scheda, con il
 # gruppo di appartenenza: e' da qui che l'interfaccia disegna i menu' a
 # tendina, cosi' griglia e maschera non possono divergere.
 FATTORI = (
     ("finiture", "Finiture", "edificio", FINITURE),
-    ("condizioni", "Condizioni", "unita", CONDIZIONI),
-    ("degrado", "Degrado/manutenzione", "unita", DEGRADO),
     ("balconi", "Balconi", "complementi", BALCONI),
     ("giardino", "Giardino", "complementi", GIARDINO),
     ("terrazzo", "Terrazzo", "complementi", TERRAZZO),
-    ("luminosita", "Luminosità", "complementi", LUMINOSITA),
+    ("luce_vista", "Luce e vista", "complementi", LUCE_VISTA),
     ("spazi_comuni", "Spazi comuni", "complementi", SPAZI_COMUNI),
     ("parcheggio", "Parcheggio comune", "complementi", PARCHEGGIO),
-    ("esposizione", "Esposizione e vista", "complementi", ESPOSIZIONE),
     ("riscaldamento", "Riscaldamento", "complementi", RISCALDAMENTO),
 )
 
@@ -172,19 +233,20 @@ def _valore(scelta, tabella):
 def coefficiente_merito(scelte):
     """Il coefficiente di merito complessivo, dai fattori scelti.
 
-    `scelte` e' un dizionario con le chiavi dei fattori. Per la vetusta'
-    servono `stato_edificio` e `eta_edificio`; per il piano servono
-    `piano` e `ascensore` (booleano). Ogni valore puo' essere il nome
-    della voce oppure direttamente un numero, che scavalca la griglia.
+    `scelte` e' un dizionario con le chiavi dei fattori. Per lo stato
+    servono `stato_unita` (la scala) piu' `stato_edificio` e `eta_edificio`
+    (lo scostamento, SOMMATO); per il piano servono `piano` e `ascensore`
+    (booleano). Ogni valore puo' essere il nome della voce oppure
+    direttamente un numero, che scavalca la griglia.
 
     Le voci non indicate valgono 1,0 — neutre — e finiscono in `mancanti`.
-    Non e' un dettaglio: un coefficiente calcolato su sei fattori su
-    tredici e' un altro numero, e nel foglio non si vedeva quali fossero
-    rimasti in bianco perche' una cella vuota e una cella a 1,00 producono
-    lo stesso prodotto.
+    Non e' un dettaglio: un coefficiente calcolato su cinque voci su dieci
+    e' un altro numero, e nel foglio non si vedeva quali fossero rimaste in
+    bianco perche' una cella vuota e una cella a 1,00 producono lo stesso
+    prodotto.
 
-    Ritorna i tre subtotali del foglio (edificio, unita', complementi), il
-    totale, il dettaglio voce per voce e l'elenco delle voci mancanti.
+    Ritorna i tre subtotali (edificio, unita', complementi), il totale, il
+    dettaglio voce per voce e l'elenco delle voci mancanti.
     """
     dettaglio = {}
     mancanti = []
@@ -198,23 +260,23 @@ def coefficiente_merito(scelte):
         dettaglio[etichetta] = valore
         return valore
 
-    # vetusta': due scelte, un coefficiente solo
-    stato = scelte.get("stato_edificio")
-    eta = scelte.get("eta_edificio")
-    if isinstance(stato, (int, float)) and not isinstance(stato, bool):
-        vetusta = prendi("stato_edificio", "Vetustà", VETUSTA, stato)
-    elif stato and eta:
-        vetusta = prendi("stato_edificio", "Vetustà", VETUSTA,
-                         VETUSTA.get((str(stato), str(eta))))
-    else:
-        mancanti.append("Vetustà")
-        vetusta = 1.0
-
     finiture = prendi("finiture", "Finiture", FINITURE)
-    edificio = vetusta * finiture
+    edificio = finiture
 
-    condizioni = prendi("condizioni", "Condizioni", CONDIZIONI)
-    degrado = prendi("degrado", "Degrado/manutenzione", DEGRADO)
+    # Stato complessivo: l'unita' porta la scala, l'edificio uno scostamento
+    # che si SOMMA. Tre voci moltiplicate erano 0,54-1,32; questa sta in
+    # 0,75-1,25, che e' il range largo delle tabelle di mercato.
+    stato = prendi("stato_unita", "Stato complessivo", STATO_UNITA)
+    if "Stato complessivo" in dettaglio:
+        edificio_scelto = scelte.get("stato_edificio")
+        eta_scelta = scelte.get("eta_edificio")
+        scarto = SCARTO_EDIFICIO.get(
+            (str(edificio_scelto), str(eta_scelta)))
+        if scarto is None:
+            mancanti.append("Stato edificio")
+        else:
+            stato = round(stato + scarto, 6)
+            dettaglio["Stato complessivo"] = stato
 
     # ⚠️ Senza l'indicazione dell'ascensore si applica la tabella SENZA: e'
     # la scelta prudente (coefficienti piu' bassi = stima piu' bassa). Dare
@@ -223,7 +285,7 @@ def coefficiente_merito(scelte):
     tab_piano = (PIANO_CON_ASCENSORE if scelte.get("ascensore")
                  else PIANO_SENZA_ASCENSORE)
     piano = prendi("piano", "Livello piano", tab_piano)
-    unita = condizioni * degrado * piano
+    unita = stato * piano
 
     complementi = 1.0
     for chiave, etichetta, gruppo, tabella in FATTORI:
@@ -290,6 +352,59 @@ def coefficiente_taglio(mq, elasticita=ELASTICITA_TAGLIO,
     if not elasticita:
         return 1.0
     return round((float(neutra) / mq) ** float(elasticita), 6)
+
+
+# ------------------------------------------------- dalla griglia di prima
+
+# Le voci di «Condizioni» che si chiamavano diversamente. Le altre quattro
+# — nuova costruzione, finemente ristrutturato, nuovo o ristrutturato,
+# ristrutturato <10 anni — hanno lo stesso nome e passano da sole.
+CONDIZIONI_RINOMINATE = {
+    "Abitabile 10-30 anni": "Abitabile",
+    "Da ristrutturare 30-50 anni": "Da ristrutturare",
+    "Da ristrutturare oltre 50 anni": "Da ristrutturare integralmente",
+}
+
+
+def _piu_vicina(valore, tabella):
+    """La voce della tabella col coefficiente piu' vicino a `valore`."""
+    return min(tabella, key=lambda voce: abs(tabella[voce] - valore))
+
+
+def migra_scelte(scelte):
+    """Le scelte di un progetto salvato con la griglia di prima, tradotte.
+
+    Serve perche' accorpare le voci ha cambiato i nomi dei campi: chi ha
+    compilato la griglia vecchia si ritroverebbe le tendine vuote, e le
+    tendine vuote non sono un errore visibile — la stima verrebbe fuori lo
+    stesso, solo piu' bassa, senza che nessuno lo dica.
+
+    - `condizioni` diventa `stato_unita` (tre voci cambiano nome, quattro
+      no); `degrado` sparisce, perche' era la stessa informazione;
+    - `luminosita` ed `esposizione` diventano `luce_vista`: si prende la
+      MEDIA dei due coefficienti di prima e si sceglie la voce nuova piu'
+      vicina. E' meccanico e si puo' spiegare, che e' meglio di indovinare.
+
+    Chi ha gia' i campi nuovi non viene toccato. Ritorna un dizionario
+    nuovo: `scelte` non si modifica.
+    """
+    fuori = dict(scelte)
+
+    if not fuori.get("stato_unita") and fuori.get("condizioni"):
+        vecchia = str(fuori["condizioni"])
+        fuori["stato_unita"] = CONDIZIONI_RINOMINATE.get(vecchia, vecchia)
+
+    if not fuori.get("luce_vista"):
+        luce = LUMINOSITA_STORICA.get(str(fuori.get("luminosita") or ""))
+        vista = ESPOSIZIONE_STORICA.get(str(fuori.get("esposizione") or ""))
+        presenti = [v for v in (luce, vista) if v is not None]
+        if presenti:
+            fuori["luce_vista"] = _piu_vicina(
+                sum(presenti) / len(presenti), LUCE_VISTA)
+
+    for sparita in ("condizioni", "degrado", "luminosita", "esposizione"):
+        fuori.pop(sparita, None)
+    return fuori
 
 
 def scelte_da_riga(riga):
