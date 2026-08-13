@@ -75,12 +75,59 @@ def test_i_comparabili_scartati_non_spariscono_in_silenzio(mca_con_scarti):
 def test_la_media_dichiara_su_quanti_e_fatta(mca_con_scarti):
     """«€/mq medio» senza il numero di comparabili è mezza informazione."""
     etichette = [m.label for m in mca_con_scarti.metric]
-    assert "€/mq medio normalizzato (su 2)" in etichette, etichette
+    assert any("normalizzato" in e and "su 2" in e for e in etichette), \
+        etichette
 
 
 def test_la_media_dichiara_di_essere_aritmetica(mca_con_scarti):
     """Un bilocale pesa quanto un quadrilocale: va detto, non dedotto."""
     assert "aritmetica" in _testi(mca_con_scarti)
+
+
+def test_il_coefficiente_esce_dalla_griglia_senza_scriverlo_a_mano():
+    """Il motivo per cui la griglia esiste: si dice com'è fatto l'immobile
+    e il coefficiente lo calcola CME. Prima si moltiplicava a mano."""
+    at = _avvia(bp_mq=100.0, df_mca=pd.DataFrame([{
+        "nome": "C1", "prezzo": 300000.0, "mq": 100.0,
+        "finiture": "Signorili", "piano": "Terzo", "ascensore": True,
+        "coeff": None, "note": "",
+    }]))
+    assert not at.exception, [e.value for e in at.exception]
+    # 1,05 (signorili) × 1,00 (terzo con ascensore) = 1,05
+    coefficienti = [str(getattr(d, "value", "")) for d in at.dataframe]
+    assert any("1,050" in c for c in coefficienti), coefficienti
+
+
+def test_un_comparabile_senza_niente_resta_scartato():
+    """Griglia in bianco e nessun coefficiente: non è un immobile «nella
+    media», è un immobile di cui non si sa nulla. Come prima della griglia,
+    non entra nella stima e si dice che non c'è entrato."""
+    at = _avvia(bp_mq=100.0, df_mca=pd.DataFrame([
+        {"nome": "C1", "prezzo": 300000.0, "mq": 100.0, "coeff": 1.0,
+         "note": ""},
+        {"nome": "vuoto", "prezzo": 250000.0, "mq": 100.0, "coeff": None,
+         "note": ""},
+    ]))
+    testo = _testi(at)
+    assert "1 comparabile/i" in testo
+    assert "non entra/entrano" in testo
+
+
+def test_il_coefficiente_del_soggetto_esce_dalla_griglia():
+    """Attico con ascensore (1,20) e finiture signorili (1,05) = 1,260."""
+    at = _avvia(bp_mq=100.0, sog_finiture="Signorili", sog_piano="Attico",
+                sog_ascensore=True)
+    etichette = {m.label: m.value for m in at.metric}
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,260"
+
+
+def test_senza_griglia_il_soggetto_vale_uno_e_lo_dichiara():
+    """Il soggetto è uno solo ed è il motivo per cui si sta stimando:
+    scartarlo come si fa coi comparabili vorrebbe dire non dare numeri."""
+    at = _avvia(bp_mq=100.0)
+    etichette = {m.label: m.value for m in at.metric}
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,000"
+    assert "non compilata" in _testi(at)
 
 
 def test_i_mq_dei_comparabili_e_del_soggetto_sono_la_stessa_grandezza():

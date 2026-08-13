@@ -59,6 +59,7 @@ import fattibilita
 import fattura
 import listino
 import listino_personale
+import merito
 import stampa
 import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
@@ -627,7 +628,33 @@ IMPOSTAZIONI_BP = {
     "bp_iva_notaio": 22.0, "bp_iva_mutuo": 22.0,
     "bp_iva_imprevisti": 0.0, "bp_iva_ristr": 10.0,
     "bp_iva_ag_in": 22.0, "bp_iva_ag_out": 22.0,
-    "bp_coeff_sogg": 1.0, "bp_sconto": 13.0,
+    "bp_coeff_sogg": 0.0, "bp_sconto": 13.0,
+}
+
+# Le voci della griglia di merito per il SOGGETTO. Stanno fuori da
+# IMPOSTAZIONI_BP perche' li' i valori sono numerici — il caricamento di un
+# progetto li passa tutti per int() o float() — e queste sono stringhe.
+SOGGETTO_MCA = {f"sog_{campo}": (False if campo == "ascensore" else None)
+                for campo in merito.CAMPI}
+
+# Le tendine della griglia: chiave della colonna → (etichetta, voci).
+# Una sola tabella per la riga del soggetto e per quelle dei comparabili,
+# cosi' non possono divergere.
+TENDINE_MERITO = {
+    "stato_edificio": ("Stato edificio", merito.STATI_EDIFICIO),
+    "eta_edificio": ("Età edificio", merito.FASCE_ETA),
+    "finiture": ("Finiture", tuple(merito.FINITURE)),
+    "condizioni": ("Condizioni", tuple(merito.CONDIZIONI)),
+    "degrado": ("Manutenzione", tuple(merito.DEGRADO)),
+    "piano": ("Piano", merito.LIVELLI_PIANO),
+    "balconi": ("Balconi", tuple(merito.BALCONI)),
+    "giardino": ("Giardino", tuple(merito.GIARDINO)),
+    "terrazzo": ("Terrazzo", tuple(merito.TERRAZZO)),
+    "luminosita": ("Luminosità", tuple(merito.LUMINOSITA)),
+    "spazi_comuni": ("Spazi comuni", tuple(merito.SPAZI_COMUNI)),
+    "parcheggio": ("Parcheggio", tuple(merito.PARCHEGGIO)),
+    "esposizione": ("Esposizione", tuple(merito.ESPOSIZIONE)),
+    "riscaldamento": ("Riscaldamento", tuple(merito.RISCALDAMENTO)),
 }
 
 # Palette del brand Resolve (dark navy + oro), come MORA.
@@ -2333,6 +2360,15 @@ def _payload_progetto():
         "spese_prev": spese_da_df(st.session_state.get(
             "df_spese_prev_live", st.session_state.df_spese_prev)),
         "mca_comparabili": mca_da_df(st.session_state.df_mca),
+        # ⚠️ Il trattino delle tendine è "non indicato", non una voce: nel
+        # progetto ci va None, o riaprendolo la griglia cercherebbe "—"
+        # fra i coefficienti e non lo troverebbe.
+        "mca_soggetto": {
+            campo: (None if st.session_state.get(f"sog_{campo}") == "—"
+                    else st.session_state.get(f"sog_{campo}"))
+            for campo in merito.CAMPI
+        },
+        "mca_statistica": st.session_state.mca_statistica,
         "categorie": st.session_state.categorie,
         "etichette": {"font": st.session_state.et_font,
                       "nome": st.session_state.et_nome,
@@ -2448,7 +2484,14 @@ def salva_e_ripristina_bp(stato, copia, predefiniti=None):
         # la spunta del consuntivo sta fuori da IMPOSTAZIONI_BP (lì i valori
         # sono numerici e il caricamento li converte in int/float, che per una
         # casella non va bene) ma è un widget come gli altri
-        predefiniti = dict(IMPOSTAZIONI_BP, bp_usa_consuntivo=False)
+        # ⚠️ E così le tendine della griglia di merito: sono widget della
+        # scheda fattibilità, quindi soffrono dello stesso difetto descritto
+        # qui sopra — quindici caselle compilate a mano che sparivano al
+        # primo errore prima di quella scheda.
+        predefiniti = dict(
+            IMPOSTAZIONI_BP, bp_usa_consuntivo=False, mca_statistica="media",
+            **{chiave: ("—" if valore is None else valore)
+               for chiave, valore in SOGGETTO_MCA.items()})
     for chiave, valore in predefiniti.items():
         if chiave in stato:
             copia[chiave] = stato[chiave]
@@ -2679,6 +2722,11 @@ st.session_state.setdefault("df_spese_prev",
                             df_spese_vuoto(COLONNE_SPESE_PREV))
 st.session_state.setdefault("df_mca", df_mca_vuoto())
 st.session_state.setdefault("versione_bp", 0)
+# la griglia di merito del soggetto e il modo di riassumere i comparabili:
+# stringhe e una spunta, quindi fuori da IMPOSTAZIONI_BP come sopra
+for _chiave, _valore in SOGGETTO_MCA.items():
+    st.session_state.setdefault(_chiave, "—" if _valore is None else _valore)
+st.session_state.setdefault("mca_statistica", "media")
 # tenuto fuori da IMPOSTAZIONI_BP: lì i valori sono numerici e il
 # caricamento li converte in int/float, che per una checkbox non va bene
 st.session_state.setdefault("fatt_count", 0)  # svuota l'uploader fatture
@@ -2903,6 +2951,20 @@ if "da_caricare" in st.session_state:
     for col in ("prezzo", "mq", "coeff"):
         df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
     st.session_state.df_mca = df_mc if len(df_mc) else df_mca_vuoto()
+    # ⚠️ Un progetto salvato prima della griglia non ha «mca_soggetto»: le
+    # tendine tornano a «non indicato» e il coefficiente resta quello
+    # battuto a mano, che quel progetto ce l'ha. E' il motivo per cui il
+    # numero a mano scavalca la griglia invece di essere scavalcato.
+    sog_salvato = dati.get("mca_soggetto") or {}
+    for _campo in merito.CAMPI:
+        _valore = sog_salvato.get(_campo)
+        if _campo == "ascensore":
+            st.session_state[f"sog_{_campo}"] = bool(_valore)
+        else:
+            st.session_state[f"sog_{_campo}"] = (
+                "—" if _valore in (None, "") else str(_valore))
+    st.session_state.mca_statistica = (
+        dati.get("mca_statistica") or "media")
     st.session_state.versione_bp += 1
     bp_ricalcola_euro()
 
@@ -5530,22 +5592,39 @@ with tab_bp:
     with sotto_mca:
         st.caption("Stima del prezzo di vendita col **metodo comparativo** "
                    "(il tuo foglio «MCA sell»): per ogni comparabile "
-                   "inserisci prezzo, mq e il **coefficiente di merito** "
-                   "complessivo (il prodotto dei fattori: vetustà, "
-                   "finiture, piano, luminosità, riscaldamento… "
-                   ">1 = immobile migliore della media, <1 = peggiore). "
-                   "Il €/mq viene normalizzato, mediato e riproporzionato "
-                   "sul tuo immobile.")
+                   "inserisci prezzo, mq e **com'è fatto** — vetustà, "
+                   "finiture, piano, luminosità, riscaldamento… Il "
+                   "**coefficiente di merito** lo calcola CME dalle voci "
+                   "scelte (>1 = immobile migliore della media, <1 = "
+                   "peggiore); il €/mq viene normalizzato, mediato e "
+                   "riproporzionato sul tuo immobile. La colonna "
+                   "**Coeff. a mano** serve solo a scavalcare la griglia "
+                   "quando non la si condivide.")
         # ⚠️ width="stretch" non è cosmesi: senza, una tabella VUOTA si
         # stringe alla larghezza delle sue intestazioni (52 px misurati) e
         # la barra degli strumenti, che sta appesa al bordo destro, le esce
         # a sinistra e finisce fuori dallo schermo. Finché la barra era
         # invisibile non se ne accorgeva nessuno.
+        # Le tendine della griglia sono quattordici (l'ascensore e' una
+        # spunta, non una tendina): si costruiscono da
+        # TENDINE_MERITO, che e' la stessa tabella da cui le legge il
+        # blocco del soggetto qui sotto. Aggiungere un fattore a merito.py
+        # lo fa comparire in tutti e due i posti senza toccare la scheda.
+        config_mca = {
+            campo: st.column_config.SelectboxColumn(
+                etichetta, options=list(voci), width="small")
+            for campo, (etichetta, voci) in TENDINE_MERITO.items()
+        }
+        config_mca["ascensore"] = st.column_config.CheckboxColumn(
+            "Ascensore", width="small",
+            help="⚠️ Pesa più di ogni altra voce: l'ultimo piano vale 1,10 "
+                 "con ascensore e 0,70 senza. Non spuntato = assente.")
         df_mca_ed = st.data_editor(
             st.session_state.df_mca,
             num_rows="dynamic", hide_index=True, width="stretch",
             key=f"editor_mca_{st.session_state.versione_bp}",
             column_config={
+                **config_mca,
                 "nome": st.column_config.TextColumn(
                     "Comparabile", help="Es. C1 — via Roma 10"),
                 # I prezzi dei comparabili si confrontano FRA LORO: è tutto il
@@ -5566,9 +5645,12 @@ with tab_bp:
                          "superficie commerciale, non calpestabile. È quella "
                          "che scrivono gli annunci."),
                 "coeff": st.column_config.NumberColumn(
-                    "Coeff. di merito", format="%.3f",
-                    help="Prodotto dei coefficienti (vetustà, piano, "
-                         "finiture…): 1 = nella media"),
+                    "Coeff. a mano", format="%.3f", width="small",
+                    help="Lascia VUOTO per usare il coefficiente calcolato "
+                         "dalle voci qui accanto. Un numero qui scavalca la "
+                         "griglia: serve ai progetti salvati prima che la "
+                         "griglia esistesse, e a chi davanti all'immobile "
+                         "sa che il modello ha torto."),
                 "note": st.column_config.TextColumn(
                     "Note / link annuncio", width="large"),
             })
@@ -5581,21 +5663,91 @@ with tab_bp:
         # tocca i dati.
         st.session_state.df_mca = df_mca_ed.reindex(columns=COLONNE_MCA)
 
-        m1, m2, m3 = st.columns(3)
-        m1.number_input("Coeff. di merito del TUO immobile",
-                        min_value=0.1, max_value=3.0, step=0.01,
-                        format="%.3f", key="bp_coeff_sogg")
-        m2.number_input("Sconto di trattativa (%)", min_value=0.0,
+        # --- il TUO immobile, com'è a fine ristrutturazione ---------------
+        st.markdown("##### Il tuo immobile a lavori finiti")
+        st.caption(":gray[Le stesse voci dei comparabili, ma sul tuo — "
+                   "**com'è quando lo vendi**, non com'è adesso: se lo "
+                   "ristrutturi integralmente, «Condizioni» è *Finemente "
+                   "ristrutturato*, non *Da ristrutturare*.]")
+        # quattro per riga: quindici voci in una colonna sola sarebbero uno
+        # scroll lungo quanto la scheda
+        scelte_sog = {}
+        for blocco in range(0, len(merito.CAMPI), 4):
+            colonne_sog = st.columns(4)
+            for colonna, campo in zip(colonne_sog,
+                                      merito.CAMPI[blocco:blocco + 4]):
+                chiave = f"sog_{campo}"
+                if campo == "ascensore":
+                    colonna.checkbox("Ascensore", key=chiave,
+                                     help="Non spuntato = assente.")
+                else:
+                    etichetta, voci = TENDINE_MERITO[campo]
+                    colonna.selectbox(etichetta, ("—",) + tuple(voci),
+                                      key=chiave)
+                valore = st.session_state.get(chiave)
+                scelte_sog[campo] = None if valore == "—" else valore
+
+        merito_sog = merito.coefficiente_effettivo(
+            scelte_sog, st.session_state.bp_coeff_sogg)
+        # ⚠️ Per un COMPARABILE la griglia in bianco vale zero, e lo fa
+        # scartare: uno di cui non si sa nulla non deve entrare nella media.
+        # Il soggetto invece è uno solo ed è il motivo per cui si sta
+        # stimando — scartarlo vorrebbe dire non dare nessun numero. Vale
+        # 1,00, cioè «nella media dei comparabili», e la scheda lo dice.
+        coeff_sog = merito_sog["totale"] or 1.0
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Coeff. di merito del tuo immobile",
+                  numero_it(coeff_sog, 3))
+        if merito_sog["fonte"] == "a mano":
+            m1.caption(":gray[Scritto **a mano** nel campo qui accanto.]")
+        elif merito_sog["fonte"] == "assente":
+            m1.caption(":gray[Griglia **non compilata**: vale 1,000, cioè "
+                       "«nella media dei comparabili».]")
+        else:
+            m1.caption(":gray[Calcolato dalle voci qui sopra.]")
+        m2.number_input("Coeff. a mano (0 = usa la griglia)",
+                        min_value=0.0, max_value=3.0, step=0.01,
+                        format="%.3f", key="bp_coeff_sogg",
+                        help="A zero comanda la griglia qui sopra. Un "
+                             "numero diverso da zero la scavalca: è così "
+                             "che continuano a tornare i progetti salvati "
+                             "prima che la griglia esistesse.")
+        m3.number_input("Sconto di trattativa (%)", min_value=0.0,
                         max_value=30.0, step=0.5, key="bp_sconto",
                         help="Differenza media tra prezzo richiesto e "
                              "prezzo di vendita reale (~13%)")
-        m3.metric("Mq commerciali del soggetto", numero_it(mq_eff, 0) + " m²")
-        m3.caption(":gray[Dal campo **Mq commerciali** dello studio di "
+        m4.metric("Mq commerciali del soggetto", numero_it(mq_eff, 0) + " m²")
+        m4.caption(":gray[Dal campo **Mq commerciali** dello studio di "
                    "fattibilità.]")
+        # ⚠️ Un progetto salvato prima della griglia porta dentro il suo
+        # coefficiente scritto a mano — spesso 1,00, che era il predefinito
+        # di allora. Senza questo avviso, chi apre quel progetto e compila
+        # le tendine non vede cambiare NIENTE e non capisce perché: il
+        # numero vecchio sta zitto e vince.
+        if merito_sog["fonte"] == "a mano" and merito_sog["dettaglio"]:
+            st.warning(
+                "⚠️ Hai compilato la griglia, ma comanda il **coefficiente "
+                f"a mano ({numero_it(merito_sog['totale'], 3)})**: dalle "
+                f"voci scelte uscirebbe "
+                f"**{numero_it(merito_sog['calcolato'], 3)}**. Metti "
+                "**0** in «Coeff. a mano» per usare la griglia.")
+        if merito_sog["fonte"] == "griglia" and merito_sog["mancanti"]:
+            st.caption(":gray[Voci non indicate, che valgono 1,00: **"
+                       + "**, **".join(merito_sog["mancanti"]) + "**.]")
+
+        # Il coefficiente di ogni comparabile esce dalla sua riga: le voci
+        # scelte, oppure il numero scritto a mano se c'è.
+        comparabili = []
+        for riga in mca_da_df(df_mca_ed):
+            eff = merito.coefficiente_effettivo(
+                merito.scelte_da_riga(riga), riga.get("coeff"))
+            comparabili.append({**riga, "coeff": eff["totale"]})
 
         esito_mca = fattibilita.stima_mca(
-            mca_da_df(df_mca_ed), st.session_state.bp_coeff_sogg,
-            mq_eff, st.session_state.bp_sconto)
+            comparabili, coeff_sog, mq_eff,
+            st.session_state.bp_sconto,
+            statistica=st.session_state.mca_statistica)
         if esito_mca is None:
             st.info("Aggiungi almeno un comparabile completo (prezzo, mq e "
                     "coefficiente maggiori di zero).")
@@ -5605,6 +5757,7 @@ with tab_bp:
                 "€/mq": numero_it(d["eur_mq"], 0),
                 "Coeff.": numero_it(d["coeff"], 3),
                 "€/mq normalizzato": numero_it(d["eur_mq_normalizzato"], 0),
+                "Scarto dalla mediana": f"{numero_it(d['scarto_pct'], 1)}%",
             } for d in esito_mca["dettaglio"]]), hide_index=True)
             # ⚠️ Le righe incomplete sparivano in silenzio: con cinque
             # comparabili in tabella e due senza coefficiente, la stima era
@@ -5617,15 +5770,67 @@ with tab_bp:
                     f"incompleto/i **non entra/entrano** nella stima: serve "
                     "che prezzo, mq e coefficiente siano tutti maggiori di "
                     f"zero. La media qui sotto è su **{usati}**.")
-            st.caption(
-                f":gray[Media **aritmetica** dei €/mq normalizzati di "
-                f"**{usati}** "
+
+            # Il controllo di qualità del metodo: normalizzati i €/mq, quel
+            # che resta è il valore della zona — e la zona è una sola. Se
+            # non convergono, la stima non è pronta.
+            cv = esito_mca["cv"]
+            if usati > 1:
+                if cv <= 15:
+                    st.success(f"✅ I €/mq normalizzati **convergono** "
+                               f"(dispersione {numero_it(cv, 1)}%): "
+                               "i comparabili raccontano tutti la stessa "
+                               "zona.")
+                elif cv <= 25:
+                    st.warning(f"⚠️ Dispersione **{numero_it(cv, 1)}%**: i "
+                               "comparabili non concordano del tutto. "
+                               "Guarda gli scarti qui sopra prima di usare "
+                               "il numero.")
+                else:
+                    st.error(f"🚨 Dispersione **{numero_it(cv, 1)}%**: "
+                             "normalizzati, i comparabili dovrebbero dire "
+                             "lo stesso €/mq e non lo dicono. O non sono "
+                             "confrontabili, o una voce della griglia è "
+                             "sbagliata: **il numero non è pronto**.")
+            if esito_mca["outlier"]:
+                st.info(
+                    "🔎 Fuori scala di oltre il 25% dalla mediana: **"
+                    + "**, **".join(esito_mca["outlier"]) + "**. Spesso è "
+                    "una questione di taglio — i tagli piccoli costano di "
+                    "più al metro e la griglia non ha un fattore per la "
+                    "superficie. Con la **mediana** pesano molto meno; "
+                    "toglierli del tutto è un'altra scelta ancora, e la "
+                    "fai tu.")
+
+            s1, s2 = st.columns([1, 3])
+            s1.selectbox("Come si riassumono", ("media", "mediana"),
+                         key="mca_statistica",
+                         help="La mediana non si fa spostare da un "
+                              "comparabile fuori scala. La media è quella "
+                              "del foglio Excel.")
+            # ⚠️ «aritmetica» non è un vezzo: dice che la media NON è
+            # ponderata sui mq, cioè che un bilocale pesa quanto un
+            # quadrilocale. È l'avvertenza che regge tutto il metodo, e un
+            # test la protegge — se cambia la parola, cambiala anche lì
+            # sapendo cosa stai togliendo.
+            riassunto = ("Media **aritmetica**"
+                         if esito_mca["statistica"] == "media"
+                         else "**Mediana**")
+            s2.caption(
+                f":gray[{riassunto} dei €/mq "
+                f"normalizzati di **{usati}** "
                 f"{'comparabile' if usati == 1 else 'comparabili'}: un "
                 "bilocale pesa quanto un quadrilocale — a riproporzionare "
-                "ci pensa il coefficiente di merito, non la superficie.]")
+                "ci pensa il coefficiente di merito, non la superficie. "
+                f"Media {numero_it(esito_mca['eur_mq_media'], 0)} €/mq, "
+                f"mediana {numero_it(esito_mca['eur_mq_mediana'], 0)} €/mq.]")
+
             n1, n2, n3, n4 = st.columns(4)
-            n1.metric(f"€/mq medio normalizzato (su {usati})",
-                      numero_it(esito_mca["eur_mq_media"], 0))
+            n1.metric(f"€/mq normalizzato ({esito_mca['statistica']}, "
+                      f"su {usati})",
+                      numero_it(esito_mca["eur_mq_media"]
+                                if esito_mca["statistica"] == "media"
+                                else esito_mca["eur_mq_mediana"], 0))
             n2.metric("€/mq del soggetto",
                       numero_it(esito_mca["eur_mq_soggetto"], 0))
             n3.metric(f"€/mq −{numero_it(st.session_state.bp_sconto, 0)}%",

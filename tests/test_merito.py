@@ -7,8 +7,10 @@ spostata la stima rispetto al modello di partenza.
 
 import pytest
 
-from merito import (BALCONI, CONDIZIONI, FINITURE, PIANO_CON_ASCENSORE,
-                    PIANO_SENZA_ASCENSORE, coefficiente_merito)
+from merito import (BALCONI, CONDIZIONI, FATTORI, FINITURE,
+                    PIANO_CON_ASCENSORE, PIANO_SENZA_ASCENSORE,
+                    coefficiente_effettivo, coefficiente_merito,
+                    scelte_da_riga)
 
 
 # Il soggetto del foglio (colonna N): normale 20-40 anni, finiture civili,
@@ -109,6 +111,66 @@ def test_una_voce_che_non_esiste_e_una_voce_mancante():
     esito = coefficiente_merito({"finiture": "Lussuosissime"})
     assert "Finiture" in esito["mancanti"]
     assert esito["totale"] == pytest.approx(1.0)
+
+
+def test_le_scelte_si_estraggono_da_una_riga_della_tabella():
+    """La riga di un comparabile porta anche nome, prezzo, mq e note."""
+    riga = dict(SOGGETTO, nome="C1", prezzo=300000.0, mq=80.0,
+                coeff=None, note="via Roma 10")
+    scelte = scelte_da_riga(riga)
+    assert "nome" not in scelte and "prezzo" not in scelte
+    assert scelte["piano"] == "Primo"
+    assert coefficiente_merito(scelte)["totale"] == pytest.approx(
+        1.322204, abs=1e-6)
+
+
+def test_le_celle_vuote_non_diventano_scelte():
+    riga = {"stato_edificio": "Normale", "eta_edificio": "20-40 anni",
+            "finiture": None, "condizioni": ""}
+    scelte = scelte_da_riga(riga)
+    assert "finiture" not in scelte and "condizioni" not in scelte
+    assert "Finiture" in coefficiente_merito(scelte)["mancanti"]
+
+
+def test_il_coefficiente_a_mano_vince_sulla_griglia():
+    """E' quello che tiene in piedi i progetti salvati prima della griglia:
+    hanno il coefficiente battuto a mano e nessuna voce compilata."""
+    esito = coefficiente_effettivo(scelte_da_riga(SOGGETTO), a_mano=1.475)
+    assert esito["totale"] == pytest.approx(1.475)
+    assert esito["fonte"] == "a mano"
+    # la griglia resta visibile accanto, per il confronto
+    assert esito["calcolato"] == pytest.approx(1.322204, abs=1e-6)
+
+
+@pytest.mark.parametrize("a_mano", [None, 0, 0.0])
+def test_senza_numero_a_mano_comanda_la_griglia(a_mano):
+    esito = coefficiente_effettivo(scelte_da_riga(SOGGETTO), a_mano=a_mano)
+    assert esito["fonte"] == "griglia"
+    assert esito["totale"] == pytest.approx(1.322204, abs=1e-6)
+
+
+def test_una_griglia_in_bianco_non_e_un_immobile_nella_media():
+    """`coefficiente_merito` dà 1,0 a chi non ha compilato niente — tutte
+    le voci neutre — ma come comparabile vorrebbe dire farne entrare uno di
+    cui non si sa nulla spacciandolo per medio. A zero viene scartato."""
+    esito = coefficiente_effettivo({})
+    assert esito["totale"] == 0.0
+    assert esito["fonte"] == "assente"
+    assert esito["calcolato"] == pytest.approx(1.0)
+    # 13 coefficienti da 15 caselle: stato ed età fanno la vetustà, e
+    # l'ascensore non è un fattore a sé — sceglie quale tabella dei piani
+    # si applica.
+    assert len(esito["mancanti"]) == len(FATTORI) + 2
+    assert len(esito["mancanti"]) == 13
+
+
+def test_basta_una_voce_perche_la_griglia_conti():
+    """Non serve compilarle tutte: una sola voce dice già qualcosa, e le
+    altre restano dichiarate fra le mancanti."""
+    esito = coefficiente_effettivo({"finiture": "Signorili"})
+    assert esito["fonte"] == "griglia"
+    assert esito["totale"] == pytest.approx(1.05)
+    assert len(esito["mancanti"]) == 12
 
 
 def test_la_griglia_e_quella_del_foglio():

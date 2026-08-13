@@ -17,6 +17,7 @@ l'interfaccia.
 import pandas as pd
 
 import fattibilita
+import merito
 
 # ------------------------------------------------------------- il computo
 
@@ -58,8 +59,18 @@ def senza_iva_derivata(df):
 COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
                       "note"]
 COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
-COLONNE_MCA = ["nome", "prezzo", "mq", "coeff", "note"]
+# ⚠️ Le voci della griglia di merito stanno IN MEZZO, fra i mq e il
+# coefficiente: e' l'ordine in cui si compila una riga (che immobile e',
+# poi quanto vale). Il coefficiente viene dopo perche' ormai e' l'ECCEZIONE
+# — il numero battuto a mano da chi non si fida della griglia — e non piu'
+# il dato da inserire.
+COLONNE_MCA = (["nome", "prezzo", "mq"] + list(merito.CAMPI)
+               + ["coeff", "note"])
 COLONNE_MCA_NUM = ("prezzo", "mq", "coeff")
+# L'ascensore e' l'unica spunta della griglia. Senza questa riga finirebbe
+# fra le colonne di testo e tornerebbe dal salvataggio come la stringa
+# "False", che e' vera.
+COLONNE_MCA_BOOL = ("ascensore",)
 
 # Pallino colorato mostrato davanti alla categoria nella tabella modificabile
 # (il data_editor non colora lo sfondo delle celle: l'emoji è il ripiego).
@@ -250,8 +261,14 @@ def mca_da_df(df):
                 valori[col] = None
             elif col in COLONNE_MCA_NUM:
                 valori[col] = float(valore)
+            elif col in COLONNE_MCA_BOOL:
+                valori[col] = bool(valore)
             else:
                 valori[col] = str(valore)
-        if any(v is not None for v in valori.values()):
+        # ⚠️ Una spunta NON messa non e' un dato: la casella dell'ascensore
+        # nasce a False in ogni riga nuova, e senza questa esclusione una
+        # riga mai toccata si salverebbe come comparabile vero — vuoto, ma
+        # contato fra gli scartati a ogni stima.
+        if any(v is not None and v is not False for v in valori.values()):
             righe.append(valori)
     return righe

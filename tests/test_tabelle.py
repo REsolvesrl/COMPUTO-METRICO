@@ -7,6 +7,7 @@ colonna di testo nata numerica fa rifiutare la tabella dall'editor.
 import pandas as pd
 import pytest
 
+import merito
 import tabelle
 
 
@@ -175,16 +176,53 @@ def test_registro_previsioni_ha_le_sue_colonne():
 # ------------------------------------------------------- comparabili (MCA)
 
 def test_mca_giro_completo():
+    """Un comparabile col solo coefficiente a mano — com'erano tutti prima
+    che la griglia esistesse — torna indietro identico, e le voci della
+    griglia che non ha restano vuote invece di inventarsi un valore."""
     righe = [{"nome": "Via Roma 5", "prezzo": 200000.0, "mq": 90.0,
               "coeff": 1.05, "note": "ristrutturato"}]
     df = pd.DataFrame(righe)
-    assert tabelle.mca_da_df(df) == righe
+    tornate = tabelle.mca_da_df(df)
+    assert len(tornate) == 1
+    for chiave, valore in righe[0].items():
+        assert tornate[0][chiave] == valore
+    assert all(tornate[0][campo] is None for campo in merito.CAMPI)
+
+
+def test_mca_giro_completo_con_la_griglia():
+    righe = [{"nome": "C1", "prezzo": 300000.0, "mq": 80.0,
+              "stato_edificio": "Normale", "eta_edificio": "20-40 anni",
+              "finiture": "Civili", "condizioni": "Finemente ristrutturato",
+              "degrado": "Assente/ottima", "piano": "Primo",
+              "ascensore": True, "balconi": "Sì", "giardino": "No",
+              "terrazzo": "Sì", "luminosita": "Mediamente luminoso",
+              "spazi_comuni": "Assenti", "parcheggio": "Posto auto per UI",
+              "esposizione": "Mista", "riscaldamento": "Autonomo",
+              "coeff": None, "note": ""}]
+    tornate = tabelle.mca_da_df(pd.DataFrame(righe))
+    assert tornate[0]["ascensore"] is True
+    assert tornate[0]["piano"] == "Primo"
+    assert tornate[0]["coeff"] is None
+    # e da lì esce il coefficiente, senza che nessuno lo scriva a mano
+    esito = merito.coefficiente_effettivo(
+        merito.scelte_da_riga(tornate[0]), tornate[0]["coeff"])
+    assert esito["fonte"] == "griglia"
+    assert esito["totale"] == pytest.approx(1.298593, abs=1e-6)
+
+
+def test_mca_la_sola_spunta_dell_ascensore_non_fa_una_riga():
+    """La casella nasce a False in ogni riga nuova: senza esclusione una
+    riga mai toccata diventerebbe un comparabile vuoto ma contato."""
+    df = pd.DataFrame([{**{c: None for c in tabelle.COLONNE_MCA},
+                        "ascensore": False}])
+    assert tabelle.mca_da_df(df) == []
 
 
 def test_mca_vuoto_ha_i_tipi_giusti():
     df = tabelle.df_mca_vuoto()
     assert df["prezzo"].dtype == "float64"
     assert df["nome"].dtype == object
+    assert list(df.columns) == tabelle.COLONNE_MCA
 
 
 @pytest.mark.parametrize("funzione", [tabelle.voci_da_df,

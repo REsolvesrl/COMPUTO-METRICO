@@ -69,6 +69,13 @@ def giro(tmp_path_factory, monkeypatch_module):
     at.run()
     at.text_input(key="q_1.02_txt").set_value("120").run()
     at.text_input(key="p_1.02_txt").set_value("115").run()
+    # la griglia di merito del soggetto: tendine e una spunta, cioe' l'unico
+    # pezzo del business plan che non e' ne' numero ne' testo battuto
+    at.selectbox(key="sog_finiture").set_value("Signorili").run()
+    at.selectbox(key="sog_piano").set_value("Attico").run()
+    at.checkbox(key="sog_ascensore").check().run()
+    at.session_state["mca_statistica"] = "mediana"
+    at.run()
 
     at.button(key="salva_testata").click().run()
     assert not at.exception, [e.value for e in at.exception]
@@ -123,6 +130,42 @@ def test_riaprendo_torna_anche_il_computo(giro):
     _, riaperta = giro
     assert riaperta.session_state["q_1.02"] == 120.0
     assert riaperta.session_state["p_1.02"] == 115.0
+
+
+def test_il_file_salvato_contiene_la_griglia_del_soggetto(giro):
+    """Le tendine sono stringhe e la spunta e' un booleano: non passano da
+    IMPOSTAZIONI_BP, che converte tutto in int/float. Hanno una chiave
+    loro nel file, ed e' quella che va guardata."""
+    salvato, _ = giro
+    assert salvato["mca_soggetto"]["finiture"] == "Signorili"
+    assert salvato["mca_soggetto"]["piano"] == "Attico"
+    assert salvato["mca_soggetto"]["ascensore"] is True
+    assert salvato["mca_statistica"] == "mediana"
+
+
+def test_le_voci_non_indicate_si_salvano_come_niente(giro):
+    """Il trattino delle tendine e' «non indicato», non una voce: se
+    finisse nel file, riaprendo la griglia lo cercherebbe fra i
+    coefficienti e non lo troverebbe."""
+    salvato, _ = giro
+    assert salvato["mca_soggetto"]["riscaldamento"] is None
+    assert "—" not in [v for v in salvato["mca_soggetto"].values()]
+
+
+def test_riaprendo_torna_anche_la_griglia_del_soggetto(giro):
+    _, riaperta = giro
+    assert riaperta.session_state["sog_finiture"] == "Signorili"
+    assert riaperta.session_state["sog_piano"] == "Attico"
+    assert riaperta.session_state["sog_ascensore"] is True
+    assert riaperta.session_state["sog_riscaldamento"] == "—"
+    assert riaperta.session_state["mca_statistica"] == "mediana"
+
+
+def test_riaprendo_il_coefficiente_del_soggetto_e_quello_di_prima(giro):
+    """1,05 (signorili) × 1,20 (attico con ascensore) = 1,260."""
+    _, riaperta = giro
+    etichette = {m.label: m.value for m in riaperta.metric}
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,260"
 
 
 def test_riaprendo_le_caselle_mostrano_i_valori(giro):

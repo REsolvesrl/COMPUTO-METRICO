@@ -3,7 +3,7 @@
 Nel foglio Excel i coefficienti si mettevano a mano: si leggeva la voce
 nella colonna B, si copiava il numero della colonna C nella colonna del
 comparabile, e alla fine si moltiplicava tutto. Tre passaggi manuali per
-ognuno dei quattordici fattori, per ognuno dei cinque comparabili, e il
+ognuno dei tredici fattori, per ognuno dei cinque comparabili, e il
 prodotto finale — quello che poi divide il €/mq — usciva da una formula
 lunga mezza riga.
 
@@ -11,7 +11,7 @@ Qui la griglia e' un dato: si sceglie la voce, il coefficiente lo calcola
 il software. Chi legge la stima puo' risalire da ogni numero alla voce che
 l'ha prodotto, che nel foglio non si poteva fare.
 
-⚠️ I coefficienti si MOLTIPLICANO fra loro, e sono quattordici. Un errore
+⚠️ I coefficienti si MOLTIPLICANO fra loro, e sono tredici. Un errore
 del 5% su ciascuno non fa il 5%: si compone. Per questo `dettaglio` riporta
 voce per voce cosa ha pesato — un totale di 1,40 va guardato in faccia
 prima di crederci.
@@ -123,6 +123,15 @@ RISCALDAMENTO = {
     "Assente": 0.95,
 }
 
+# Le chiavi della griglia, nell'ordine in cui si compilano: dal fabbricato
+# all'unita' ai complementi, come le tre fasce del foglio. La maschera legge
+# di qui, cosi' aggiungere un fattore non vuol dire ricordarsi di aggiungerlo
+# anche a mano da un'altra parte.
+CAMPI = ("stato_edificio", "eta_edificio", "finiture",
+         "condizioni", "degrado", "piano", "ascensore",
+         "balconi", "giardino", "terrazzo", "luminosita",
+         "spazi_comuni", "parcheggio", "esposizione", "riscaldamento")
+
 # I fattori a scelta singola, nell'ordine in cui li mostra la scheda, con il
 # gruppo di appartenenza: e' da qui che l'interfaccia disegna i menu' a
 # tendina, cosi' griglia e maschera non possono divergere.
@@ -170,7 +179,7 @@ def coefficiente_merito(scelte):
 
     Le voci non indicate valgono 1,0 — neutre — e finiscono in `mancanti`.
     Non e' un dettaglio: un coefficiente calcolato su sei fattori su
-    quattordici e' un altro numero, e nel foglio non si vedeva quali fossero
+    tredici e' un altro numero, e nel foglio non si vedeva quali fossero
     rimasti in bianco perche' una cella vuota e una cella a 1,00 producono
     lo stesso prodotto.
 
@@ -230,3 +239,49 @@ def coefficiente_merito(scelte):
         "dettaglio": dettaglio,
         "mancanti": mancanti,
     }
+
+
+def scelte_da_riga(riga):
+    """Le sole voci della griglia, prese da una riga della tabella.
+
+    La riga di un comparabile porta anche nome, prezzo, mq e note: qui
+    restano fuori. Le celle vuote non diventano scelte — una tendina mai
+    toccata non e' una risposta, ed e' `coefficiente_merito` a doverla
+    contare fra le mancanti.
+    """
+    return {c: riga.get(c) for c in CAMPI
+            if riga.get(c) is not None and riga.get(c) != ""}
+
+
+def coefficiente_effettivo(scelte, a_mano=None):
+    """Il coefficiente che entra davvero nella stima.
+
+    Se c'e' un numero scritto a mano vince lui, e la griglia resta come
+    riferimento: serve a chi ha aperto un progetto salvato prima che la
+    maschera esistesse — quei progetti hanno il coefficiente battuto a mano
+    e nessuna voce compilata, e devono continuare a dare lo stesso numero.
+    Serve anche a chi la griglia ce l'ha ma non ci crede: e' un modello, e
+    davanti all'immobile puo' avere torto.
+
+    `fonte` dice quale delle due ha vinto, cosi' la scheda lo puo' mostrare
+    invece di far indovinare da dove esce il numero.
+
+    ⚠️ Una griglia COMPLETAMENTE in bianco non vale 1,00: vale zero, e
+    `fonte` diventa "assente". Non e' un cavillo — `coefficiente_merito`
+    da' 1,0 a chi non ha compilato niente, che come funzione pura e'
+    giusto (tutte le voci neutre), ma come comparabile vorrebbe dire far
+    entrare nella stima un immobile di cui non si sa NULLA spacciandolo
+    per uno nella media. Con zero, `stima_mca` lo scarta e lo conta fra
+    gli scartati, che e' quello che faceva prima della griglia.
+    """
+    esito = coefficiente_merito(scelte)
+    esito["calcolato"] = esito["totale"]
+    if a_mano is not None and float(a_mano) > 0:
+        esito["totale"] = round(float(a_mano), 6)
+        esito["fonte"] = "a mano"
+    elif not esito["dettaglio"]:
+        esito["totale"] = 0.0
+        esito["fonte"] = "assente"
+    else:
+        esito["fonte"] = "griglia"
+    return esito
