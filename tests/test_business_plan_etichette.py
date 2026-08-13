@@ -131,10 +131,10 @@ def test_un_comparabile_senza_niente_resta_scartato():
 def test_i_predefiniti_sono_l_immobile_tipo_a_lavori_finiti():
     """Palazzina normale di 20-40 anni, finiture civili, finemente
     ristrutturato, balconi, esterna e luminosa, riscaldamento autonomo:
-    1,14 × 1,157625 = 1,320."""
+    1,13 × 1,157625 = 1,308."""
     at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0)
     etichette = {m.label: m.value for m in at.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,320"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,308"
 
 
 def test_la_correzione_del_taglio_si_regola_anche_senza_comparabili():
@@ -158,11 +158,11 @@ def test_il_piano_resta_da_indicare():
 
 def test_il_coefficiente_del_soggetto_segue_le_tendine():
     """Cambiando una voce cambia il numero: attico con ascensore (1,20)
-    invece del piano non indicato (1,00) porta 1,320 a 1,584."""
+    invece del piano non indicato (1,00) porta 1,308 a 1,570."""
     at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0, sog_piano="Attico",
                 sog_ascensore=True)
     etichette = {m.label: m.value for m in at.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,584"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,570"
 
 
 def test_svuotando_la_griglia_il_soggetto_vale_uno_e_lo_dichiara():

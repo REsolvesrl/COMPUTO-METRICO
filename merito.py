@@ -22,6 +22,24 @@ prima di crederci.
 # Vetusta': l'incrocio fra lo stato dell'edificio e la sua eta'. Nel foglio
 # erano nove righe (tre stati x tre fasce d'eta'); qui e' una chiave doppia,
 # cosi' l'interfaccia puo' chiedere le due cose separatamente.
+#
+# ⚠️ Questo coefficiente riguarda l'ESTERNO — facciata, coperture, parti
+# comuni — e resta separato da quello dell'unita' perche' sono davvero due
+# informazioni: si puo' ristrutturare benissimo dentro un palazzo che cade,
+# e viceversa. La duplicazione che e' stata tolta era un'altra, fra
+# «condizioni» e «degrado», che chiedevano tutt'e due dell'interno.
+#
+# Rispetto al foglio cambia solo il fondo scala: da 0,85 a 0,90. Due
+# coefficienti che si moltiplicano vanno tenuti stretti ognuno, se no
+# tornano a comporsi — 0,90-1,10 qui per 0,82-1,18 sull'unita' fa
+# 0,74-1,30, che e' l'ordine di grandezza delle tabelle di mercato.
+#
+# Il segno dell'eta' NON e' quello che verrebbe da pensare, ed e' voluto:
+# un edificio in OTTIMO stato vale di piu' se vecchio (1,10 oltre i 40 anni
+# contro 1,00 sotto i 20), in stato SCADENTE vale di meno. Non e' una
+# svista del foglio: un palazzo d'epoca tenuto bene e' un pregio, lo stesso
+# palazzo malandato e' una spesa. E' un'interazione, non un effetto
+# dell'eta' da sola.
 VETUSTA = {
     ("Ottimo", "1-20 anni"): 1.0,
     ("Ottimo", "20-40 anni"): 1.05,
@@ -29,65 +47,41 @@ VETUSTA = {
     ("Normale", "1-20 anni"): 1.0,
     ("Normale", "20-40 anni"): 1.0,
     ("Normale", "oltre 40 anni"): 1.0,
-    ("Scadente", "1-20 anni"): 0.95,
-    ("Scadente", "20-40 anni"): 0.9,
-    ("Scadente", "oltre 40 anni"): 0.85,
+    ("Scadente", "1-20 anni"): 0.97,
+    ("Scadente", "20-40 anni"): 0.94,
+    ("Scadente", "oltre 40 anni"): 0.9,
 }
 STATI_EDIFICIO = ("Ottimo", "Normale", "Scadente")
 FASCE_ETA = ("1-20 anni", "20-40 anni", "oltre 40 anni")
 
 FINITURE = {"Signorili": 1.05, "Civili": 1.0, "Economiche": 0.9}
 
-# ------------------------------------------------------- stato complessivo
+# --------------------------------------------- stato dell'unita' (interno)
 
-# ⚠️ QUI stava il difetto piu' costoso della griglia. Lo stato era contato
-# TRE volte — vetusta' dell'edificio (0,85-1,10) x condizioni dell'unita'
-# (0,80-1,15) x degrado/manutenzione (0,80-1,04) — e le tre si
-# moltiplicavano, per un'escursione complessiva da 0,54 a 1,32. Nessuna
-# delle tabelle in circolazione fa cosi': idealista e RockAgent usano UN
-# coefficiente di stato a +/-10%, RealAdvisor arriva a 0,65-1,25. Non era
-# sbagliata nessuna delle tre voci: erano tre misure della stessa cosa
-# moltiplicate fra loro, e moltiplicando la stessa informazione non se ne
-# aggiunge, se ne conta tre volte.
+# ⚠️ QUI stava il difetto piu' costoso della griglia, e riguardava
+# l'INTERNO. Lo stato dell'unita' viaggiava su DUE voci che si
+# moltiplicavano — «condizioni» (0,80-1,15) e «degrado/manutenzione»
+# (0,80-1,04) — che sono la stessa domanda fatta due volte: un
+# appartamento «da ristrutturare» con manutenzione «alta/scadente» non e'
+# due notizie, e' una. Moltiplicate, e messe in fila con la vetusta'
+# dell'edificio, davano un'escursione da 0,54 a 1,32: il doppio del range
+# piu' largo in circolazione (RealAdvisor si ferma a 0,65-1,25).
 #
-# Adesso e' una voce sola, 0,75-1,25, che e' il range largo — per chi compra
-# da ristrutturare e rivende finemente ristrutturato lo stato E' la
-# variabile, e schiacciarlo a +/-10% avrebbe tolto il mestiere dalla stima.
+# Adesso e' una voce sola, 0,82-1,18. Range largo e non stretto: per chi
+# compra da ristrutturare e rivende finemente ristrutturato lo stato E' la
+# variabile, e schiacciarlo a +/-10% come fanno idealista e RockAgent
+# avrebbe tolto il mestiere dalla stima.
 #
-# Le due domande restano DUE, pero', perche' un'unita' a posto in un
-# edificio che cade e' un'altra cosa dal contrario: l'unita' porta la scala,
-# l'edificio uno scostamento. Si SOMMANO, non si moltiplicano — e' lo stesso
-# trucco della vetusta' del foglio, dove due tendine davano un coefficiente
-# solo.
+# Resta DIVISO dalla vetusta' dell'edificio (vedi VETUSTA), che e' l'altra
+# meta' del discorso e un'informazione diversa davvero.
 STATO_UNITA = {
-    "Nuova costruzione": 1.2,
-    "Finemente ristrutturato": 1.14,
-    "Nuovo o ristrutturato": 1.08,
-    "Ristrutturato <10 anni": 1.04,
+    "Nuova costruzione": 1.18,
+    "Finemente ristrutturato": 1.13,
+    "Nuovo o ristrutturato": 1.07,
+    "Ristrutturato <10 anni": 1.03,
     "Abitabile": 1.0,
-    "Da ristrutturare": 0.88,
-    "Da ristrutturare integralmente": 0.8,
-}
-
-# Lo scostamento dell'edificio, entro +/-0,05: sommato alla scala qui sopra
-# da' esattamente 0,75-1,25.
-#
-# ⚠️ Il segno dell'eta' NON e' quello che verrebbe da pensare, ed e' voluto:
-# nel foglio un edificio in OTTIMO stato valeva di piu' se vecchio (1,10
-# oltre i 40 anni contro 1,00 sotto i 20), mentre in stato SCADENTE valeva
-# di meno. Non e' una svista: un palazzo d'epoca tenuto bene e' un pregio,
-# lo stesso palazzo malandato e' una spesa. E' un'interazione, non un
-# effetto dell'eta' da sola, e si conserva.
-SCARTO_EDIFICIO = {
-    ("Ottimo", "1-20 anni"): 0.0,
-    ("Ottimo", "20-40 anni"): 0.03,
-    ("Ottimo", "oltre 40 anni"): 0.05,
-    ("Normale", "1-20 anni"): 0.0,
-    ("Normale", "20-40 anni"): 0.0,
-    ("Normale", "oltre 40 anni"): 0.0,
-    ("Scadente", "1-20 anni"): -0.02,
-    ("Scadente", "20-40 anni"): -0.04,
-    ("Scadente", "oltre 40 anni"): -0.05,
+    "Da ristrutturare": 0.89,
+    "Da ristrutturare integralmente": 0.82,
 }
 
 # Le tabelle di prima, tenute SOLO per rileggere i progetti salvati con la
@@ -261,22 +255,24 @@ def coefficiente_merito(scelte):
         return valore
 
     finiture = prendi("finiture", "Finiture", FINITURE)
-    edificio = finiture
 
-    # Stato complessivo: l'unita' porta la scala, l'edificio uno scostamento
-    # che si SOMMA. Tre voci moltiplicate erano 0,54-1,32; questa sta in
-    # 0,75-1,25, che e' il range largo delle tabelle di mercato.
-    stato = prendi("stato_unita", "Stato complessivo", STATO_UNITA)
-    if "Stato complessivo" in dettaglio:
-        edificio_scelto = scelte.get("stato_edificio")
-        eta_scelta = scelte.get("eta_edificio")
-        scarto = SCARTO_EDIFICIO.get(
-            (str(edificio_scelto), str(eta_scelta)))
-        if scarto is None:
-            mancanti.append("Stato edificio")
-        else:
-            stato = round(stato + scarto, 6)
-            dettaglio["Stato complessivo"] = stato
+    # L'ESTERNO: due tendine, un coefficiente solo. E' il trucco che il
+    # foglio usava gia' per la vetusta', e va bene cosi' — il doppio
+    # conteggio non era qui.
+    stato_ed = scelte.get("stato_edificio")
+    eta = scelte.get("eta_edificio")
+    if isinstance(stato_ed, (int, float)) and not isinstance(stato_ed, bool):
+        vetusta = prendi("stato_edificio", "Stato edificio", VETUSTA, stato_ed)
+    elif stato_ed and eta:
+        vetusta = prendi("stato_edificio", "Stato edificio", VETUSTA,
+                         VETUSTA.get((str(stato_ed), str(eta))))
+    else:
+        mancanti.append("Stato edificio")
+        vetusta = 1.0
+    edificio = vetusta * finiture
+
+    # L'INTERNO: una voce sola dove prima erano condizioni x degrado.
+    stato = prendi("stato_unita", "Stato dell'unità", STATO_UNITA)
 
     # ⚠️ Senza l'indicazione dell'ascensore si applica la tabella SENZA: e'
     # la scelta prudente (coefficienti piu' bassi = stima piu' bassa). Dare

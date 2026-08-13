@@ -33,65 +33,65 @@ SOGGETTO = {
 
 def test_coefficiente_del_soggetto():
     esito = coefficiente_merito(SOGGETTO)
-    assert esito["edificio"] == pytest.approx(1.0)          # finiture civili
-    assert esito["unita"] == pytest.approx(1.026)           # 1,14 × 0,90
+    assert esito["edificio"] == pytest.approx(1.0)      # vetustà × finiture
+    assert esito["unita"] == pytest.approx(1.017)       # 1,13 × 0,90
     assert esito["complementi"] == pytest.approx(1.26126)
-    assert esito["totale"] == pytest.approx(1.294053, abs=1e-6)
+    assert esito["totale"] == pytest.approx(1.282701, abs=1e-6)
     assert esito["mancanti"] == []
 
 
 def test_quanto_ci_si_e_spostati_dal_foglio():
-    """Sul caso tipico l'accorpamento vale il 2%: non e' una ritaratura,
-    e' l'aver smesso di moltiplicare la stessa informazione. La differenza
+    """Sul caso tipico l'accorpamento vale il 3%: non e' una ritaratura,
+    e' l'aver smesso di chiedere due volte la stessa cosa. La differenza
     vera sta agli ESTREMI, che e' dove il difetto mordeva."""
     assert coefficiente_merito(SOGGETTO)["totale"] == pytest.approx(
-        1.322204 * 0.979, abs=0.002)      # 1,322204 era il valore del foglio
+        1.322204 * 0.970, abs=0.002)      # 1,322204 era il valore del foglio
 
 
-def test_lo_stato_non_si_conta_piu_tre_volte():
-    """Vetusta' × condizioni × degrado davano da 0,54 a 1,32 — il doppio
-    del range piu' largo in circolazione. Adesso e' 0,75-1,25."""
+def test_l_esterno_e_l_interno_restano_due_domande():
+    """Si puo' ristrutturare benissimo dentro un palazzo che cade, e
+    viceversa: sono due informazioni, non una. Ognuna conta da sola."""
+    solo_edificio = coefficiente_merito({"stato_edificio": "Scadente",
+                                         "eta_edificio": "oltre 40 anni"})
+    solo_unita = coefficiente_merito({"stato_unita": "Finemente ristrutturato"})
+    assert solo_edificio["totale"] == pytest.approx(0.90)
+    assert solo_unita["totale"] == pytest.approx(1.13)
+    # e insieme si moltiplicano, ma partendo da due range tenuti stretti
+    insieme = coefficiente_merito({"stato_edificio": "Scadente",
+                                   "eta_edificio": "oltre 40 anni",
+                                   "stato_unita": "Finemente ristrutturato"})
+    assert insieme["totale"] == pytest.approx(0.90 * 1.13)
+
+
+def test_l_interno_non_si_conta_piu_due_volte():
+    """«Condizioni» × «degrado» erano la stessa domanda fatta due volte: un
+    appartamento da ristrutturare con manutenzione scadente non e' due
+    notizie. Con la vetusta' in fila davano 0,544-1,316; adesso 0,738-1,298."""
     peggiore = coefficiente_merito({
         "stato_unita": "Da ristrutturare integralmente",
         "stato_edificio": "Scadente", "eta_edificio": "oltre 40 anni"})
     migliore = coefficiente_merito({
         "stato_unita": "Nuova costruzione",
         "stato_edificio": "Ottimo", "eta_edificio": "oltre 40 anni"})
-    assert peggiore["dettaglio"]["Stato complessivo"] == pytest.approx(0.75)
-    assert migliore["dettaglio"]["Stato complessivo"] == pytest.approx(1.25)
-    # e prima del rudere: 0,85 × 0,80 × 0,80 = 0,544
-    assert peggiore["dettaglio"]["Stato complessivo"] > 0.544
-
-
-def test_l_edificio_si_somma_allo_stato_non_si_moltiplica():
-    """E' il trucco che toglie il doppio conteggio: due tendine, un
-    coefficiente solo."""
-    senza = coefficiente_merito({"stato_unita": "Abitabile",
-                                 "stato_edificio": "Normale",
-                                 "eta_edificio": "20-40 anni"})
-    ottimo = coefficiente_merito({"stato_unita": "Abitabile",
-                                  "stato_edificio": "Ottimo",
-                                  "eta_edificio": "oltre 40 anni"})
-    assert senza["dettaglio"]["Stato complessivo"] == pytest.approx(1.0)
-    assert ottimo["dettaglio"]["Stato complessivo"] == pytest.approx(1.05)
+    assert peggiore["totale"] == pytest.approx(0.738, abs=1e-3)
+    assert migliore["totale"] == pytest.approx(1.298, abs=1e-3)
+    # il rudere non vale piu' 0,544: era il prodotto di tre voci gemelle
+    assert peggiore["totale"] > 0.544
 
 
 def test_un_palazzo_d_epoca_tenuto_bene_vale_di_piu_di_uno_nuovo():
     """Non e' una svista ereditata dal foglio: e' un'interazione. Un
     edificio d'epoca in ottimo stato e' un pregio, lo stesso malandato e'
     una spesa."""
-    epoca = coefficiente_merito({"stato_unita": "Abitabile",
-                                 "stato_edificio": "Ottimo",
+    epoca = coefficiente_merito({"stato_edificio": "Ottimo",
                                  "eta_edificio": "oltre 40 anni"})
-    recente = coefficiente_merito({"stato_unita": "Abitabile",
-                                   "stato_edificio": "Ottimo",
+    recente = coefficiente_merito({"stato_edificio": "Ottimo",
                                    "eta_edificio": "1-20 anni"})
-    scadente = coefficiente_merito({"stato_unita": "Abitabile",
-                                    "stato_edificio": "Scadente",
+    scadente = coefficiente_merito({"stato_edificio": "Scadente",
                                     "eta_edificio": "oltre 40 anni"})
-    assert (epoca["dettaglio"]["Stato complessivo"]
-            > recente["dettaglio"]["Stato complessivo"]
-            > scadente["dettaglio"]["Stato complessivo"])
+    assert (epoca["dettaglio"]["Stato edificio"]
+            > recente["dettaglio"]["Stato edificio"]
+            > scadente["dettaglio"]["Stato edificio"])
 
 
 def test_la_luce_non_si_chiede_piu_due_volte():
@@ -101,29 +101,29 @@ def test_la_luce_non_si_chiede_piu_due_volte():
     assert max(LUCE_VISTA.values()) == pytest.approx(1.10)
 
 
-def test_dieci_coefficienti_da_tredici_caselle():
-    """Erano tredici da quindici. Le caselle in piu' sono lo stato
-    dell'edificio (due tendine, un coefficiente) e l'ascensore, che sceglie
-    quale tabella dei piani si applica."""
+def test_undici_coefficienti_da_tredici_caselle():
+    """Erano tredici da quindici. Le due caselle in piu' dei coefficienti
+    sono l'eta' dell'edificio, che con lo stato fa un coefficiente solo, e
+    l'ascensore, che sceglie quale tabella dei piani si applica."""
     assert len(merito.CAMPI) == 13
     esito = coefficiente_effettivo({})
-    assert len(esito["mancanti"]) == 10
-    assert len(FATTORI) + 2 == 10
+    assert len(esito["mancanti"]) == 11
+    assert len(FATTORI) + 3 == 11
 
 
 def test_le_voci_lasciate_in_bianco_si_dichiarano():
     esito = coefficiente_merito({"finiture": "Civili"})
     assert esito["totale"] == pytest.approx(1.0)
-    assert "Stato complessivo" in esito["mancanti"]
+    assert "Stato dell'unità" in esito["mancanti"]
+    assert "Stato edificio" in esito["mancanti"]
     assert "Finiture" not in esito["mancanti"]
 
 
-def test_lo_stato_dell_edificio_senza_quello_dell_unita_non_conta():
-    """Lo scostamento si somma a una scala: senza la scala non c'e' niente
-    a cui sommarlo, e dichiararlo e' meglio che applicarlo a 1,00."""
-    esito = coefficiente_merito({"stato_edificio": "Ottimo",
-                                 "eta_edificio": "oltre 40 anni"})
-    assert "Stato complessivo" in esito["mancanti"]
+def test_lo_stato_dell_edificio_vuole_tutt_e_due_le_tendine():
+    """Due tendine, un coefficiente solo: con una sola non c'e' la casella
+    da cercare nella tabella a doppia entrata."""
+    esito = coefficiente_merito({"stato_edificio": "Ottimo"})
+    assert "Stato edificio" in esito["mancanti"]
     assert esito["totale"] == pytest.approx(1.0)
 
 
@@ -139,7 +139,7 @@ def test_il_numero_a_mano_scavalca_la_griglia():
 def test_senza_numero_a_mano_comanda_la_griglia(a_mano):
     esito = coefficiente_effettivo(scelte_da_riga(SOGGETTO), a_mano=a_mano)
     assert esito["fonte"] == "griglia"
-    assert esito["totale"] == pytest.approx(1.294053, abs=1e-6)
+    assert esito["totale"] == pytest.approx(1.282701, abs=1e-6)
 
 
 def test_una_griglia_in_bianco_non_e_un_immobile_nella_media():
@@ -153,7 +153,7 @@ def test_basta_una_voce_perche_la_griglia_conti():
     esito = coefficiente_effettivo({"finiture": "Signorili"})
     assert esito["fonte"] == "griglia"
     assert esito["totale"] == pytest.approx(1.05)
-    assert len(esito["mancanti"]) == 9
+    assert len(esito["mancanti"]) == 10
 
 
 def test_senza_ascensore_il_piano_alto_vale_meno():
@@ -189,7 +189,7 @@ def test_le_scelte_si_estraggono_da_una_riga_della_tabella():
     assert "nome" not in scelte and "prezzo" not in scelte
     assert scelte["piano"] == "Primo"
     assert coefficiente_merito(scelte)["totale"] == pytest.approx(
-        1.294053, abs=1e-6)
+        1.282701, abs=1e-6)
 
 
 def test_le_celle_vuote_non_diventano_scelte():
@@ -281,5 +281,5 @@ def test_la_griglia_resta_quella_delle_tabelle_di_mercato():
     assert FINITURE == {"Signorili": 1.05, "Civili": 1.0, "Economiche": 0.9}
     assert PIANO_CON_ASCENSORE["Attico"] == 1.2          # +20%, come loro
     assert PIANO_SENZA_ASCENSORE["Piani superiori"] == 0.7   # -30%
-    assert STATO_UNITA["Nuova costruzione"] == 1.2
-    assert STATO_UNITA["Da ristrutturare integralmente"] == 0.8
+    assert STATO_UNITA["Nuova costruzione"] == 1.18
+    assert STATO_UNITA["Da ristrutturare integralmente"] == 0.82

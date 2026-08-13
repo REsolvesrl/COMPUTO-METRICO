@@ -168,10 +168,10 @@ def test_riaprendo_torna_anche_la_griglia_del_soggetto(giro):
 
 def test_riaprendo_il_coefficiente_del_soggetto_e_quello_di_prima(giro):
     """Predefiniti + signorili (1,05 al posto di civili) + attico con
-    ascensore (1,20 al posto del piano non indicato) = 1,663."""
+    ascensore (1,20 al posto del piano non indicato) = 1,648."""
     _, riaperta = giro
     etichette = {m.label: m.value for m in riaperta.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,663"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,648"
 
 
 def test_riaprendo_le_caselle_mostrano_i_valori(giro):

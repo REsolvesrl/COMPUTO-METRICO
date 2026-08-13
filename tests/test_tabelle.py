@@ -207,7 +207,7 @@ def test_mca_giro_completo_con_la_griglia():
     esito = merito.coefficiente_effettivo(
         merito.scelte_da_riga(tornate[0]), tornate[0]["coeff"])
     assert esito["fonte"] == "griglia"
-    assert esito["totale"] == pytest.approx(1.294053, abs=1e-6)
+    assert esito["totale"] == pytest.approx(1.282701, abs=1e-6)
 
 
 def test_mca_la_sola_spunta_dell_ascensore_non_fa_una_riga():
