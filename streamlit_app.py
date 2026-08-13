@@ -651,6 +651,11 @@ IMPOSTAZIONI_BP = {
     # e' gia' in tabella. A zero e' spenta. Vedi merito.coefficiente_taglio
     # per il perche' di 0,15 e per il perche' NON dell'ottimo statistico.
     "bp_taglio": 0.15,
+    # Il costo dei lavori e la quota che il mercato ne riconosce: da questi
+    # due si ricava di quanto deve allargarsi la voce «stato dell'unita'»,
+    # perche' il salto fra il finito e il da-rifare E' il costo dei lavori,
+    # meno quello che il mercato non paga. Vedi merito.scala_stato_unita.
+    "bp_costo_ristr_mq": 900.0, "bp_quota_mercato": 85.0,
 }
 
 # L'immobile tipo di chi usa CME: un appartamento in palazzina normale di
@@ -5732,6 +5737,19 @@ with tab_bp:
         # tocca i dati.
         st.session_state.df_mca = df_mca_ed.reindex(columns=COLONNE_MCA)
 
+        # --- quanto vale, qui, essere già ristrutturati -------------------
+        # ⚠️ Il livello di prezzo della zona si prende dai €/mq RICHIESTI,
+        # cioè da un dato che NON passa per i coefficienti. Se si usasse il
+        # normalizzato si entrerebbe in un giro chiuso: la scala serve a
+        # calcolare i coefficienti che servono a calcolare la scala.
+        righe_mca = mca_da_df(df_mca_ed)
+        lordi = [r["prezzo"] / r["mq"] for r in righe_mca
+                 if (r.get("prezzo") or 0) > 0 and (r.get("mq") or 0) > 0]
+        valore_zona = sum(lordi) / len(lordi) if lordi else None
+        scala_stato = merito.scala_stato_unita(
+            valore_zona, st.session_state.bp_costo_ristr_mq,
+            st.session_state.bp_quota_mercato / 100)
+
         # --- il TUO immobile, com'è a fine ristrutturazione ---------------
         st.markdown("##### Il tuo immobile a lavori finiti")
         st.caption(":gray[Le stesse voci dei comparabili, ma sul tuo — "
@@ -5757,7 +5775,7 @@ with tab_bp:
                 scelte_sog[campo] = None if valore == "—" else valore
 
         merito_sog = merito.coefficiente_effettivo(
-            scelte_sog, st.session_state.bp_coeff_sogg)
+            scelte_sog, st.session_state.bp_coeff_sogg, scala_stato)
         # ⚠️ Per un COMPARABILE la griglia in bianco vale zero, e lo fa
         # scartare: uno di cui non si sa nulla non deve entrare nella media.
         # Il soggetto invece è uno solo ed è il motivo per cui si sta
@@ -5827,12 +5845,57 @@ with tab_bp:
             st.caption(":gray[Voci non indicate, che valgono 1,00: **"
                        + "**, **".join(merito_sog["mancanti"]) + "**.]")
 
+        # --- lo stato tarato sul costo dei lavori -------------------------
+        st.markdown("###### Quanto vale, qui, essere già ristrutturati")
+        r1, r2, r3 = st.columns([1, 1, 2])
+        r1.number_input("Costo lavori (€/m² comm.)", min_value=0.0,
+                        max_value=3000.0, step=50.0, format="%.0f",
+                        key="bp_costo_ristr_mq",
+                        help="Quanto costa ristrutturare, al metro quadro "
+                             "COMMERCIALE (la stessa base dei €/mq della "
+                             "stima, non il calpestabile). A zero la voce "
+                             "«Stato dell'unità» resta sulla tabella fissa.")
+        r2.number_input("Quota riconosciuta (%)", min_value=0.0,
+                        max_value=130.0, step=5.0, format="%.0f",
+                        key="bp_quota_mercato",
+                        help="Quanto di quel costo il mercato te lo ripaga "
+                             "sul prezzo. Non è mai tutto: chi compra da "
+                             "ristrutturare vuole anche il compenso per il "
+                             "rischio, il tempo e la seccatura. È anche il "
+                             "margine del tuo mestiere — sotto il 100% ci "
+                             "guadagni, sopra il 100% il mercato paga il "
+                             "ristrutturato più di quanto ti costa farlo.")
+        if valore_zona:
+            finito = scala_stato["Finemente ristrutturato"]
+            grezzo = scala_stato["Da ristrutturare integralmente"]
+            salto = (finito - grezzo) / finito * valore_zona
+            r3.caption(
+                f":gray[Coi comparabili in tabella la zona sta sui "
+                f"**{numero_it(valore_zona, 0)} €/m²** richiesti. Su quel "
+                f"livello, «finemente ristrutturato» vale "
+                f"**{numero_it(finito, 3)}** e «da ristrutturare "
+                f"integralmente» **{numero_it(grezzo, 3)}**: un salto di "
+                f"**{numero_it(salto, 0)} €/m²**, che è il costo dei lavori "
+                "per la quota qui accanto.]")
+            # ⚠️ Lo stesso costo pesa il 60% del valore in una zona da
+            # 1.500 €/m² e il 18% in una da 5.000: una tabella fissa dello
+            # stato non può essere giusta in tutt'e due. Qui si riscala.
+            r3.caption(":gray[Una tabella fissa varrebbe solo per un unico "
+                       "livello di prezzo: lo stesso costo pesa il 60% del "
+                       "valore in una zona da 1.500 €/m² e il 18% in una da "
+                       "5.000.]")
+        else:
+            r3.caption(":gray[Servono dei comparabili con prezzo e mq per "
+                       "sapere su che livello di prezzo sta la zona. Senza, "
+                       "«Stato dell'unità» resta sulla tabella fissa "
+                       "0,82–1,18, che vale per una zona da ~2.500 €/m².]")
+
         # Il coefficiente di ogni comparabile esce dalla sua riga: le voci
         # scelte, oppure il numero scritto a mano se c'è.
         comparabili = []
-        for riga in mca_da_df(df_mca_ed):
+        for riga in righe_mca:
             eff = merito.coefficiente_effettivo(
-                merito.scelte_da_riga(riga), riga.get("coeff"))
+                merito.scelte_da_riga(riga), riga.get("coeff"), scala_stato)
             comparabili.append({**riga, "coeff": eff["totale"]})
 
         esito_mca = fattibilita.stima_mca(

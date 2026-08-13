@@ -94,6 +94,73 @@ def test_un_palazzo_d_epoca_tenuto_bene_vale_di_piu_di_uno_nuovo():
             > scadente["dettaglio"]["Stato edificio"])
 
 
+# ------------------------- lo stato tarato sul costo dei lavori
+
+def test_la_tabella_base_vale_per_una_zona_da_2500():
+    """0,82-1,18 non e' campato in aria: corrisponde a ~800 €/m² di lavori
+    riconosciuti all'85% su una zona da 2.500 €/m². E' giusta li', e solo
+    li' — che e' il motivo per cui altrove va riscalata."""
+    assert merito.costo_implicito(STATO_UNITA, 2500) == pytest.approx(
+        807, abs=2)
+
+
+def test_lo_stesso_costo_pesa_diversamente_secondo_la_zona():
+    """900 €/m² sono il 60% del valore in una zona da 1.500 e il 18% in una
+    da 5.000: la stessa casa da rifare vale, in proporzione, molto meno
+    dove il finito costa poco."""
+    povera = merito.scala_stato_unita(1500)
+    ricca = merito.scala_stato_unita(5000)
+    assert (povera["Da ristrutturare integralmente"]
+            < STATO_UNITA["Da ristrutturare integralmente"]
+            < ricca["Da ristrutturare integralmente"])
+    assert povera["Da ristrutturare integralmente"] == pytest.approx(
+        0.623, abs=0.002)
+    assert ricca["Da ristrutturare integralmente"] == pytest.approx(
+        0.905, abs=0.002)
+
+
+@pytest.mark.parametrize("zona", [1500, 2000, 2500, 3000, 4000, 5000])
+def test_la_scala_riporta_sempre_il_costo_che_le_hai_dato(zona):
+    """Il giro si chiude: qualunque sia il livello di prezzo, il salto fra
+    finito e da-rifare vale i 900 €/m² di partenza."""
+    scala = merito.scala_stato_unita(zona, 900.0, 0.85)
+    assert merito.costo_implicito(scala, zona, 0.85) == pytest.approx(
+        900, abs=1)
+
+
+def test_abitabile_resta_l_ancora():
+    """E' il punto rispetto a cui i comparabili sono normalizzati: se si
+    muovesse, si muoverebbe tutta la stima insieme a lui."""
+    for zona in (1500, 2500, 5000):
+        assert merito.scala_stato_unita(zona)["Abitabile"] == 1.0
+
+
+def test_senza_il_livello_di_prezzo_resta_la_tabella():
+    assert merito.scala_stato_unita() == STATO_UNITA
+    assert merito.scala_stato_unita(0) == STATO_UNITA
+    assert merito.scala_stato_unita(2500, costo_mq=0) == STATO_UNITA
+    assert merito.scala_stato_unita(2500, quota=0) == STATO_UNITA
+
+
+def test_la_scala_non_esplode_sulle_zone_economiche():
+    """Sotto un certo prezzo l'obiettivo tende a 1 e il ventaglio si
+    aprirebbe all'infinito: un coefficiente negativo non vuol dire niente."""
+    estrema = merito.scala_stato_unita(400, 1000.0, 1.0)
+    assert estrema["Da ristrutturare integralmente"] > 0.5
+    assert estrema["Nuova costruzione"] < 1.6
+
+
+def test_la_scala_entra_nel_coefficiente():
+    scelte = {"stato_unita": "Da ristrutturare integralmente"}
+    base = coefficiente_merito(scelte)["totale"]
+    povera = coefficiente_merito(
+        scelte, merito.scala_stato_unita(1500))["totale"]
+    assert povera < base
+    assert coefficiente_effettivo(
+        scelte, scala_stato=merito.scala_stato_unita(1500))["totale"] == \
+        pytest.approx(povera)
+
+
 def test_la_luce_non_si_chiede_piu_due_volte():
     """Un appartamento e' luminoso PERCHE' e' esterno e ben esposto:
     luminosita' × esposizione davano 0,855-1,21 sulla stessa informazione."""

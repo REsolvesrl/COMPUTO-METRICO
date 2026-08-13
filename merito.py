@@ -84,6 +84,89 @@ STATO_UNITA = {
     "Da ristrutturare integralmente": 0.82,
 }
 
+# ------------------------------ lo stato tarato sul costo dei lavori
+
+# ⚠️ Un coefficiente e' una PERCENTUALE, il costo di ristrutturazione e' un
+# valore ASSOLUTO al metro. Sono due grandezze diverse, e per questo una
+# tabella fissa dello stato non puo' essere giusta dappertutto: 900 EUR/mq
+# di lavori pesano il 60% del valore in una zona da 1.500 EUR/mq e il 18% in
+# una da 5.000. La stessa casa da ristrutturare vale, in proporzione, molto
+# meno dove il finito costa poco.
+#
+# Il salto fra «finemente ristrutturato» e «da ristrutturare integralmente»
+# — che per chi fa questo mestiere e' TUTTO il mestiere, e' la differenza
+# fra il prezzo di uscita e quello d'ingresso — dovrebbe quindi valere piu'
+# o meno il costo dei lavori, per la quota che il mercato gliene riconosce.
+# Il mercato non la riconosce mai tutta: chi compra da ristrutturare vuole
+# anche il compenso per il rischio, il tempo e la seccatura, e chi vende
+# tira sul prezzo. Da qui la `quota`, sotto 1.
+#
+# La tabella qui sopra non e' campata in aria: 0,82-1,18 corrisponde
+# ESATTAMENTE a 900 EUR/mq riconosciuti all'85% su una zona da 2.500
+# EUR/mq. E' giusta li' e solo li' — altrove va riscalata, ed e' quello che
+# fa questa funzione.
+COSTO_RISTRUTTURAZIONE_MQ = 900.0
+QUOTA_RICONOSCIUTA = 0.85
+
+# Limiti alla riscalatura. Sotto zone molto economiche l'obiettivo tende a
+# 1 e la scala esploderebbe; sopra zone di lusso si schiaccerebbe a niente.
+SCALA_MIN, SCALA_MAX = 0.35, 2.20
+
+
+def scala_stato_unita(valore_mq=None, costo_mq=COSTO_RISTRUTTURAZIONE_MQ,
+                      quota=QUOTA_RICONOSCIUTA):
+    """La scala dello stato dell'unita', tarata sul costo dei lavori.
+
+    `valore_mq` e' il livello di prezzo del FINITO nella zona. Va preso da
+    un dato che NON dipenda dai coefficienti — la media dei EUR/mq richiesti
+    dei comparabili va bene — o si entra in un giro chiuso: la scala
+    servirebbe a calcolare i coefficienti che servono a calcolare la scala.
+
+    Le voci mantengono le posizioni relative della tabella: si allarga o si
+    stringe il ventaglio attorno ad «Abitabile», che resta 1,00 perche' e'
+    l'ancora rispetto a cui i comparabili sono normalizzati.
+
+    Senza `valore_mq` ritorna la tabella cosi' com'e'.
+    """
+    try:
+        valore_mq = float(valore_mq or 0.0)
+        costo_mq = float(costo_mq or 0.0)
+        quota = float(quota if quota is not None else 0.0)
+    except (TypeError, ValueError):
+        return dict(STATO_UNITA)
+    if valore_mq <= 0 or costo_mq <= 0 or quota <= 0:
+        return dict(STATO_UNITA)
+
+    # quanto deve valere il salto uscita-ingresso, in quota sul finito
+    obiettivo = quota * costo_mq / valore_mq
+    su = STATO_UNITA["Finemente ristrutturato"] - 1.0
+    giu = 1.0 - STATO_UNITA["Da ristrutturare integralmente"]
+    denominatore = su + giu - su * obiettivo
+    if denominatore <= 0:
+        return dict(STATO_UNITA)
+    scala = max(SCALA_MIN, min(SCALA_MAX, obiettivo / denominatore))
+    return {voce: round(1.0 + (valore - 1.0) * scala, 6)
+            for voce, valore in STATO_UNITA.items()}
+
+
+def costo_implicito(scala, valore_mq, quota=QUOTA_RICONOSCIUTA):
+    """Il contrario: quanti EUR/mq di lavori dice una scala gia' fatta.
+
+    Serve a girare la domanda — invece di «che coefficienti metto», «che
+    costo di ristrutturazione sto dando per buono senza saperlo». Sulla
+    tabella di partenza e una zona da 2.500 EUR/mq la risposta e' 900.
+    """
+    try:
+        valore_mq = float(valore_mq or 0.0)
+        quota = float(quota or 0.0)
+    except (TypeError, ValueError):
+        return None
+    finito = scala.get("Finemente ristrutturato")
+    grezzo = scala.get("Da ristrutturare integralmente")
+    if not finito or not grezzo or valore_mq <= 0 or quota <= 0:
+        return None
+    return round((finito - grezzo) / finito * valore_mq / quota, 2)
+
 # Le tabelle di prima, tenute SOLO per rileggere i progetti salvati con la
 # griglia vecchia (vedi `migra_scelte`). Non entrano piu' nel calcolo.
 CONDIZIONI_STORICHE = {
@@ -224,7 +307,7 @@ def _valore(scelta, tabella):
     return tabella.get(str(scelta))
 
 
-def coefficiente_merito(scelte):
+def coefficiente_merito(scelte, scala_stato=None):
     """Il coefficiente di merito complessivo, dai fattori scelti.
 
     `scelte` e' un dizionario con le chiavi dei fattori. Per lo stato
@@ -271,8 +354,10 @@ def coefficiente_merito(scelte):
         vetusta = 1.0
     edificio = vetusta * finiture
 
-    # L'INTERNO: una voce sola dove prima erano condizioni x degrado.
-    stato = prendi("stato_unita", "Stato dell'unità", STATO_UNITA)
+    # L'INTERNO: una voce sola dove prima erano condizioni x degrado. La
+    # scala puo' arrivare tarata sul costo dei lavori (scala_stato_unita).
+    stato = prendi("stato_unita", "Stato dell'unità",
+                   scala_stato or STATO_UNITA)
 
     # ⚠️ Senza l'indicazione dell'ascensore si applica la tabella SENZA: e'
     # la scelta prudente (coefficienti piu' bassi = stima piu' bassa). Dare
@@ -415,7 +500,7 @@ def scelte_da_riga(riga):
             if riga.get(c) is not None and riga.get(c) != ""}
 
 
-def coefficiente_effettivo(scelte, a_mano=None):
+def coefficiente_effettivo(scelte, a_mano=None, scala_stato=None):
     """Il coefficiente che entra davvero nella stima.
 
     Se c'e' un numero scritto a mano vince lui, e la griglia resta come
@@ -436,7 +521,7 @@ def coefficiente_effettivo(scelte, a_mano=None):
     per uno nella media. Con zero, `stima_mca` lo scarta e lo conta fra
     gli scartati, che e' quello che faceva prima della griglia.
     """
-    esito = coefficiente_merito(scelte)
+    esito = coefficiente_merito(scelte, scala_stato)
     esito["calcolato"] = esito["totale"]
     if a_mano is not None and float(a_mano) > 0:
         esito["totale"] = round(float(a_mano), 6)
