@@ -113,21 +113,83 @@ def test_un_comparabile_senza_niente_resta_scartato():
     assert "non entra/entrano" in testo
 
 
-def test_il_coefficiente_del_soggetto_esce_dalla_griglia():
-    """Attico con ascensore (1,20) e finiture signorili (1,05) = 1,260."""
-    at = _avvia(bp_mq=100.0, sog_finiture="Signorili", sog_piano="Attico",
+def test_i_predefiniti_sono_l_immobile_tipo_a_lavori_finiti():
+    """Palazzina normale di 20-40 anni, finiture civili, finemente
+    ristrutturato, manutenzione ottima, balconi, luminoso, esterno,
+    riscaldamento autonomo: 1,144 × 1,215506 = 1,391."""
+    at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0)
+    etichette = {m.label: m.value for m in at.metric}
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,391"
+
+
+def test_il_piano_resta_da_indicare():
+    """È la voce che cambia a ogni immobile ed è quella che pesa di più:
+    un predefinito lì sarebbe un numero deciso da nessuno."""
+    at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0)
+    assert at.session_state["sog_piano"] == "—"
+    assert at.session_state["sog_ascensore"] is False
+    assert "Livello piano" in _testi(at)
+
+
+def test_il_coefficiente_del_soggetto_segue_le_tendine():
+    """Cambiando una voce cambia il numero: attico con ascensore (1,20)
+    invece del piano non indicato (1,00) porta 1,391 a 1,669."""
+    at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0, sog_piano="Attico",
                 sog_ascensore=True)
     etichette = {m.label: m.value for m in at.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,260"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,669"
 
 
-def test_senza_griglia_il_soggetto_vale_uno_e_lo_dichiara():
+def test_svuotando_la_griglia_il_soggetto_vale_uno_e_lo_dichiara():
     """Il soggetto è uno solo ed è il motivo per cui si sta stimando:
     scartarlo come si fa coi comparabili vorrebbe dire non dare numeri."""
-    at = _avvia(bp_mq=100.0)
+    import streamlit_app
+    vuote = {chiave: "—" for chiave in streamlit_app.SOGGETTO_MCA
+             if chiave != "sog_ascensore"}
+    at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0, sog_ascensore=False, **vuote)
     etichette = {m.label: m.value for m in at.metric}
     assert etichette["Coeff. di merito del tuo immobile"] == "1,000"
     assert "non compilata" in _testi(at)
+
+
+def test_un_progetto_vecchio_riceve_i_predefiniti():
+    """Chiave «mca_soggetto» assente = progetto salvato prima della
+    griglia, cioè «di questo non si sa niente»: valgono i predefiniti. Se
+    no chi riapre il lavoro di sempre trova quattordici tendine vuote e i
+    predefiniti non li vede mai."""
+    at = _avvia(da_caricare={"progetto": {"nome": "vecchio"},
+                             "business_plan": {"bp_coeff_sogg": 1.4}})
+    assert at.session_state["sog_condizioni"] == "Finemente ristrutturato"
+    assert at.session_state["sog_riscaldamento"] == "Autonomo"
+    # ma il coefficiente battuto a mano resta al comando: i numeri di un
+    # progetto vecchio non si muovono da soli
+    etichette = {m.label: m.value for m in at.metric}
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,400"
+
+
+def test_una_voce_svuotata_apposta_resta_svuotata():
+    """Chiave presente con dentro un None = l'utente ha messo «—» apposta.
+    Rimetterci il predefinito sarebbe riempire una casella svuotata."""
+    at = _avvia(da_caricare={
+        "progetto": {"nome": "nuovo"},
+        "mca_soggetto": {"condizioni": None, "riscaldamento": "Autonomo"},
+    })
+    assert at.session_state["sog_condizioni"] == "—"
+    assert at.session_state["sog_riscaldamento"] == "Autonomo"
+
+
+def test_la_tabella_dei_comparabili_scorre_di_lato():
+    """Venti colonne fanno ~2.040 px in un contenitore da ~1.100, e ogni
+    antenato ha `overflow-x: visible`: senza questa regola le ultime
+    colonne non finiscono sotto una barra di scorrimento, spariscono
+    tagliate. È il difetto peggiore di questa scheda — non stona niente,
+    semplicemente «Riscaldamento» non esiste per chi guarda.
+
+    Si controlla il foglio di stile perché il taglio è visivo: AppTest non
+    disegna, e la tabella vive su canvas.
+    """
+    sorgente = SORGENTE.read_text(encoding="utf-8")
+    assert '[class*="st-key-editor_mca"] {{ overflow-x: auto; }}' in sorgente
 
 
 def test_i_mq_dei_comparabili_e_del_soggetto_sono_la_stessa_grandezza():

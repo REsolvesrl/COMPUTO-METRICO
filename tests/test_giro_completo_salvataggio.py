@@ -70,10 +70,13 @@ def giro(tmp_path_factory, monkeypatch_module):
     at.text_input(key="q_1.02_txt").set_value("120").run()
     at.text_input(key="p_1.02_txt").set_value("115").run()
     # la griglia di merito del soggetto: tendine e una spunta, cioe' l'unico
-    # pezzo del business plan che non e' ne' numero ne' testo battuto
+    # pezzo del business plan che non e' ne' numero ne' testo battuto.
+    # Il giardino torna a «—» apposta: serve una voce NON indicata per
+    # provare che il trattino si salva come niente invece che come voce.
     at.selectbox(key="sog_finiture").set_value("Signorili").run()
     at.selectbox(key="sog_piano").set_value("Attico").run()
     at.checkbox(key="sog_ascensore").check().run()
+    at.selectbox(key="sog_giardino").set_value("—").run()
     at.session_state["mca_statistica"] = "mediana"
     at.run()
 
@@ -148,7 +151,7 @@ def test_le_voci_non_indicate_si_salvano_come_niente(giro):
     finisse nel file, riaprendo la griglia lo cercherebbe fra i
     coefficienti e non lo troverebbe."""
     salvato, _ = giro
-    assert salvato["mca_soggetto"]["riscaldamento"] is None
+    assert salvato["mca_soggetto"]["giardino"] is None
     assert "—" not in [v for v in salvato["mca_soggetto"].values()]
 
 
@@ -157,15 +160,18 @@ def test_riaprendo_torna_anche_la_griglia_del_soggetto(giro):
     assert riaperta.session_state["sog_finiture"] == "Signorili"
     assert riaperta.session_state["sog_piano"] == "Attico"
     assert riaperta.session_state["sog_ascensore"] is True
-    assert riaperta.session_state["sog_riscaldamento"] == "—"
+    assert riaperta.session_state["sog_giardino"] == "—"
+    # e i predefiniti mai toccati tornano come predefiniti, non vuoti
+    assert riaperta.session_state["sog_riscaldamento"] == "Autonomo"
     assert riaperta.session_state["mca_statistica"] == "mediana"
 
 
 def test_riaprendo_il_coefficiente_del_soggetto_e_quello_di_prima(giro):
-    """1,05 (signorili) × 1,20 (attico con ascensore) = 1,260."""
+    """Predefiniti + signorili (1,05 al posto di civili) + attico con
+    ascensore (1,20 al posto del piano non indicato) = 1,752."""
     _, riaperta = giro
     etichette = {m.label: m.value for m in riaperta.metric}
-    assert etichette["Coeff. di merito del tuo immobile"] == "1,260"
+    assert etichette["Coeff. di merito del tuo immobile"] == "1,752"
 
 
 def test_riaprendo_le_caselle_mostrano_i_valori(giro):

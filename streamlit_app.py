@@ -405,6 +405,22 @@ def css_mondo():
    dopo. Il limite non allarga nulla, taglia solo le righe troppo lunghe. */
 [data-testid="stCaptionContainer"] {{ max-width: 82ch; }}
 
+/* ---- La tabella dei comparabili scorre di lato --------------------- */
+/* Venti colonne: le tre dei dati, le quindici della griglia di merito, il
+   coefficiente a mano e le note. Con le larghezze fissate delle tendine la
+   tabella misura circa 2.040 px, il contenitore ne dà 1.100, e OGNI
+   antenato ha `overflow-x: visible` — così le ultime colonne non finivano
+   sotto una barra di scorrimento: sparivano tagliate, e «Riscaldamento»
+   non esisteva per chi guardava. Misurato dal vivo: 2.046 px di contenuto
+   in 1.099 di spazio.
+
+   ⚠️ La regola va sul contenitore dell'ELEMENTO, non sulla tabella: è la
+   tabella a essere larga 2.040, e un `overflow` su di lei non avrebbe
+   nulla da contenere. La classe la genera la chiave del data_editor
+   (`editor_mca_<versione>`), la stessa che qui sotto serve alla barra
+   degli strumenti — per questo il selettore è a sottostringa. */
+[class*="st-key-editor_mca"] {{ overflow-x: auto; }}
+
 /* ---- La barra degli strumenti delle tabelle ------------------------ */
 /* Aggiungi riga · mostra colonne · scarica CSV · cerca · schermo intero.
    Streamlit la tiene a opacità ZERO finché non ci passi sopra col mouse,
@@ -631,11 +647,42 @@ IMPOSTAZIONI_BP = {
     "bp_coeff_sogg": 0.0, "bp_sconto": 13.0,
 }
 
+# L'immobile tipo di chi usa CME: un appartamento in palazzina normale di
+# venti-quarant'anni, comprato da ristrutturare e rivenduto FINEMENTE
+# RISTRUTTURATO — che e' il mestiere, ed e' il motivo per cui la scheda si
+# chiama «a lavori finiti». Sono i predefiniti, non un vincolo: si cambiano
+# tendina per tendina.
+#
+# ⚠️ Piano e ascensore restano in bianco DI PROPOSITO. Sono le uniche due
+# voci che cambiano a ogni immobile e sono anche quelle che pesano di piu'
+# (l'ultimo piano vale 1,10 con ascensore e 0,70 senza): un predefinito li'
+# sarebbe un numero deciso da nessuno dentro la stima.
+PREDEFINITI_SOGGETTO = {
+    "stato_edificio": "Normale",
+    "eta_edificio": "20-40 anni",
+    "finiture": "Civili",
+    "condizioni": "Finemente ristrutturato",
+    "degrado": "Assente/ottima",
+    "balconi": "Sì",
+    "giardino": "No",
+    "terrazzo": "No",
+    "luminosita": "Luminoso",
+    "spazi_comuni": "Assenti",
+    "parcheggio": "Assente",
+    "esposizione": "Esterna",
+    "riscaldamento": "Autonomo",
+}
+
 # Le voci della griglia di merito per il SOGGETTO. Stanno fuori da
 # IMPOSTAZIONI_BP perche' li' i valori sono numerici — il caricamento di un
 # progetto li passa tutti per int() o float() — e queste sono stringhe.
-SOGGETTO_MCA = {f"sog_{campo}": (False if campo == "ascensore" else None)
-                for campo in merito.CAMPI}
+# Si costruiscono da merito.CAMPI, cosi' un fattore aggiunto alla griglia
+# compare qui senza predefinito invece di sparire.
+SOGGETTO_MCA = {
+    f"sog_{campo}": PREDEFINITI_SOGGETTO.get(
+        campo, False if campo == "ascensore" else None)
+    for campo in merito.CAMPI
+}
 
 # Le tendine della griglia: chiave della colonna → (etichetta, voci).
 # Una sola tabella per la riga del soggetto e per quelle dei comparabili,
@@ -2951,17 +2998,27 @@ if "da_caricare" in st.session_state:
     for col in ("prezzo", "mq", "coeff"):
         df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
     st.session_state.df_mca = df_mc if len(df_mc) else df_mca_vuoto()
-    # ⚠️ Un progetto salvato prima della griglia non ha «mca_soggetto»: le
-    # tendine tornano a «non indicato» e il coefficiente resta quello
-    # battuto a mano, che quel progetto ce l'ha. E' il motivo per cui il
-    # numero a mano scavalca la griglia invece di essere scavalcato.
-    sog_salvato = dati.get("mca_soggetto") or {}
+    # ⚠️ Chiave ASSENTE e chiave con dentro dei vuoti sono due cose diverse,
+    # e confonderle si vede subito. Un progetto salvato prima della griglia
+    # non ha «mca_soggetto» per niente: vuol dire «di questo non si sa», e
+    # allora valgono i predefiniti, se no chi riapre il lavoro di sempre
+    # trova quattordici tendine vuote e i predefiniti non li vede mai.
+    # Un progetto salvato DOPO ce l'ha, e allora comanda lui: se una voce
+    # è a None è perché è stata messa a «—» apposta, e rimetterci il
+    # predefinito sarebbe riempire una casella che l'utente ha svuotato.
+    # In tutti e due i casi il coefficiente battuto a mano, se c'è, resta
+    # al comando: i numeri dei progetti vecchi non si muovono.
+    sog_salvato = dati.get("mca_soggetto")
     for _campo in merito.CAMPI:
-        _valore = sog_salvato.get(_campo)
-        if _campo == "ascensore":
-            st.session_state[f"sog_{_campo}"] = bool(_valore)
+        _chiave = f"sog_{_campo}"
+        if sog_salvato is None:
+            _valore = SOGGETTO_MCA[_chiave]
         else:
-            st.session_state[f"sog_{_campo}"] = (
+            _valore = sog_salvato.get(_campo)
+        if _campo == "ascensore":
+            st.session_state[_chiave] = bool(_valore)
+        else:
+            st.session_state[_chiave] = (
                 "—" if _valore in (None, "") else str(_valore))
     st.session_state.mca_statistica = (
         dati.get("mca_statistica") or "media")
