@@ -19,6 +19,8 @@ in funzioni pure e testate coi numeri esatti di quel file:
 
 import statistics
 
+import merito
+
 CATEGORIE_SPESE = ["ACQUISTO", "LAVORI", "MATERIALE", "ARCHITETTO",
                    "COSTI INDIRETTI", "AGENZIA", "ALTRO"]
 STATI_SPESA = ["Sostenuta", "Da sostenere"]
@@ -212,7 +214,8 @@ def matrice_sensitivita(parametri, passo, metrica="multiplo",
 
 
 def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0,
-              statistica="media", soglia_outlier_pct=25.0):
+              statistica="media", soglia_outlier_pct=25.0,
+              elasticita_taglio=None):
     """Valore di vendita col metodo comparativo (MCA).
 
     comparabili: [{"nome", "prezzo", "mq", "coeff"}] — coeff è il
@@ -250,6 +253,15 @@ def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0,
     da soli — è chi stima che decide se un immobile è fuori mercato o solo
     diverso — ma smettono di essere invisibili.
 
+    TAGLIO. Con `elasticita_taglio` diversa da None entra in gioco anche la
+    superficie: i tagli piccoli costano di più al metro, e senza correzione
+    un bilocale fra i comparabili alza la stima di un quadrilocale. Il
+    coefficiente lo calcola `merito.coefficiente_taglio` e si moltiplica a
+    quello di merito — su TUTTI, comparabili e soggetto, anche su chi ha il
+    merito scritto a mano: è una correzione della superficie, non del
+    pregio, e applicarla a metà gruppo falserebbe il confronto invece di
+    aggiustarlo.
+
     Le righe incomplete (prezzo, mq o coefficiente a zero) NON entrano nella
     media. Quante ne sono state lasciate fuori si legge in `scartati`: una
     stima fatta su tre comparabili quando in tabella ce ne sono cinque è un
@@ -267,12 +279,17 @@ def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0,
             scartati += 1
             continue
         eur_mq = prezzo / mq
+        taglio = (merito.coefficiente_taglio(mq, elasticita_taglio)
+                  if elasticita_taglio is not None else None)
+        coeff_pieno = coeff * (taglio or 1.0)
         dettaglio.append({
             "nome": c.get("nome") or f"C{len(dettaglio) + 1}",
             "mq": mq,
             "eur_mq": round(eur_mq, 2),
             "coeff": coeff,
-            "eur_mq_normalizzato": round(eur_mq / coeff, 2),
+            "coeff_taglio": taglio,
+            "coeff_pieno": round(coeff_pieno, 6),
+            "eur_mq_normalizzato": round(eur_mq / coeff_pieno, 2),
         })
     if not dettaglio:
         return None
@@ -298,14 +315,19 @@ def stima_mca(comparabili, coeff_soggetto, mq_soggetto, sconto_pct=13.0,
             outlier.append(d["nome"])
 
     riferimento = mediana if statistica == "mediana" else media
-    eur_mq_soggetto = riferimento * float(coeff_soggetto or 1.0)
-    eur_mq_probabile = eur_mq_soggetto * (1 - float(sconto_pct) / 100)
     mq_sog = float(mq_soggetto or 0.0)
+    taglio_sog = (merito.coefficiente_taglio(mq_sog, elasticita_taglio)
+                  if elasticita_taglio is not None else None)
+    coeff_sog_pieno = float(coeff_soggetto or 1.0) * (taglio_sog or 1.0)
+    eur_mq_soggetto = riferimento * coeff_sog_pieno
+    eur_mq_probabile = eur_mq_soggetto * (1 - float(sconto_pct) / 100)
     return {
         "dettaglio": dettaglio,
         "usati": len(dettaglio),
         "scartati": scartati,
         "statistica": statistica,
+        "coeff_taglio_soggetto": taglio_sog,
+        "coeff_soggetto_pieno": round(coeff_sog_pieno, 6),
         "eur_mq_media": round(media, 2),
         "eur_mq_mediana": round(mediana, 2),
         "cv": round(cv, 1),

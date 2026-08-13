@@ -645,6 +645,12 @@ IMPOSTAZIONI_BP = {
     "bp_iva_imprevisti": 0.0, "bp_iva_ristr": 10.0,
     "bp_iva_ag_in": 22.0, "bp_iva_ag_out": 22.0,
     "bp_coeff_sogg": 0.0, "bp_sconto": 13.0,
+    # Correzione per il taglio: i tagli piccoli costano di piu' al metro.
+    # E' l'unica voce della stima che non sta nella griglia dei coefficienti
+    # perche' non si sceglie da una tendina — si ricava dalla superficie, che
+    # e' gia' in tabella. A zero e' spenta. Vedi merito.coefficiente_taglio
+    # per il perche' di 0,15 e per il perche' NON dell'ottimo statistico.
+    "bp_taglio": 0.15,
 }
 
 # L'immobile tipo di chi usa CME: un appartamento in palazzina normale di
@@ -5753,7 +5759,13 @@ with tab_bp:
         # 1,00, cioè «nella media dei comparabili», e la scheda lo dice.
         coeff_sog = merito_sog["totale"] or 1.0
 
-        m1, m2, m3, m4 = st.columns(4)
+        # ⚠️ Cinque colonne, e la correzione per il taglio sta QUI e non fra
+        # i risultati: il suo effetto — il coefficiente sotto i mq — si vede
+        # sempre, mentre il blocco dei risultati compare solo quando c'è
+        # almeno un comparabile buono. Un comando invisibile accanto a un
+        # effetto visibile è il modo più rapido di far credere che il numero
+        # lo decida il programma.
+        m1, m2, m5, m3, m4 = st.columns(5)
         m1.metric("Coeff. di merito del tuo immobile",
                   numero_it(coeff_sog, 3))
         if merito_sog["fonte"] == "a mano":
@@ -5770,13 +5782,29 @@ with tab_bp:
                              "numero diverso da zero la scavalca: è così "
                              "che continuano a tornare i progetti salvati "
                              "prima che la griglia esistesse.")
+        m5.number_input("Correzione per il taglio", min_value=0.0,
+                        max_value=0.60, step=0.05, format="%.2f",
+                        key="bp_taglio",
+                        help="I tagli piccoli costano di più al metro, e la "
+                             "griglia non ha una voce per la superficie. "
+                             "0 = spenta. 0,15 = un 50 m² vale l'11% in più "
+                             "al metro di un 100 m². È l'unico parametro "
+                             "che puoi TARARE: alzalo o abbassalo e guarda "
+                             "la dispersione dei comparabili — se scende, "
+                             "quel valore descrive meglio il tuo mercato.")
         m3.number_input("Sconto di trattativa (%)", min_value=0.0,
                         max_value=30.0, step=0.5, key="bp_sconto",
                         help="Differenza media tra prezzo richiesto e "
                              "prezzo di vendita reale (~13%)")
         m4.metric("Mq commerciali del soggetto", numero_it(mq_eff, 0) + " m²")
-        m4.caption(":gray[Dal campo **Mq commerciali** dello studio di "
-                   "fattibilità.]")
+        taglio_sog = merito.coefficiente_taglio(
+            mq_eff, st.session_state.bp_taglio)
+        if taglio_sog and st.session_state.bp_taglio:
+            m4.caption(f":gray[Coeff. di taglio **{numero_it(taglio_sog, 3)}** "
+                       "— dalla superficie, non da una tendina.]")
+        else:
+            m4.caption(":gray[Dal campo **Mq commerciali** dello studio di "
+                       "fattibilità.]")
         # ⚠️ Un progetto salvato prima della griglia porta dentro il suo
         # coefficiente scritto a mano — spesso 1,00, che era il predefinito
         # di allora. Senza questo avviso, chi apre quel progetto e compila
@@ -5804,15 +5832,19 @@ with tab_bp:
         esito_mca = fattibilita.stima_mca(
             comparabili, coeff_sog, mq_eff,
             st.session_state.bp_sconto,
-            statistica=st.session_state.mca_statistica)
+            statistica=st.session_state.mca_statistica,
+            elasticita_taglio=st.session_state.bp_taglio)
         if esito_mca is None:
             st.info("Aggiungi almeno un comparabile completo (prezzo, mq e "
                     "coefficiente maggiori di zero).")
         else:
             st.dataframe(pd.DataFrame([{
                 "Comparabile": d["nome"],
+                "m²": numero_it(d["mq"], 0),
                 "€/mq": numero_it(d["eur_mq"], 0),
-                "Coeff.": numero_it(d["coeff"], 3),
+                "Coeff. merito": numero_it(d["coeff"], 3),
+                "Coeff. taglio": (numero_it(d["coeff_taglio"], 3)
+                                  if d["coeff_taglio"] else "—"),
                 "€/mq normalizzato": numero_it(d["eur_mq_normalizzato"], 0),
                 "Scarto dalla mediana": f"{numero_it(d['scarto_pct'], 1)}%",
             } for d in esito_mca["dettaglio"]]), hide_index=True)

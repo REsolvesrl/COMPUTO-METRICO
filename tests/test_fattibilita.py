@@ -186,6 +186,38 @@ def test_stima_mca_la_mediana_non_si_fa_spostare():
     assert con_mediana["eur_mq_mediana"] == pytest.approx(2186.88, abs=0.05)
 
 
+def test_il_taglio_avvicina_i_comparabili_ma_non_salva_c1():
+    """Provato sui comparabili veri: la correzione per il taglio porta la
+    dispersione dal 25,5% al 21,6% — meglio, ma ancora sopra la soglia.
+    C1 non è solo un bilocale in mezzo a quadrilocali: è diverso per
+    ragioni che il modello non cattura."""
+    senza = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO)
+    con = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO, elasticita_taglio=0.15)
+    assert senza["cv"] == pytest.approx(25.5, abs=0.1)
+    assert con["cv"] == pytest.approx(21.6, abs=0.1)
+    assert con["outlier"] == ["C1"]
+
+
+def test_il_taglio_si_applica_anche_a_chi_ha_il_merito_a_mano():
+    """È una correzione della SUPERFICIE, non del pregio: applicarla a
+    metà gruppo falserebbe il confronto invece di aggiustarlo."""
+    esito = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO,
+                      elasticita_taglio=0.15)
+    for d in esito["dettaglio"]:
+        assert d["coeff_taglio"] is not None
+        assert d["coeff_pieno"] == pytest.approx(d["coeff"] * d["coeff_taglio"])
+    assert esito["coeff_taglio_soggetto"] == pytest.approx(0.95704, abs=1e-4)
+
+
+def test_senza_taglio_i_conti_restano_quelli_del_foglio():
+    """Il predefinito della funzione è spento: chi chiama stima_mca senza
+    dire niente ottiene ancora il numero dell'Excel."""
+    esito = stima_mca(VOMERO, COEFF_VOMERO, MQ_VOMERO)
+    assert esito["coeff_taglio_soggetto"] is None
+    assert all(d["coeff_taglio"] is None for d in esito["dettaglio"])
+    assert esito["valore"] == pytest.approx(357306, abs=5)
+
+
 def test_stima_mca_lasciare_fuori_l_outlier_pesa_ancora_di_piu():
     """La mediana lo neutralizza, escluderlo lo cancella: sono due numeri
     diversi, e la scelta e' di chi stima, non del software."""

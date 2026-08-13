@@ -241,6 +241,57 @@ def coefficiente_merito(scelte):
     }
 
 
+# ------------------------------------------------------- taglio (superficie)
+
+# I tagli piccoli costano di piu' al metro: e' la regolarita' di mercato piu'
+# solida che ci sia, e none delle tabelle di coefficienti in circolazione ce
+# l'ha — ne' la nostra griglia, ne' quelle pubblicate da idealista, RockAgent
+# o Borsino. L'MCA fatto per bene non ne ha bisogno perche' la superficie e'
+# una caratteristica come le altre e il suo prezzo marginale si ricava dai
+# comparabili (e viene sempre piu' basso del prezzo medio al metro: e'
+# esattamente l'effetto taglio). Con la griglia dei coefficienti, invece, va
+# messo a mano.
+#
+# La forma e' una legge di potenza e non una tabella a fasce: con le fasce un
+# appartamento di 79 mq e uno di 81 finirebbero in due mondi diversi per un
+# metro quadro.
+#
+#     coefficiente = (superficie_neutra / mq) ** elasticita
+#
+# `elasticita` a zero spegne tutto. A 0,15 un 50 mq vale l'11% in piu' al
+# metro di un 100 mq e un 200 mq il 10% in meno: 23% di escursione fra i due
+# estremi, che e' l'ordine di grandezza che si osserva.
+#
+# ⚠️ Sui comparabili del MCA.xlsx reale l'elasticita' che minimizza la
+# dispersione e' 0,415 — e NON va usata: su cinque punti sta inseguendo il
+# rumore, e infatti a quel valore C5 diventa un outlier al contrario (da
+# 2.187 a 2.916 €/mq normalizzati). A 0,15 la dispersione scende dal 25,5%
+# al 21,6%: meglio, ma ancora sopra la soglia. Il taglio spiega una PARTE
+# dello scarto di C1, non tutto.
+SUPERFICIE_NEUTRA = 100.0
+ELASTICITA_TAGLIO = 0.15
+
+
+def coefficiente_taglio(mq, elasticita=ELASTICITA_TAGLIO,
+                        neutra=SUPERFICIE_NEUTRA):
+    """Quanto vale di piu' (o di meno) il metro quadro a questa metratura.
+
+    Sopra 1 per i tagli piccoli, sotto 1 per quelli grandi, esattamente 1
+    alla superficie neutra. Ritorna None se la superficie non c'e': senza
+    metratura non c'e' effetto taglio da correggere, ed e' meglio dirlo che
+    restituire un 1,0 che sembra una misura.
+    """
+    try:
+        mq = float(mq or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if mq <= 0:
+        return None
+    if not elasticita:
+        return 1.0
+    return round((float(neutra) / mq) ** float(elasticita), 6)
+
+
 def scelte_da_riga(riga):
     """Le sole voci della griglia, prese da una riga della tabella.
 

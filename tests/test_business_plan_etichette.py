@@ -49,6 +49,16 @@ def _testi(at):
     return "\n".join(pezzi)
 
 
+def _riga_comparabili(at, indice=0):
+    """Una riga della tabella dei comparabili, come dizionario."""
+    for elemento in at.dataframe:
+        tabella = getattr(elemento, "value", None)
+        if tabella is not None and "Coeff. merito" in getattr(
+                tabella, "columns", []):
+            return tabella.iloc[indice].to_dict()
+    raise AssertionError("la tabella dei comparabili non c'è")
+
+
 # --------------------------------------------------------------------- MCA
 
 @pytest.fixture(scope="module")
@@ -93,9 +103,14 @@ def test_il_coefficiente_esce_dalla_griglia_senza_scriverlo_a_mano():
         "coeff": None, "note": "",
     }]))
     assert not at.exception, [e.value for e in at.exception]
+    # ⚠️ Si legge la COLONNA, non `str(dataframe)`: con sette colonne pandas
+    # elide quelle di mezzo nella rappresentazione, e il test passava o
+    # falliva a seconda di quante colonne aveva la tabella quel giorno.
+    riga = _riga_comparabili(at)
     # 1,05 (signorili) × 1,00 (terzo con ascensore) = 1,05
-    coefficienti = [str(getattr(d, "value", "")) for d in at.dataframe]
-    assert any("1,050" in c for c in coefficienti), coefficienti
+    assert riga["Coeff. merito"] == "1,050"
+    # 100 m² è la superficie neutra: il taglio non corregge niente
+    assert riga["Coeff. taglio"] == "1,000"
 
 
 def test_un_comparabile_senza_niente_resta_scartato():
@@ -120,6 +135,16 @@ def test_i_predefiniti_sono_l_immobile_tipo_a_lavori_finiti():
     at = _avvia(bp_mq=100.0, bp_coeff_sogg=0.0)
     etichette = {m.label: m.value for m in at.metric}
     assert etichette["Coeff. di merito del tuo immobile"] == "1,391"
+
+
+def test_la_correzione_del_taglio_si_regola_anche_senza_comparabili():
+    """Il suo effetto — il coefficiente sotto i mq — si vede sempre. Se il
+    comando stesse fra i risultati, che compaiono solo con un comparabile
+    buono in tabella, si vedrebbe l'effetto senza la manopola."""
+    at = _avvia(bp_mq=132.0)
+    assert at.number_input(key="bp_taglio").value == pytest.approx(0.15)
+    # (100/132) ** 0,15 = 0,9592
+    assert "0,959" in _testi(at)
 
 
 def test_il_piano_resta_da_indicare():

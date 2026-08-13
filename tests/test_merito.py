@@ -10,7 +10,7 @@ import pytest
 from merito import (BALCONI, CONDIZIONI, FATTORI, FINITURE,
                     PIANO_CON_ASCENSORE, PIANO_SENZA_ASCENSORE,
                     coefficiente_effettivo, coefficiente_merito,
-                    scelte_da_riga)
+                    coefficiente_taglio, scelte_da_riga)
 
 
 # Il soggetto del foglio (colonna N): normale 20-40 anni, finiture civili,
@@ -171,6 +171,35 @@ def test_basta_una_voce_perche_la_griglia_conti():
     assert esito["fonte"] == "griglia"
     assert esito["totale"] == pytest.approx(1.05)
     assert len(esito["mancanti"]) == 12
+
+
+# --------------------------------------------------------------- taglio
+
+def test_il_taglio_premia_il_piccolo_e_sconta_il_grande():
+    assert coefficiente_taglio(100) == pytest.approx(1.0)
+    assert coefficiente_taglio(50) > 1.0
+    assert coefficiente_taglio(200) < 1.0
+    # 0,15 di elasticità: +11% a 50 m², −10% a 200 m²
+    assert coefficiente_taglio(50) == pytest.approx(1.1096, abs=0.001)
+    assert coefficiente_taglio(200) == pytest.approx(0.9013, abs=0.001)
+
+
+def test_il_taglio_e_continuo_e_non_a_fasce():
+    """Con le fasce un 79 m² e un 81 m² finirebbero in due mondi diversi
+    per un metro quadro."""
+    salto = abs(coefficiente_taglio(81) - coefficiente_taglio(79))
+    assert salto < 0.01
+
+
+def test_elasticita_zero_spegne_il_taglio():
+    assert coefficiente_taglio(50, elasticita=0) == 1.0
+    assert coefficiente_taglio(200, elasticita=0) == 1.0
+
+
+def test_senza_superficie_non_c_e_taglio_da_correggere():
+    """Meglio dirlo che restituire un 1,0 che sembra una misura."""
+    for niente in (None, 0, "", "abc", -10):
+        assert coefficiente_taglio(niente) is None
 
 
 def test_la_griglia_e_quella_del_foglio():
