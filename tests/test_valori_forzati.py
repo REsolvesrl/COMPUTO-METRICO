@@ -162,14 +162,13 @@ def test_cambiare_gli_imprevisti_muove_il_totale():
     Serve un computo con dentro qualcosa: su un totale di zero, lo 0% e il
     20% danno lo stesso numero e la prova non proverebbe niente.
     """
-    import pandas as pd
     at = _avvia()
-    at.session_state["df_voci"] = pd.DataFrame([{
-        "categoria": "1 · Demolizioni", "codice": "X.01",
-        "descrizione": "voce di prova", "um": "a corpo",
-        "parti": None, "lunghezza": None, "larghezza": None, "altezza": None,
-        "quantita_manuale": 1.0, "prezzo": 10000.0,
-    }])
+    at.session_state["voci_extra"] = {"1.90": {
+        "codice": "1.90", "categoria": "Demolizioni",
+        "descrizione": "voce di prova", "um": "a corpo", "prezzo": 10000.0}}
+    at.session_state["voci_scelte"] = ["1.90"]
+    at.session_state["q_1.90"] = 1.0
+    at.session_state["p_1.90"] = 10000.0
     at.run()
     at.number_input(key="imprevisti").set_value(10.0).run()
     dieci = {m.label: m.value for m in at.metric}

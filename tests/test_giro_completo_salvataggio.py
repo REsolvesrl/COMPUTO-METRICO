@@ -66,7 +66,10 @@ def giro(tmp_path_factory, monkeypatch_module):
         at.number_input(key=chiave).set_value(valore).run()
     # una voce di computo, per coprire anche quantità e prezzi del listino.
     # Prima si pesca dal pool: il computo porta solo le voci scelte, e senza
-    # questo clic la riga di 1.02 non esiste nemmeno a video.
+    # questo clic la riga di 1.02 non esiste nemmeno a video. Il pool va
+    # aperto sulla categoria, altrimenti i suoi ＋ non sono disegnati.
+    at.session_state["pool_aperte"] = {"Demolizioni"}
+    at.run()
     at.button(key="prendi_1.02").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()

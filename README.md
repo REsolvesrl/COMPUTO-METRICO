@@ -7,7 +7,9 @@ App web per il settore edile, live su
   pescate con un clic dal **pool** in fondo alla scheda (~70 voci pronte fra
   demolizioni, ricostruzioni, impianti e serramenti, con una barra di
   ricerca); una volta su, ogni voce è modificabile in tutto — descrizione,
-  unità, quantità e prezzo. Totali per categoria con incidenze percentuali,
+  unità, quantità e prezzo — e le lavorazioni che il listino non ha si
+  scrivono a mano, scegliendo la categoria (il codice lo mette l'app).
+  Totali per categoria con incidenze percentuali,
   **imprevisti %** e IVA, salvataggio del lavoro ed export in Excel/CSV.
 - **Misura da planimetria** (stile AreaPlan): più planimetrie per progetto,
   zone colorate per categoria con percentuale commerciale, scala a vettore,

@@ -347,13 +347,20 @@ def test_l_iva_calcolata_non_entra_nel_progetto_salvato():
 # ------------------------------------------- confronto col preventivo
 
 def _computo_da(totale):
-    """Un computo di una riga sola, che vale esattamente `totale`."""
-    return pd.DataFrame([{
-        "categoria": "1 · Demolizioni", "codice": "X.01",
-        "descrizione": "voce di prova", "um": "a corpo",
-        "parti": None, "lunghezza": None, "larghezza": None, "altezza": None,
-        "quantita_manuale": 1.0, "prezzo": float(totale),
-    }])
+    """Lo stato di un computo di una riga sola, che vale `totale`.
+
+    Una voce aggiunta a mano: categoria, codice suo e prezzo «a corpo».
+    Quantità e prezzo stanno nelle chiavi q_/p_, come per ogni riga.
+    """
+    return {
+        "voci_extra": {"1.90": {
+            "codice": "1.90", "categoria": "Demolizioni",
+            "descrizione": "voce di prova", "um": "a corpo",
+            "prezzo": float(totale)}},
+        "voci_scelte": ["1.90"],
+        "q_1.90": 1.0,
+        "p_1.90": float(totale),
+    }
 
 
 def _spesa(categoria, importo):
@@ -392,7 +399,7 @@ def test_lo_scostamento_e_una_percentuale_non_la_stessa_cifra_due_volte():
     Serve un computo vero da confrontare: senza preventivo non esiste una
     percentuale, e la scheda scrive «—» (che è la cosa giusta).
     """
-    at = _avvia(df_voci=_computo_da(10000.0),
+    at = _avvia(**_computo_da(10000.0),
                 df_spese=pd.DataFrame([_spesa("🟡 LAVORI", 5000.0)]))
     scostamento = [m for m in at.metric
                    if m.label == "Scostamento sul preventivo"]

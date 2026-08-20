@@ -39,6 +39,14 @@ def app():
     at = AppTest.from_file(str(SORGENTE), default_timeout=240)
     at.run()
     assert not at.exception, [e.value for e in at.exception]
+    return _apri_pool(at)
+
+
+def _apri_pool(at):
+    """Apre tutte le categorie del pool: i ＋ esistono solo se aperte."""
+    import listino
+    at.session_state["pool_aperte"] = set(listino.CATEGORIE)
+    at.run()
     return at
 
 
@@ -51,7 +59,7 @@ def _prendibili(at):
 def _avvia():
     at = AppTest.from_file(str(SORGENTE), default_timeout=240)
     at.run()
-    return at
+    return _apri_pool(at)
 
 
 # ------------------------------------------------- il computo nasce vuoto
@@ -225,3 +233,129 @@ def test_un_codice_sparito_dal_listino_non_pianta_l_apertura():
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     assert at.session_state["voci_scelte"] == ["1.02"]
+
+
+# --------------------------------------------- le voci scritte a mano
+
+def _crea(at, categoria, descrizione, um, quantita=0.0, prezzo=0.0):
+    """Compila il pannello «Aggiungi una voce» e preme il bottone."""
+    at.selectbox(key="nuova_cat").set_value(categoria).run()
+    at.selectbox(key="nuova_um").set_value(um).run()
+    at.text_input(key="nuova_desc").set_value(descrizione).run()
+    if um != "a corpo":
+        at.number_input(key="nuova_qta").set_value(quantita).run()
+    at.number_input(key="nuova_prezzo").set_value(prezzo).run()
+    at.button(key="crea_voce").click().run()
+    return at
+
+
+def test_la_voce_scritta_a_mano_finisce_nel_computo():
+    at = _avvia()
+    _crea(at, "Idraulico", "Spostamento colonna di scarico", "cad", 2.0, 300.0)
+    assert not at.exception, [e.value for e in at.exception]
+    extra = at.session_state["voci_extra"]
+    assert len(extra) == 1
+    codice = next(iter(extra))
+    assert extra[codice]["categoria"] == "Idraulico"
+    assert codice in at.session_state["voci_scelte"]
+
+
+def test_il_codice_lo_mette_l_app_nella_serie_della_categoria():
+    """Idraulico è la quarta categoria (serie 3): 3.90, poi 3.91."""
+    at = _avvia()
+    _crea(at, "Idraulico", "Prima voce", "cad", 1.0, 100.0)
+    _crea(at, "Idraulico", "Seconda voce", "cad", 1.0, 100.0)
+    assert sorted(at.session_state["voci_extra"]) == ["3.90", "3.91"]
+
+
+def test_il_codice_inventato_non_pesta_i_piedi_al_listino():
+    """Da .90 in su: le voci del listino arrivano al massimo a .23."""
+    at = _avvia()
+    _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
+    import listino
+    codice = next(iter(at.session_state["voci_extra"]))
+    assert listino.voce_per_codice(codice) is None
+
+
+def test_a_corpo_vale_uno_senza_chiederlo():
+    at = _avvia()
+    _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    assert at.session_state[f"q_{codice}"] == 1.0
+    # e quindi l'importo è il prezzo: 800, non zero
+    assert at.session_state[f"p_{codice}"] == 800.0
+
+
+def test_la_voce_a_mano_non_entra_nel_pool():
+    """Il pool è il magazzino del listino: quello che inventi non è merce."""
+    at = _avvia()
+    _crea(at, "Idraulico", "Spostamento colonna", "cad", 1.0, 300.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    assert f"prendi_{codice}" not in _prendibili(at)
+
+
+def test_una_voce_senza_descrizione_non_si_crea():
+    at = _avvia()
+    at.selectbox(key="nuova_cat").set_value("Idraulico").run()
+    at.number_input(key="nuova_prezzo").set_value(300.0).run()
+    at.button(key="crea_voce").click().run()
+    assert at.session_state["voci_extra"] == {}
+    assert any("descrizione" in w.value for w in at.warning)
+
+
+def test_la_x_su_una_voce_a_mano_la_elimina_davvero():
+    """Non ha un pool dove tornare: si cancella, chiavi comprese."""
+    at = _avvia()
+    _crea(at, "Idraulico", "Spostamento colonna", "cad", 2.0, 300.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    at.session_state["cat_aperte"] = {"Idraulico"}
+    at.run()
+    at.button(key=f"togli_{codice}").click().run()
+    assert at.session_state["voci_extra"] == {}
+    assert codice not in at.session_state["voci_scelte"]
+    assert f"q_{codice}" not in at.session_state
+
+
+def test_la_voce_a_mano_conta_nei_totali():
+    at = _avvia()
+    _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
+    somma = [m for m in at.metric if m.label == "Somma parziali"]
+    assert somma and somma[0].value == "800,00 €"
+
+
+# ------------------------------------------------- il pool resta aperto
+
+def test_prendere_una_voce_non_richiude_il_pool():
+    """Ogni ＋ è una riesecuzione: la categoria deve restare dov'era."""
+    at = _avvia()
+    at.session_state["pool_aperte"] = {"Demolizioni"}
+    at.run()
+    at.button(key="prendi_1.01").click().run()
+    assert at.session_state["pool_aperte"] == {"Demolizioni"}
+    # e la voce dopo è lì, pronta da prendere senza riaprire niente
+    assert "prendi_1.03" in _prendibili(at)
+
+
+# ----------------------------------------- i vecchi progetti con la tabella
+
+PROGETTO_CON_TABELLA = {
+    **PROGETTO_VECCHIO,
+    "voci": [{"categoria": "Demolizioni", "codice": None,
+              "descrizione": "allestimento cantiere", "um": "a corpo",
+              "parti": None, "lunghezza": None, "larghezza": None,
+              "altezza": None, "quantita_manuale": 1.0, "prezzo": 800.0}],
+}
+
+
+def test_le_voci_libere_di_prima_diventano_voci_del_computo():
+    at = _avvia()
+    at.session_state["da_caricare"] = PROGETTO_CON_TABELLA
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    extra = at.session_state["voci_extra"]
+    assert len(extra) == 1
+    codice = next(iter(extra))
+    assert extra[codice]["descrizione"] == "allestimento cantiere"
+    assert extra[codice]["categoria"] == "Demolizioni"
+    assert codice in at.session_state["voci_scelte"]
+    assert at.session_state[f"q_{codice}"] == 1.0
