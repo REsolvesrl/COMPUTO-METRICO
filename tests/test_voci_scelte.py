@@ -242,7 +242,7 @@ def _crea(at, categoria, descrizione, um, quantita=0.0, prezzo=0.0):
     at.selectbox(key="nuova_cat").set_value(categoria).run()
     at.selectbox(key="nuova_um").set_value(um).run()
     at.text_input(key="nuova_desc").set_value(descrizione).run()
-    if um != "a corpo":
+    if quantita:
         at.number_input(key="nuova_qta").set_value(quantita).run()
     at.number_input(key="nuova_prezzo").set_value(prezzo).run()
     at.button(key="crea_voce").click().run()
@@ -277,13 +277,55 @@ def test_il_codice_inventato_non_pesta_i_piedi_al_listino():
     assert listino.voce_per_codice(codice) is None
 
 
-def test_a_corpo_vale_uno_senza_chiederlo():
+def test_a_corpo_propone_uno_senza_chiederlo():
     at = _avvia()
     _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
     codice = next(iter(at.session_state["voci_extra"]))
     assert at.session_state[f"q_{codice}"] == 1.0
     # e quindi l'importo è il prezzo: 800, non zero
     assert at.session_state[f"p_{codice}"] == 800.0
+
+
+def test_a_corpo_riempie_la_casella_ma_non_la_blocca():
+    """L'1 è una proposta: si vede nella casella e si può cambiare."""
+    at = _avvia()
+    at.selectbox(key="nuova_um").set_value("a corpo").run()
+    assert at.session_state["nuova_qta"] == 1.0
+    at.number_input(key="nuova_qta").set_value(2.0).run()
+    at.text_input(key="nuova_desc").set_value("Due interventi").run()
+    at.button(key="crea_voce").click().run()
+    codice = next(iter(at.session_state["voci_extra"]))
+    assert at.session_state[f"q_{codice}"] == 2.0
+
+
+def test_a_corpo_non_calpesta_una_quantita_gia_scritta():
+    """Prima si scrive 3, poi si sceglie «a corpo»: resta 3."""
+    at = _avvia()
+    at.number_input(key="nuova_qta").set_value(3.0).run()
+    at.selectbox(key="nuova_um").set_value("a corpo").run()
+    assert at.session_state["nuova_qta"] == 3.0
+
+
+def test_nel_computo_a_corpo_propone_uno_solo_se_manca():
+    at = _avvia()
+    at.button(key="prendi_1.02").click().run()      # m², quantità a zero
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    at.text_input(key="u_1.02_w").set_value("a corpo").run()
+    assert at.session_state["q_1.02"] == 1.0
+    # e la casella resta scrivibile: 2 vale 2
+    at.text_input(key="q_1.02_txt").set_value("2").run()
+    assert at.session_state["q_1.02"] == 2.0
+
+
+def test_nel_computo_a_corpo_non_cancella_la_quantita_che_ce():
+    at = _avvia()
+    at.button(key="prendi_1.02").click().run()
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    at.text_input(key="q_1.02_txt").set_value("120").run()
+    at.text_input(key="u_1.02_w").set_value("a corpo").run()
+    assert at.session_state["q_1.02"] == 120.0
 
 
 def test_la_voce_a_mano_nasce_nel_computo_non_nel_pool():

@@ -1017,6 +1017,18 @@ def e_scartata(codice):
     return codice in st.session_state.voci_scartate
 
 
+def proponi_quantita_a_corpo():
+    """Scegliendo «a corpo» la quantità si propone da sé: 1.
+
+    Callback della tendina delle unità — solo da qui si può scrivere nella
+    casella della quantità senza che Streamlit si lamenti. Propone e basta:
+    se un numero c'era già, resta quello.
+    """
+    if (st.session_state.get("nuova_um") == UM_A_CORPO
+            and not (st.session_state.get("nuova_qta") or 0.0)):
+        st.session_state.nuova_qta = 1.0
+
+
 def crea_voce_a_mano():
     """Crea la voce scritta nel pannello «Aggiungi una voce».
 
@@ -1032,8 +1044,9 @@ def crea_voce_a_mano():
         return
     categoria = st.session_state.get("nuova_cat") or listino.CATEGORIE[0]
     um = st.session_state.get("nuova_um") or ""
-    quantita = (1.0 if um == UM_A_CORPO
-                else st.session_state.get("nuova_qta") or 0.0)
+    quantita = st.session_state.get("nuova_qta") or 0.0
+    if um == UM_A_CORPO and not quantita:
+        quantita = 1.0
     codice = aggiungi_voce_computo(
         categoria, descrizione, um, quantita,
         st.session_state.get("nuova_prezzo") or 0.0)
@@ -1444,14 +1457,17 @@ def scrivi_testo_voce(chiave):
 
 
 def scrivi_unita_voce(codice):
-    """L'unità riscritta, con la regola del «a corpo».
+    """L'unità riscritta, con la proposta del «a corpo».
 
-    Una voce a corpo non si misura: vale una volta, e il prezzo È l'importo.
-    Chiedere «quante ne fai?» a una direzione lavori non vuol dire niente,
-    e lasciare la quantità a zero farebbe sparire la voce dai totali.
+    Una voce a corpo di norma vale una volta, e il prezzo È l'importo:
+    lasciarla a zero la farebbe sparire dai totali senza spiegare perché.
+    Quindi passando ad «a corpo» la quantità diventa 1 — ma solo se era
+    ancora vuota, e resta una casella come le altre: due volte lo stesso
+    intervento a corpo è un caso normale, e chi scrive 2 ha ragione lui.
     """
     scrivi_testo_voce(f"u_{codice}")
-    if st.session_state.get(f"u_{codice}") == UM_A_CORPO:
+    if (st.session_state.get(f"u_{codice}") == UM_A_CORPO
+            and not float(st.session_state.get(f"q_{codice}") or 0.0)):
         st.session_state[f"q_{codice}"] = 1.0
         st.session_state.pop(f"q_{codice}_txt", None)
 
@@ -3629,23 +3645,22 @@ with tab_computo:
                 st.caption("Va nella categoria che scegli, insieme alle "
                            "altre. Il codice lo mette l'app, nella serie "
                            "della categoria. Con **a corpo** la quantità "
-                           "è 1: il prezzo è già l'importo.")
+                           "si propone da sé — **1**, il prezzo è già "
+                           "l'importo — e la puoi cambiare.")
                 n1, n2 = st.columns([1, 2])
                 n1.selectbox("Categoria", listino.CATEGORIE, key="nuova_cat")
                 n2.text_input("Descrizione", key="nuova_desc",
                               placeholder="Es. Allestimento del cantiere")
                 n3, n4, n5, n6 = st.columns([1, 1, 1, 1.1],
                                             vertical_alignment="bottom")
-                nuova_um = n3.selectbox("U.M.", UNITA_MISURA, key="nuova_um")
-                # Con «a corpo» la casella della quantità non si disabilita:
-                # sparisce. Una casella spenta con dentro un numero vecchio
-                # fa credere che valga quello, e invece vale 1.
-                if nuova_um == UM_A_CORPO:
-                    n4.markdown("Quantità")
-                    n4.markdown(":gray[**1** — a corpo]")
-                else:
-                    n4.number_input("Quantità", min_value=0.0, step=1.0,
-                                    format="%.2f", key="nuova_qta")
+                n3.selectbox("U.M.", UNITA_MISURA, key="nuova_um",
+                             on_change=proponi_quantita_a_corpo)
+                # La casella c'è sempre, «a corpo» compreso: lì dentro ci
+                # trovi 1, che è il caso normale, e se le volte sono due lo
+                # scrivi. Prima la casella spariva e la quantità la decideva
+                # l'app: comodo nove volte su dieci, muto la decima.
+                n4.number_input("Quantità", min_value=0.0, step=1.0,
+                                format="%.2f", key="nuova_qta")
                 n5.number_input("Prezzo €", min_value=0.0, step=10.0,
                                 format="%.2f", key="nuova_prezzo")
                 n6.button("➕ Al computo", type="primary", width="stretch",
