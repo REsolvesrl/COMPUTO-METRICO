@@ -954,7 +954,44 @@ def nome_file(estensione):
     return f"{base}.{estensione}"
 
 
-# ------------------------------------------------------- checklist listino
+# --------------------------------------------------- le voci del computo
+# Il computo porta SOLO le voci scelte: un cantiere non è l'altro, e un
+# elenco di 69 lavorazioni in cui 60 valgono zero non è un computo, è un
+# catalogo. Le voci si pescano dal pool qui sotto e si tolgono con la ×.
+# «scelte» è l'elenco dei codici, nell'ordine in cui sono stati aggiunti;
+# i totali e la stampa lo leggono da qui.
+
+
+def scelte():
+    """I codici delle voci di listino portate nel computo."""
+    return list(st.session_state.voci_scelte)
+
+
+def e_scelta(codice):
+    return codice in st.session_state.voci_scelte
+
+
+def porta_nel_computo(codice):
+    """Aggiunge una voce al computo (se non c'è già). True se l'ha aggiunta."""
+    if codice in st.session_state.voci_scelte:
+        return False
+    st.session_state.voci_scelte.append(codice)
+    return True
+
+
+def togli_dal_computo(codice):
+    """Toglie la voce dal computo. Quantità, prezzo e testi restano dove
+    sono: se la si ripesca dal pool, si ritrova come l'avevi lasciata."""
+    if codice in st.session_state.voci_scelte:
+        st.session_state.voci_scelte.remove(codice)
+
+
+def scelte_della_categoria(categoria):
+    """Le voci scelte di una categoria, nell'ordine in cui sono entrate."""
+    return [v for c in scelte()
+            if (v := listino.voce_per_codice(c))
+            and v["categoria"] == categoria]
+
 
 def quantita_prezzo_listino(voce):
     """Quantità e prezzo correnti di una voce del listino.
@@ -969,27 +1006,53 @@ def quantita_prezzo_listino(voce):
     return quantita, prezzo
 
 
+def testi_voce(voce):
+    """Descrizione e unità correnti: quelle riscritte, o quelle del listino.
+
+    Ogni cantiere ha le sue parole («gres 60×60 posato a correre» non è
+    «pavimenti in piastrelle»): la voce del listino è un punto di partenza,
+    non un'etichetta da subire. Le riscritture stanno in d_/u_ e si salvano
+    col progetto; il listino resta intatto per il progetto dopo.
+    """
+    codice = voce["codice"]
+    descrizione = st.session_state.get(f"d_{codice}")
+    um = st.session_state.get(f"u_{codice}")
+    return (descrizione if descrizione else voce["descrizione"],
+            um if um else voce["um"])
+
+
 def totale_categoria_listino(categoria):
-    """Somma quantità × prezzo delle voci compilate della categoria."""
+    """Somma quantità × prezzo delle voci SCELTE della categoria."""
     totale = 0.0
-    for voce in listino.voci_della_categoria(categoria):
+    for voce in scelte_della_categoria(categoria):
         quantita, prezzo = quantita_prezzo_listino(voce)
         totale += quantita * prezzo
     return round(totale, 2)
 
 
 def voci_dal_listino():
-    """Le voci del listino con quantità > 0, nel formato del computo."""
+    """Le voci scelte con quantità > 0, nel formato del computo.
+
+    La scelta dice che la voce è del cantiere; la quantità dice quanto ne
+    va fatto. Una voce scelta e non ancora quantificata resta a video —
+    così si vede che manca — ma fuori da totali, stampa ed export: un
+    computo consegnato non porta righe da zero.
+    """
     voci = []
-    for voce in listino.VOCI:
+    for codice in scelte():
+        voce = listino.voce_per_codice(codice)
+        if voce is None:
+            continue
         quantita, prezzo = quantita_prezzo_listino(voce)
-        if quantita > 0:
-            voci.append({"categoria": voce["categoria"],
-                         "codice": voce["codice"],
-                         "descrizione": voce["descrizione"],
-                         "um": voce["um"], "parti": None, "lunghezza": None,
-                         "larghezza": None, "altezza": None,
-                         "quantita_manuale": quantita, "prezzo": prezzo})
+        if quantita <= 0:
+            continue
+        descrizione, um = testi_voce(voce)
+        voci.append({"categoria": voce["categoria"],
+                     "codice": voce["codice"],
+                     "descrizione": descrizione,
+                     "um": um, "parti": None, "lunghezza": None,
+                     "larghezza": None, "altezza": None,
+                     "quantita_manuale": quantita, "prezzo": prezzo})
     return voci
 
 
@@ -1138,6 +1201,43 @@ def css_schede_computo():
     margin: 0.35rem 0 0.6rem;
 }}
 """)
+    # Il pool: il magazzino, non il documento. Stessa famiglia di forme —
+    # squadrata, contorno sottile — ma spenta: fondo neutro e nessuna tinta
+    # piena, così a colpo d'occhio si vede che il computo è quello sopra.
+    regole.append(f"""
+.st-key-card_pool {{
+    background: {ARDESIA}0F;
+    border: 1px solid {ARDESIA}55;
+    border-radius: 0;
+    padding: 0.7rem 0.9rem 0.3rem;
+    margin-top: 0.9rem;
+}}
+.st-key-card_pool h4 {{
+    font-size: 1.05rem;
+    font-weight: 650;
+    padding: 0 0 0.35rem;
+}}
+.st-key-card_pool [data-testid="stExpander"] details {{
+    background: transparent;
+    border: none;
+    border-top: 1px solid {ARDESIA}33;
+    border-radius: 0;
+}}
+.st-key-card_pool summary p {{
+    font-size: 1rem;
+    font-weight: 600;
+}}
+/* il ＋ è un quadretto, non una pastiglia: si preme cento volte di fila */
+.st-key-card_pool [class*="st-key-prendi_"] button {{
+    border-radius: 0;
+    padding: 0.1rem 0;
+    min-height: 1.9rem;
+    font-weight: 700;
+}}
+.st-key-card_pool hr {{
+    margin: 0.2rem 0;
+}}
+""")
     tot_extra = calcoli.totale_generale(
         calcoli.calcola_computo(voci_da_df(st.session_state.df_voci)))
     regole.append(f"""
@@ -1155,6 +1255,17 @@ def css_schede_computo():
 }}
 .st-key-card_extra summary [data-testid="stMarkdownContainer"] p::after {{
     content: "{euro(tot_extra)}";
+}}
+[class*="st-key-togli_"] button {{
+    border: none;
+    background: transparent;
+    color: {TRAVERTINO}99;
+    padding: 0 0.2rem;
+    min-height: 1.6rem;
+}}
+[class*="st-key-togli_"] button:hover {{
+    color: {colore_testo_su(OTTONE)};
+    background: {OTTONE}40;
 }}
 .st-key-card_extra hr {{
     height: 1px;
@@ -1186,6 +1297,7 @@ def registra_storia_computo(descrizione):
               for v in listino.VOCI},
         "p": {v["codice"]: st.session_state.get(f"p_{v['codice']}")
               or v["prezzo"] for v in listino.VOCI},
+        "scelte": list(st.session_state.voci_scelte),
         "df_voci": st.session_state.df_voci.copy(deep=True),
     })
     del st.session_state.storia_computo[:-PASSI_STORIA_COMPUTO]
@@ -1201,6 +1313,7 @@ def annulla_computo():
     # prima che i campi rinascano.
     st.session_state.listino_pending = passo["q"]
     st.session_state.prezzi_pending = passo["p"]
+    st.session_state.voci_scelte = list(passo["scelte"])
     st.session_state.df_voci = passo["df_voci"]
     st.session_state.versione_editor += 1
     return passo["descrizione"]
@@ -1287,28 +1400,64 @@ def pannello_listino_personale():
                     st.rerun()
 
 
-def riga_voce_listino(voce):
-    """Una riga della checklist: descrizione, quantità, prezzo, parziale."""
+def scrivi_testo_voce(chiave):
+    """Riporta il testo della casella nella chiave di verità."""
+    st.session_state[chiave] = (
+        st.session_state.get(f"{chiave}_w") or "").strip()
+
+
+def riga_voce_computo(voce):
+    """Una riga del computo: tutto modificabile, e la ✕ per toglierla.
+
+    Descrizione e unità sono caselle come la quantità e il prezzo: la voce
+    del listino è una bozza da adattare al cantiere, non un'etichetta da
+    subire. Il codice resta quello del listino — è l'unica cosa che non si
+    tocca, perché è la chiave con cui il disegno ritrova la voce da
+    aggiornare e con cui il pool sa che questa voce è già presa.
+    """
     codice = voce["codice"]
-    c_voce, c_qta, c_prezzo, c_parz = st.columns(
-        [3.4, 1, 1, 1], vertical_alignment="center")
+    c_cod, c_desc, c_um, c_qta, c_prezzo, c_parz, c_x = st.columns(
+        [0.45, 2.8, 0.7, 0.9, 0.9, 0.95, 0.35], vertical_alignment="center")
     aiuto = voce.get("nota")
     if voce.get("analisi"):
         aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
-    c_voce.markdown(f"**{codice}** {voce['descrizione']} · "
-                    f":gray[{voce['um']}]", help=aiuto)
+    descrizione, um = testi_voce(voce)
+    c_cod.markdown(f":gray[**{codice}**]", help=aiuto)
+    c_desc.text_input(
+        f"Descrizione {codice}", value=descrizione, key=f"d_{codice}_w",
+        label_visibility="collapsed", on_change=scrivi_testo_voce,
+        args=(f"d_{codice}",))
+    c_um.text_input(
+        f"Unità {codice}", value=um, key=f"u_{codice}_w",
+        label_visibility="collapsed", on_change=scrivi_testo_voce,
+        args=(f"u_{codice}",))
+    campo_numero_it(c_qta, f"Quantità {codice}", f"q_{codice}", decimali=2)
     campo_numero_it(c_prezzo, f"Prezzo € {codice}", f"p_{codice}",
                     decimali=2)
-    prezzo = float(st.session_state.get(f"p_{codice}") or voce["prezzo"])
-
-    campo_numero_it(c_qta, f"Quantità {codice}", f"q_{codice}",
-                    decimali=2)
     quantita = float(st.session_state.get(f"q_{codice}") or 0.0)
-
+    prezzo = float(st.session_state.get(f"p_{codice}") or voce["prezzo"])
     if quantita > 0:
         c_parz.markdown(f"**{euro(quantita * prezzo)}**")
     else:
-        c_parz.markdown(":gray[0,00 €]")
+        # non è uno zero come gli altri: è una voce che hai scelto e non hai
+        # ancora quantificato, e fuori di qui (totali, PDF) non esiste
+        c_parz.markdown(":orange[da quantificare]")
+    c_x.button("✕", key=f"togli_{codice}", on_click=togli_dal_computo,
+               args=(codice,), help="Togli la voce dal computo")
+
+
+def voce_trovata(voce, termine):
+    """La voce risponde alla ricerca? Codice, descrizione, unità e nota.
+
+    Più parole = tutte devono comparire: «posa gres» trova la voce anche se
+    nel listino le due parole sono lontane.
+    """
+    if not termine:
+        return True
+    descrizione, um = testi_voce(voce)
+    testo = (f"{voce['codice']} {descrizione} {um} "
+             f"{voce.get('nota') or ''}").lower()
+    return all(parola in testo for parola in termine.lower().split())
 
 
 def grafico_totali(totali):
@@ -2278,6 +2427,19 @@ def _payload_progetto():
             or float(st.session_state.get(f"p_{v['codice']}")
                      or v["prezzo"]) != v["prezzo"]
         },
+        # quali voci sono nel computo, nell'ordine in cui ci sono entrate
+        "voci_scelte": list(st.session_state.voci_scelte),
+        # e come sono state riscritte: solo quelle che si discostano dal
+        # listino, così il file non porta 69 copie di quello che c'è già
+        "testi_voci": {
+            v["codice"]: {
+                "d": st.session_state.get(f"d_{v['codice']}") or None,
+                "u": st.session_state.get(f"u_{v['codice']}") or None,
+            }
+            for v in listino.VOCI
+            if (st.session_state.get(f"d_{v['codice']}")
+                or st.session_state.get(f"u_{v['codice']}"))
+        },
         "business_plan": {
             **{chiave: st.session_state.get(chiave, valore)
                for chiave, valore in IMPOSTAZIONI_BP.items()},
@@ -2438,8 +2600,7 @@ def progetto_e_vuoto():
         return False
     if len(voci_da_df(st.session_state.df_voci)):
         return False
-    if any((st.session_state.get(f"q_{v['codice']}") or 0.0) > 0
-           for v in listino.VOCI):
+    if st.session_state.get("voci_scelte"):
         return False
     if st.session_state.get("bp_acquisto") or st.session_state.get("bp_vendita"):
         return False
@@ -2636,6 +2797,9 @@ for _voce in listino.VOCI:
     # le sue righe non vengono disegnate (vedi il riallineamento più sotto)
     st.session_state.setdefault(f"q_{_voce['codice']}", 0.0)
     st.session_state.setdefault(f"p_{_voce['codice']}", float(_voce["prezzo"]))
+# le voci portate nel computo: il computo è questo elenco, non tutto il
+# listino. Nasce vuoto — un cantiere non è l'altro — e si riempie dal pool.
+st.session_state.setdefault("voci_scelte", [])
 # categorie del listino aperte in questo momento: solo le loro righe vengono
 # disegnate. Con tutte e 58 le voci a video una riesecuzione costava 390 ms su
 # 595 totali — due terzi del tempo speso per righe che l'utente non guarda.
@@ -2734,16 +2898,31 @@ if "da_caricare" in st.session_state:
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
     st.session_state.imprevisti = float(progetto.get("imprevisti", 10.0))
     stato_listino = dati.get("listino_stato") or {}
+    testi_salvati = dati.get("testi_voci") or {}
     for _voce in listino.VOCI:
         _cod = _voce["codice"]
         elemento = stato_listino.get(_cod) or {}
         st.session_state[f"q_{_cod}"] = float(elemento.get("q", 0.0))
         st.session_state[f"p_{_cod}"] = float(
             elemento.get("p", _voce["prezzo"]))
+        _testi = testi_salvati.get(_cod) or {}
+        st.session_state[f"d_{_cod}"] = _testi.get("d") or ""
+        st.session_state[f"u_{_cod}"] = _testi.get("u") or ""
         # via i widget della sessione precedente: se restassero, le righe
         # rinascerebbero coi valori del progetto vecchio invece che con questi
-        for _w in (f"q_{_cod}_txt", f"p_{_cod}_txt"):
+        for _w in (f"q_{_cod}_txt", f"p_{_cod}_txt",
+                   f"d_{_cod}_w", f"u_{_cod}_w"):
             st.session_state.pop(_w, None)
+    # Quali voci sono nel computo. I progetti salvati prima non hanno
+    # l'elenco: si ricava da quelli che erano gli unici a comparire, cioè
+    # le voci con una quantità — così un vecchio computo si riapre uguale.
+    scelte_salvate = dati.get("voci_scelte")
+    if scelte_salvate is None:
+        scelte_salvate = [c for c, e in stato_listino.items()
+                          if float((e or {}).get("q") or 0.0) > 0]
+        scelte_salvate.sort()
+    st.session_state.voci_scelte = [c for c in scelte_salvate
+                                    if listino.voce_per_codice(c)]
     try:
         st.session_state.prg_data = date.fromisoformat(progetto.get("data", ""))
     except (TypeError, ValueError):
@@ -2916,6 +3095,16 @@ if "listino_pending" in st.session_state:
     for _cod, _quantita in st.session_state.pop("listino_pending").items():
         st.session_state[f"q_{_cod}"] = _quantita
         st.session_state.pop(f"q_{_cod}_txt", None)   # rinasce col nuovo
+
+# Una quantità che arriva dal DISEGNO porta anche la voce nel computo: il
+# computo mostra solo le voci scelte, e una quantità scritta in una voce che
+# nessuno ha scelto sarebbe un numero invisibile. Le stesse quantità
+# riscritte dall'annulla non fanno scattare niente — l'elenco delle voci
+# l'annulla se lo ripristina da sé, e una voce appena tolta non deve
+# rientrare dalla finestra.
+for _cod in st.session_state.pop("scelte_pending", []):
+    if _cod not in st.session_state.voci_scelte:
+        st.session_state.voci_scelte.append(_cod)
 
 # Stessa strada per i PREZZI del listino personale: si applicano prima che i
 # caselle dei prezzi nascano, altrimenti Streamlit rifiuta di riscriverle.
@@ -3284,9 +3473,14 @@ with tab_computo:
     with col_sx:
         barra_annulla_computo()
         pannello_listino_personale()
+        # --------------------------------------------- il computo effettivo
+        # Le categorie ci sono sempre — sono l'ossatura del documento — ma
+        # dentro c'è solo quello che è stato scelto. Un cantiere non è
+        # l'altro: le voci si pescano dal pool qui sotto.
         for indice, cat in enumerate(listino.CATEGORIE, start=1):
             colore_md = COLORI_CATEGORIE[cat][1]
             aperta = cat in st.session_state.cat_aperte
+            voci_cat = scelte_della_categoria(cat)
             # Un bottone al posto della tendina di Streamlit: la tendina si
             # apre e chiude nel browser SENZA avvisare il server, quindi non
             # potremmo sapere quali voci disegnare. Il bottone invece ce lo
@@ -3303,16 +3497,20 @@ with tab_computo:
                              key=f"apri_{indice}", width="stretch"):
                     st.session_state.cat_aperte ^= {cat}   # apre o chiude
                     st.rerun()
-                if aperta:
-                    h_voce, h_qta, h_prezzo, h_parz = st.columns(
-                        [3.4, 1, 1, 1])
-                    h_voce.caption("Voce · unità")
+                if aperta and voci_cat:
+                    h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz, h_x =                         st.columns([0.45, 2.8, 0.7, 0.9, 0.9, 0.95, 0.35])
+                    h_cod.caption("Cod.")
+                    h_voce.caption("Voce")
+                    h_um.caption("U.M.")
                     h_qta.caption("Quantità")
                     h_prezzo.caption("Prezzo €")
                     h_parz.caption("Parziale")
-                    for voce in listino.voci_della_categoria(cat):
+                    for voce in voci_cat:
                         st.divider()
-                        riga_voce_listino(voce)
+                        riga_voce_computo(voce)
+                elif aperta:
+                    st.caption(":gray[Nessuna voce in questa categoria. "
+                               "Prendile dal pool in fondo alla pagina.]")
 
         # tabella libera: personalizzate e voci arrivate dalla planimetria
         contenitore_extra = st.container(key="card_extra")
@@ -3360,6 +3558,58 @@ with tab_computo:
             # come per l'MCA: il ritorno rientra come dato di partenza, e
             # senza intestazioni la tabella non si riprende più
             st.session_state.df_voci = df_editato.reindex(columns=COLONNE)
+
+        # ------------------------------------------------- il pool di voci
+        # Il magazzino: tutte le voci del listino che NON sono nel computo.
+        # Sta sotto perché è l'attrezzo, non il documento — si apre quando
+        # serve pescare, e il resto del tempo non occupa la pagina.
+        st.markdown("")
+        with st.container(key="card_pool"):
+            st.markdown("#### 🧰 Pool voci · scegli cosa portare nel computo")
+            # La ricerca è una casella sola e senza etichetta: si vede che è
+            # una ricerca dalla lente e dal testo dentro. Cerca su tutte le
+            # categorie insieme, anche quelle chiuse — è l'unico modo di
+            # trovare una voce quando non ci si ricorda dove sta di casa.
+            termine = st.text_input(
+                "Cerca una voce", key="cerca_voce",
+                placeholder="🔎  Cerca fra le voci del listino — "
+                            "codice, descrizione, unità",
+                label_visibility="collapsed").strip()
+            aggiunte = 0
+            for indice, cat in enumerate(listino.CATEGORIE, start=1):
+                disponibili = [v for v in listino.voci_della_categoria(cat)
+                               if not e_scelta(v["codice"])
+                               and voce_trovata(v, termine)]
+                if not disponibili:
+                    continue
+                aggiunte += len(disponibili)
+                colore_md = COLORI_CATEGORIE[cat][1]
+                # Cercando si aprono da sole: se hai scritto «gres» vuoi
+                # vedere le voci, non le categorie che le contengono.
+                with st.expander(f":{colore_md}[**{cat}**] "
+                                 f":gray[· {len(disponibili)}]",
+                                 expanded=bool(termine)):
+                    for voce in disponibili:
+                        descrizione, um = testi_voce(voce)
+                        c_btn, c_txt, c_prezzo = st.columns(
+                            [0.4, 4.2, 1.1], vertical_alignment="center")
+                        c_btn.button(
+                            "＋", key=f"prendi_{voce['codice']}",
+                            on_click=porta_nel_computo,
+                            args=(voce["codice"],),
+                            help="Porta la voce nel computo")
+                        c_txt.markdown(
+                            f":gray[**{voce['codice']}**] {descrizione} "
+                            f":gray[· {um}]", help=voce.get("nota"))
+                        c_prezzo.markdown(
+                            f":gray[{euro(voce['prezzo'])}]")
+            if not aggiunte:
+                st.caption(
+                    ":gray[Nessuna voce da aggiungere: sono già tutte nel "
+                    "computo.]" if not termine else
+                    f":gray[Nessuna voce trovata per «{termine}». Le voci "
+                    "che hai già preso non compaiono qui: cercale nel "
+                    "computo qui sopra.]")
 
     # --------------------------------------------------- riepilogo costi
     with col_dx:
@@ -4530,6 +4780,7 @@ with tab_plan:
                     # qui la scheda Computo è già disegnata e Streamlit vieta
                     # di riscrivere i widget dopo che sono nati.
                     st.session_state.listino_pending = dict(proposte)
+                    st.session_state.scelte_pending = list(proposte)
                     st.rerun()
                 st.caption(
                     f":green[✔ Computo allineato al disegno — "
@@ -4543,6 +4794,7 @@ with tab_plan:
                 # riempirebbe di passi tutti uguali
                 registra_storia_computo("quantità portate dalla planimetria")
                 st.session_state.listino_pending = dict(proposte)
+                st.session_state.scelte_pending = list(proposte)
                 st.toast(f"{len(proposte)} voci aggiornate nel computo ✔")
                 st.rerun()
 

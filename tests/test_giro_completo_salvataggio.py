@@ -64,7 +64,10 @@ def giro(tmp_path_factory, monkeypatch_module):
         at.text_input(key=f"{chiave}_txt").set_value(testo).run()
     for chiave, valore in PERCENTUALI.items():
         at.number_input(key=chiave).set_value(valore).run()
-    # una voce di computo, per coprire anche quantità e prezzi del listino
+    # una voce di computo, per coprire anche quantità e prezzi del listino.
+    # Prima si pesca dal pool: il computo porta solo le voci scelte, e senza
+    # questo clic la riga di 1.02 non esiste nemmeno a video.
+    at.button(key="prendi_1.02").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
     at.text_input(key="q_1.02_txt").set_value("120").run()
