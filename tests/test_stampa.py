@@ -77,27 +77,6 @@ def test_progetto_senza_nome_non_lascia_il_titolo_in_bianco():
     assert "senza nome" in testo.lower()
 
 
-def test_appendice_del_libretto_misure():
-    libretto = {"1.01": ([
-        {"descrizione": "Soggiorno", "parti": 1, "lunghezza": 5.0,
-         "larghezza": 4.0, "altezza": None, "quantita": 20.0},
-        {"descrizione": "vano porta", "parti": -1, "lunghezza": 0.8,
-         "larghezza": 2.1, "altezza": None, "quantita": -1.68},
-    ], 18.32)}
-    testo = _testo_del_pdf(pdf_computo(
-        PROGETTO, VOCI, TOTALI, libretto=libretto,
-        descrizioni={"1.01": "Demolizione pavimenti"}))
-    assert "Libretto delle misure" in testo
-    assert "Soggiorno" in testo
-    assert "vano porta" in testo
-    assert "18,320" in testo
-
-
-def test_senza_libretto_niente_appendice():
-    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
-    assert "Libretto delle misure" not in testo
-
-
 def test_le_tinte_delle_categorie_non_fanno_saltare_la_stampa():
     """Anche una tinta chiarissima: il testo si adatta, non si rompe."""
     byte = pdf_computo(PROGETTO, VOCI, TOTALI,

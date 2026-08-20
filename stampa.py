@@ -201,61 +201,7 @@ def _tabella_totali(totali):
     return [tabella]
 
 
-def _appendice_libretto(libretto, descrizioni):
-    """Il libretto delle misure: come si è arrivati a ogni quantità.
-
-    È la parte che rende il computo verificabile: senza, chi lo riceve deve
-    fidarsi. Va in fondo, su pagina propria, perché si consulta solo quando
-    si vuole rifare un conto.
-    """
-    if not libretto:
-        return []
-    blocchi = [PageBreak(),
-               Paragraph("Libretto delle misure", STILE_TITOLO),
-               Paragraph("Il dettaglio con cui è stata ottenuta la quantità "
-                         "di ogni voce. Le parti negative sono detrazioni "
-                         "(vani porta, aperture).", STILE_NOTA),
-               Spacer(1, 6 * mm)]
-    for codice, (righe_misura, totale) in libretto.items():
-        if not righe_misura:
-            continue
-        intestazioni = ["Descrizione", "Parti", "Lungh.", "Largh.",
-                        "Alt./Peso", "Quantità"]
-        righe = [[Paragraph(t, STILE_INTESTAZIONE) for t in intestazioni]]
-        for misura in righe_misura:
-            righe.append([
-                Paragraph(str(misura.get("descrizione") or ""), STILE_VOCE),
-                Paragraph(numero_it(misura.get("parti"), 0), STILE_VOCE),
-                Paragraph(numero_it(misura.get("lunghezza"), 2), STILE_VOCE),
-                Paragraph(numero_it(misura.get("larghezza"), 2), STILE_VOCE),
-                Paragraph(numero_it(misura.get("altezza"), 2), STILE_VOCE),
-                Paragraph(numero_it(misura.get("quantita"), 3), STILE_VOCE),
-            ])
-        righe.append([Paragraph("<b>Totale</b>", STILE_VOCE), "", "", "", "",
-                      Paragraph(f"<b>{numero_it(totale, 3)}</b>",
-                                STILE_VOCE)])
-        tabella = Table(righe, colWidths=[70 * mm, 16 * mm, 20 * mm, 20 * mm,
-                                          22 * mm, 32 * mm], repeatRows=1)
-        tabella.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), ARDESIA),
-            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-            ("LINEBELOW", (0, 0), (-1, -2), 0.25,
-             colors.HexColor("#D6D2C8")),
-            ("LINEABOVE", (0, -1), (-1, -1), 0.75, OTTONE),
-            ("SPAN", (0, -1), (4, -1)),
-        ]))
-        titolo = f"{codice} · {descrizioni.get(codice, '')}".strip(" ·")
-        blocchi.append(KeepTogether([
-            Paragraph(titolo, STILE_CATEGORIA), Spacer(1, 1.5 * mm), tabella,
-            Spacer(1, 5 * mm)]))
-    return blocchi
-
-
-def pdf_computo(progetto, voci, totali, libretto=None, tinte=None,
-                descrizioni=None):
+def pdf_computo(progetto, voci, totali, tinte=None):
     """Il computo come PDF pronto da consegnare. Ritorna i byte del file.
 
     progetto: {"nome", "committente", "oggetto", "data"}.
@@ -263,10 +209,8 @@ def pdf_computo(progetto, voci, totali, libretto=None, tinte=None,
         "prezzo", "importo"}] già calcolate.
     totali: {"somma", "imprevisti_pct", "imprevisti", "totale_lavori",
         "iva_pct", "iva", "totale"}.
-    libretto: {codice: (righe_misura, totale)} — appendice facoltativa.
     tinte: {categoria: "#RRGGBB"} per la fascia d'intestazione; le categorie
         senza tinta prendono l'ardesia.
-    descrizioni: {codice: descrizione} per intitolare le voci del libretto.
     """
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
@@ -292,7 +236,6 @@ def pdf_computo(progetto, voci, totali, libretto=None, tinte=None,
             colors.HexColor(tinta) if tinta else ARDESIA))
     elementi.append(Spacer(1, 3 * mm))
     elementi.extend(_tabella_totali(totali))
-    elementi.extend(_appendice_libretto(libretto, descrizioni or {}))
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,
                     onLaterPages=_pie_di_pagina)

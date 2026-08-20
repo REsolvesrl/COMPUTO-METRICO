@@ -268,7 +268,7 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
       computo.
 - [ ] Riconoscimento muri con modelli di computer vision (fase 2).
 - [x] Listino personale riutilizzabile delle voci più usate.
-- [x] Stampa del computo in PDF, con il libretto delle misure in appendice.
+- [x] Stampa del computo in PDF.
 - [x] Contratto e SAL, con lo sforamento finale che tara gli imprevisti.
 - [ ] Import da prezzari regionali (Excel/CSV).
 - [ ] Spessore dei muri: distinguere tramezzi e murature portanti.

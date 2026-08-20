@@ -326,14 +326,6 @@ def test_voci_da_riscrivere_non_cancella_i_numeri_a_mano():
     assert voci_da_riscrivere(MAPPA, {}, {"1.02": 30.0}) == {}
 
 
-def test_voci_da_riscrivere_lascia_stare_le_voci_escluse():
-    """Voce col libretto misure: la quantità la decide quello."""
-    proposte = voci_da_riscrivere(
-        MAPPA, {"muri_demolire": 21.6, "muri_costruire": 10.8}, {},
-        escluse=["1.02"])
-    assert proposte == {"2.01": 10.8}
-
-
 def test_voci_da_riscrivere_arrotonda_ai_centesimi():
     assert voci_da_riscrivere(MAPPA, {"muri_demolire": 21.6666}, {}) \
         == {"1.02": 21.67}

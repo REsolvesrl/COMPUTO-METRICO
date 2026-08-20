@@ -51,30 +51,6 @@ def test_voci_da_df_salta_le_righe_del_tutto_vuote():
     assert tabelle.voci_da_df(df) == []
 
 
-# ---------------------------------------------------- libretto delle misure
-
-def test_df_misure_da_righe_e_ritorno():
-    righe = [{"descrizione": "Soggiorno", "parti": 1.0, "lunghezza": 5.0,
-              "larghezza": 4.0, "altezza": None}]
-    df = tabelle.df_misure(righe)
-    assert list(df.columns) == tabelle.COLONNE_MISURE
-    assert tabelle.misure_da_df(df) == righe
-
-
-def test_df_misure_senza_righe_da_la_tabella_vuota():
-    df = tabelle.df_misure([])
-    assert len(df) == 0
-    assert list(df.columns) == tabelle.COLONNE_MISURE
-
-
-def test_misure_da_df_tiene_le_parti_negative():
-    """Le detrazioni si scrivono con parti negative: non sono un errore."""
-    df = tabelle.df_misure([{"descrizione": "vano porta", "parti": -1.0,
-                             "lunghezza": 0.8, "larghezza": 2.1,
-                             "altezza": None}])
-    assert tabelle.misure_da_df(df)[0]["parti"] == -1.0
-
-
 # ------------------------------------------------------------------ spese
 
 def test_cat_pulita_toglie_il_pallino():
@@ -226,7 +202,6 @@ def test_mca_vuoto_ha_i_tipi_giusti():
 
 
 @pytest.mark.parametrize("funzione", [tabelle.voci_da_df,
-                                      tabelle.misure_da_df,
                                       tabelle.spese_da_df,
                                       tabelle.mca_da_df])
 def test_una_tabella_vuota_non_da_righe(funzione):

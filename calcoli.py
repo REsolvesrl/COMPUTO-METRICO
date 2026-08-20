@@ -33,54 +33,6 @@ def quantita_voce(parti=None, lunghezza=None, larghezza=None, altezza=None,
     return 0.0
 
 
-def quantita_da_misure(misure):
-    """Somma delle quantità di un elenco di misurazioni (libretto delle misure).
-
-    Ogni misura è un dizionario con parti/lunghezza/larghezza/altezza: valgono
-    le stesse regole di quantita_voce (campi vuoti ignorati, parti negative =
-    detrazione). È il classico "libretto delle misure" dei computi: una voce
-    (es. la demolizione di un pavimento) viene scomposta in più righe — una per
-    stanza — che si sommano nella quantità totale. Restituisce la somma
-    arrotondata a 3 decimali (0 se l'elenco è vuoto).
-    """
-    totale = 0.0
-    for misura in misure:
-        totale += quantita_voce(
-            misura.get("parti"),
-            misura.get("lunghezza"),
-            misura.get("larghezza"),
-            misura.get("altezza"),
-        )
-    return round(totale, 3)
-
-
-def dettaglio_misure(misure):
-    """Le righe del libretto, ciascuna con la sua quantità, e il totale.
-
-    `quantita_da_misure` dà solo la somma: qui si tiene anche il parziale di
-    ogni riga, che è quello che rende il computo VERIFICABILE — chi lo
-    riceve deve poter rifare il conto stanza per stanza, non fidarsi di un
-    numero solo. Le righe tutte vuote non entrano: sono le righe di coda
-    delle tabelle, non misure.
-
-    Ritorna (righe, totale), dove ogni riga è la misura originale più la
-    chiave "quantita".
-    """
-    righe = []
-    for misura in misure or []:
-        parti = misura.get("parti")
-        lunghezza = misura.get("lunghezza")
-        larghezza = misura.get("larghezza")
-        altezza = misura.get("altezza")
-        if all(v is None for v in (parti, lunghezza, larghezza, altezza)):
-            continue
-        righe.append({
-            **misura,
-            "quantita": quantita_voce(parti, lunghezza, larghezza, altezza),
-        })
-    return righe, round(sum(r["quantita"] for r in righe), 3)
-
-
 def calcola_voce(voce):
     """Restituisce una copia della voce con "quantita" e "importo" calcolati.
 

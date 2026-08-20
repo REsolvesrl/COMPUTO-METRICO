@@ -26,11 +26,6 @@ COLONNE_NUMERI = ["parti", "lunghezza", "larghezza", "altezza",
                   "quantita_manuale", "prezzo"]
 COLONNE = COLONNE_TESTO + COLONNE_NUMERI
 
-# Colonne del "libretto delle misure": ogni voce del listino può essere
-# scomposta in più righe (una per stanza/parete) che si sommano nella quantità.
-COLONNE_MISURE = ["descrizione", "parti", "lunghezza", "larghezza", "altezza"]
-COLONNE_MISURE_NUM = ["parti", "lunghezza", "larghezza", "altezza"]
-
 # Spese a consuntivo: due registri distinti (come il foglio «Spese» Excel).
 # Sostenute = fatture reali (con data e numero); da sostenere = previsioni.
 # «fornitore» sta per conto suo: stava dentro «oggetto», appiccicato alla
@@ -114,44 +109,6 @@ def voci_da_df(df):
         if any(v is not None for v in voce.values()):
             voci.append(voce)
     return voci
-
-
-# ---------------------------------------------------- libretto delle misure
-
-def df_misure_vuoto():
-    """Tabella vuota per il libretto delle misure di una voce."""
-    colonne = {"descrizione": pd.Series(dtype="object")}
-    for col in COLONNE_MISURE_NUM:
-        colonne[col] = pd.Series(dtype="float64")
-    return pd.DataFrame(colonne)
-
-
-def df_misure(righe):
-    """Costruisce la tabella del libretto misure da un elenco di dizionari."""
-    if not righe:
-        return df_misure_vuoto()
-    df = pd.DataFrame(righe).reindex(columns=COLONNE_MISURE)
-    for col in COLONNE_MISURE_NUM:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
-
-
-def misure_da_df(df):
-    """La tabella del libretto misure come elenco di dizionari (righe piene)."""
-    righe = []
-    for _, riga in df.iterrows():
-        misura = {}
-        for col in COLONNE_MISURE:
-            valore = riga.get(col)
-            if _mancante(valore) or valore == "":
-                misura[col] = None
-            elif col in COLONNE_MISURE_NUM:
-                misura[col] = float(valore)
-            else:
-                misura[col] = str(valore)
-        if any(v is not None for v in misura.values()):
-            righe.append(misura)
-    return righe
 
 
 # ------------------------------------------------------------------ spese

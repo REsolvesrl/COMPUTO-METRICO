@@ -34,7 +34,7 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 
 - Stack: Python + Streamlit; logica di calcolo separata dall'interfaccia in moduli puri e testati (calcoli.py, planimetria.py, fattibilita.py, fattura.py); componente browser custom per il visualizzatore planimetrie (cme_viewer/, canvas + barra strumenti).
 - Vincolo architetturale: la logica resta in funzioni pure coperte da pytest; l'interfaccia vive in streamlit_app.py.
-- Terminologia di dominio (italiano, settore edile/immobiliare): computo metrico, voci di lavorazione, libretto delle misure, listino, incidenze, imprevisti, IVA scorporata, superficie commerciale, studio di fattibilità, MCA, coefficiente di merito, FatturaPA/SdI. Categorie spese fisse: ACQUISTO, LAVORI, MATERIALE, ARCHITETTO, COSTI INDIRETTI, AGENZIA, ALTRO.
+- Terminologia di dominio (italiano, settore edile/immobiliare): computo metrico, voci di lavorazione, listino, incidenze, imprevisti, IVA scorporata, superficie commerciale, studio di fattibilità, MCA, coefficiente di merito, FatturaPA/SdI. Categorie spese fisse: ACQUISTO, LAVORI, MATERIALE, ARCHITETTO, COSTI INDIRETTI, AGENZIA, ALTRO.
 - L'interfaccia è in italiano, con una eccezione deliberata: lo studio di
   fattibilità conserva le etichette inglesi del foglio Excel di partenza
   (ESTIMATED, Buy cost, Sell cost, Net Return (ROI), Return on Equity, Total
