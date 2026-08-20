@@ -995,19 +995,26 @@ def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo,
     return codice
 
 
-def elimina_voce_extra(codice):
-    """Una voce aggiunta a mano, tolta dal computo, non esiste più.
+def scarta_voce(codice):
+    """Toglie una voce dal pool di QUESTO progetto.
 
-    Diverso dalle voci di listino, che la ✕ rimanda solo nel pool: questa
-    nel pool non c'è mai stata, e tenerne memoria vorrebbe dire riempire il
-    progetto di righe che nessuno vedrà.
+    Non tocca il listino, che è il catalogo e vale per tutti i cantieri:
+    sparisce solo da qui, perché su questo lavoro non c'entra e sfogliare
+    il pool sia più corto. Niente si perde — gli scarti si contano in
+    fondo al pool e si rimettono tutti insieme.
     """
-    st.session_state.voci_extra.pop(codice, None)
     togli_dal_computo(codice)
-    for chiave in (f"q_{codice}", f"p_{codice}", f"d_{codice}",
-                   f"u_{codice}", f"q_{codice}_txt", f"p_{codice}_txt",
-                   f"d_{codice}_w", f"u_{codice}_w"):
-        st.session_state.pop(chiave, None)
+    if codice not in st.session_state.voci_scartate:
+        st.session_state.voci_scartate.append(codice)
+
+
+def ripristina_scarti():
+    """Rimette nel pool tutto quello che era stato scartato."""
+    st.session_state.voci_scartate = []
+
+
+def e_scartata(codice):
+    return codice in st.session_state.voci_scartate
 
 
 def crea_voce_a_mano():
@@ -1073,6 +1080,11 @@ def e_scelta(codice):
 
 def porta_nel_computo(codice):
     """Aggiunge una voce al computo (se non c'è già). True se l'ha aggiunta."""
+    # Una voce che entra nel computo non è più scartata: può arrivarci dal
+    # disegno anche dopo essere stata tolta dal pool, e ritrovarsela fra
+    # gli scarti mentre è nel documento non vorrebbe dire niente.
+    if codice in st.session_state.voci_scartate:
+        st.session_state.voci_scartate.remove(codice)
     if codice in st.session_state.voci_scelte:
         return False
     st.session_state.voci_scelte.append(codice)
@@ -1323,6 +1335,7 @@ def registra_storia_computo(descrizione):
               or v["prezzo"] for v in listino.VOCI},
         "scelte": list(st.session_state.voci_scelte),
         "extra": dict(st.session_state.voci_extra),
+        "scartate": list(st.session_state.voci_scartate),
     })
     del st.session_state.storia_computo[:-PASSI_STORIA_COMPUTO]
 
@@ -1339,6 +1352,7 @@ def annulla_computo():
     st.session_state.prezzi_pending = passo["p"]
     st.session_state.voci_scelte = list(passo["scelte"])
     st.session_state.voci_extra = dict(passo["extra"])
+    st.session_state.voci_scartate = list(passo["scartate"])
     return passo["descrizione"]
 
 
@@ -1478,13 +1492,12 @@ def riga_voce_computo(voce):
         # non è uno zero come gli altri: è una voce che hai scelto e non hai
         # ancora quantificato, e fuori di qui (totali, PDF) non esiste
         c_parz.markdown(":orange[da quantificare]")
-    if listino.voce_per_codice(codice) is None:
-        c_x.button("✕", key=f"togli_{codice}", on_click=elimina_voce_extra,
-                   args=(codice,),
-                   help="Elimina la voce: è tua, nel pool non torna")
-    else:
-        c_x.button("✕", key=f"togli_{codice}", on_click=togli_dal_computo,
-                   args=(codice,), help="Rimanda la voce nel pool")
+    # Anche le voci scritte a mano tornano nel pool: una lavorazione
+    # inventata per questo cantiere si toglie e si rimette come le altre, e
+    # buttarla via al primo ripensamento vorrebbe dire riscriverla da capo.
+    # Per cancellarla davvero c'è il cestino, nel pool.
+    c_x.button("✕", key=f"togli_{codice}", on_click=togli_dal_computo,
+               args=(codice,), help="Rimanda la voce nel pool")
 
 
 def voce_trovata(voce, termine):
@@ -2479,6 +2492,9 @@ def _payload_progetto():
         },
         # quali voci sono nel computo, nell'ordine in cui ci sono entrate
         "voci_scelte": list(st.session_state.voci_scelte),
+        # e quali sono state tolte dal pool: è una scelta del progetto,
+        # non una modifica al listino, e va con lui
+        "voci_scartate": list(st.session_state.voci_scartate),
         # e come sono state riscritte: solo quelle che si discostano dal
         # listino, così il file non porta 69 copie di quello che c'è già
         "testi_voci": {
@@ -2854,6 +2870,9 @@ st.session_state.setdefault("voci_scelte", [])
 # le categorie del pool aperte: il pool si sfoglia a lungo, e ogni ＋ è una
 # riesecuzione — senza memoria si richiuderebbe a ogni voce presa
 st.session_state.setdefault("pool_aperte", set())
+# le voci tolte dal pool di questo progetto: il listino resta intero, qui si
+# tiene solo l'elenco di quelle che su QUESTO cantiere non c'entrano
+st.session_state.setdefault("voci_scartate", [])
 # categorie del listino aperte in questo momento: solo le loro righe vengono
 # disegnate. Con tutte e 58 le voci a video una riesecuzione costava 390 ms su
 # 595 totali — due terzi del tempo speso per righe che l'utente non guarda.
@@ -3001,11 +3020,16 @@ if "da_caricare" in st.session_state:
     st.session_state.voci_scelte = [
         c for c in scelte_salvate
         if listino.voce_per_codice(c) or c in st.session_state.voci_extra]
-    # Le voci inventate sono nel computo per definizione: non hanno un pool
-    # da cui essere ripescate, e un vecchio progetto non le elencava.
-    for _cod in st.session_state.voci_extra:
-        if _cod not in st.session_state.voci_scelte:
-            st.session_state.voci_scelte.append(_cod)
+    st.session_state.voci_scartate = [
+        c for c in (dati.get("voci_scartate") or [])
+        if c not in st.session_state.voci_scelte]
+    if dati.get("voci_scelte") is None:
+        # Progetto vecchio: non c'era un elenco, e le voci scritte a mano
+        # erano nel computo per definizione. Con l'elenco, invece, comanda
+        # lui: una voce tua messa da parte nel pool deve restarci.
+        for _cod in st.session_state.voci_extra:
+            if _cod not in st.session_state.voci_scelte:
+                st.session_state.voci_scelte.append(_cod)
     try:
         st.session_state.prg_data = date.fromisoformat(progetto.get("data", ""))
     except (TypeError, ValueError):
@@ -3643,18 +3667,26 @@ with tab_computo:
             # trovare una voce quando non ci si ricorda dove sta di casa.
             termine = st.text_input(
                 "Cerca una voce", key="cerca_voce",
-                placeholder="🔎  Cerca fra le voci del listino — "
-                            "codice, descrizione, unità",
+                placeholder="🔎  Cerca fra le voci — codice, descrizione, "
+                            "unità",
                 label_visibility="collapsed").strip()
             aggiunte = 0
-            for indice, cat in enumerate(listino.CATEGORIE, start=1):
-                disponibili = [v for v in listino.voci_della_categoria(cat)
+            for indice, cat in enumerate(categorie_del_computo(), start=1):
+                # Le voci del listino di questa categoria, più quelle che ci
+                # hai scritto tu e che al momento non sono nel computo: una
+                # volta inventata, una voce resta a disposizione: si toglie
+                # dal foglio e si ripesca, esattamente come le altre.
+                candidate = list(listino.voci_della_categoria(cat)) + [
+                    v for v in st.session_state.voci_extra.values()
+                    if v["categoria"] == cat]
+                disponibili = [v for v in candidate
                                if not e_scelta(v["codice"])
+                               and not e_scartata(v["codice"])
                                and voce_trovata(v, termine)]
                 if not disponibili:
                     continue
                 aggiunte += len(disponibili)
-                colore_md = COLORI_CATEGORIE[cat][1]
+                colore_md = COLORI_CATEGORIE.get(cat, (OTTONE, "orange"))[1]
                 # Stesso bottone delle categorie del computo, e per lo stesso
                 # motivo: la tendina di Streamlit si richiude a ogni giro, e
                 # QUI ogni ＋ è un giro. Si prendeva una voce e la tendina si
@@ -3670,19 +3702,44 @@ with tab_computo:
                     st.rerun()
                 if aperta_pool:
                     for voce in disponibili:
+                        codice_voce = voce["codice"]
+                        tua = listino.voce_per_codice(codice_voce) is None
                         descrizione, um = testi_voce(voce)
-                        c_btn, c_txt, c_prezzo = st.columns(
-                            [0.4, 4.2, 1.1], vertical_alignment="center")
+                        # il cestino c'è solo sulle voci tue: quelle del
+                        # listino non si cancellano, sono il catalogo
+                        c_btn, c_txt, c_prezzo, c_del = st.columns(
+                            [0.4, 3.9, 1.1, 0.3],
+                            vertical_alignment="center")
                         c_btn.button(
-                            "＋", key=f"prendi_{voce['codice']}",
-                            on_click=porta_nel_computo,
-                            args=(voce["codice"],),
+                            "＋", key=f"prendi_{codice_voce}",
+                            on_click=porta_nel_computo, args=(codice_voce,),
                             help="Porta la voce nel computo")
                         c_txt.markdown(
-                            f":gray[**{voce['codice']}**] {descrizione} "
-                            f":gray[· {um}]", help=voce.get("nota"))
+                            f":gray[**{codice_voce}**] {descrizione} "
+                            f":gray[· {um}]"
+                            + (" :orange[· tua]" if tua else ""),
+                            help=voce.get("nota"))
                         c_prezzo.markdown(
                             f":gray[{euro(voce['prezzo'])}]")
+                        c_del.button(
+                            "🗑", key=f"cestina_{codice_voce}",
+                            on_click=scarta_voce, args=(codice_voce,),
+                            help="Togli la voce dal pool di questo "
+                                 "progetto (si rimette dal fondo)")
+
+            # Gli scarti: quanti sono e come si rimettono. In fondo e in
+            # grigio, perché è l'uscita di sicurezza di un clic sbagliato,
+            # non un comando di tutti i giorni.
+            if st.session_state.voci_scartate:
+                s_txt, s_btn = st.columns([4, 1],
+                                          vertical_alignment="center")
+                quante = len(st.session_state.voci_scartate)
+                s_txt.caption(
+                    f":gray[🗑 {quante} "
+                    f"{'voce scartata' if quante == 1 else 'voci scartate'} "
+                    "da questo progetto — il listino non è stato toccato]")
+                s_btn.button("↩️ Rimetti tutte", key="ripristina_scarti",
+                             width="stretch", on_click=ripristina_scarti)
 
             if not aggiunte:
                 st.caption(

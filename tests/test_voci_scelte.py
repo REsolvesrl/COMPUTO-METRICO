@@ -286,11 +286,13 @@ def test_a_corpo_vale_uno_senza_chiederlo():
     assert at.session_state[f"p_{codice}"] == 800.0
 
 
-def test_la_voce_a_mano_non_entra_nel_pool():
-    """Il pool è il magazzino del listino: quello che inventi non è merce."""
+def test_la_voce_a_mano_nasce_nel_computo_non_nel_pool():
+    """Appena creata è già una riga del documento: nel pool ci finisce solo
+    se la togli."""
     at = _avvia()
     _crea(at, "Idraulico", "Spostamento colonna", "cad", 1.0, 300.0)
     codice = next(iter(at.session_state["voci_extra"]))
+    assert codice in at.session_state["voci_scelte"]
     assert f"prendi_{codice}" not in _prendibili(at)
 
 
@@ -303,17 +305,112 @@ def test_una_voce_senza_descrizione_non_si_crea():
     assert any("descrizione" in w.value for w in at.warning)
 
 
-def test_la_x_su_una_voce_a_mano_la_elimina_davvero():
-    """Non ha un pool dove tornare: si cancella, chiavi comprese."""
+def test_la_x_su_una_voce_a_mano_la_rimanda_nel_pool():
+    """Una voce tua non si perde togliendola: si mette da parte, come le
+    altre. Prima la ✕ la cancellava, e per ripensarci si riscriveva."""
     at = _avvia()
     _crea(at, "Idraulico", "Spostamento colonna", "cad", 2.0, 300.0)
     codice = next(iter(at.session_state["voci_extra"]))
     at.session_state["cat_aperte"] = {"Idraulico"}
     at.run()
     at.button(key=f"togli_{codice}").click().run()
-    assert at.session_state["voci_extra"] == {}
     assert codice not in at.session_state["voci_scelte"]
-    assert f"q_{codice}" not in at.session_state
+    assert codice in at.session_state["voci_extra"]
+    assert f"prendi_{codice}" in _prendibili(at)
+
+
+def test_la_voce_tua_ripescata_si_ritrova_com_era():
+    at = _avvia()
+    _crea(at, "Idraulico", "Spostamento colonna", "cad", 2.0, 300.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    at.session_state["cat_aperte"] = {"Idraulico"}
+    at.run()
+    at.button(key=f"togli_{codice}").click().run()
+    at.button(key=f"prendi_{codice}").click().run()
+    assert at.session_state["voci_scelte"] == [codice]
+    assert at.session_state[f"q_{codice}"] == 2.0
+    assert at.session_state[f"p_{codice}"] == 300.0
+
+
+def test_il_cestino_toglie_una_voce_dal_pool():
+    """Le voci che su questo cantiere non c'entrano si levano di mezzo."""
+    at = _avvia()
+    at.button(key="cestina_1.02").click().run()
+    assert at.session_state["voci_scartate"] == ["1.02"]
+    assert "prendi_1.02" not in _prendibili(at)
+
+
+def test_scartare_non_tocca_il_listino():
+    """È una scelta di questo progetto, non una modifica al catalogo."""
+    import listino
+    at = _avvia()
+    at.button(key="cestina_1.02").click().run()
+    assert listino.voce_per_codice("1.02") is not None
+
+
+def test_si_scarta_anche_una_voce_tua():
+    at = _avvia()
+    _crea(at, "Idraulico", "Spostamento colonna", "cad", 2.0, 300.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    at.session_state["cat_aperte"] = {"Idraulico"}
+    at.run()
+    at.button(key=f"togli_{codice}").click().run()
+    at.button(key=f"cestina_{codice}").click().run()
+    assert f"prendi_{codice}" not in _prendibili(at)
+    # la definizione resta: rimettendo gli scarti si ritrova
+    assert codice in at.session_state["voci_extra"]
+
+
+def test_gli_scarti_si_rimettono_tutti_insieme():
+    """Nessun clic sbagliato perde una voce per sempre."""
+    at = _avvia()
+    at.button(key="cestina_1.02").click().run()
+    at.button(key="cestina_1.03").click().run()
+    at.button(key="ripristina_scarti").click().run()
+    assert at.session_state["voci_scartate"] == []
+    assert "prendi_1.02" in _prendibili(at)
+    assert "prendi_1.03" in _prendibili(at)
+
+
+def test_riprendere_una_voce_scartata_la_toglie_dagli_scarti():
+    at = _avvia()
+    at.button(key="cestina_1.02").click().run()
+    at.session_state["voci_scartate"] = ["1.02"]
+    at.session_state["voci_scelte"] = []
+    at.run()
+    at.button(key="ripristina_scarti").click().run()
+    at.button(key="prendi_1.02").click().run()
+    assert at.session_state["voci_scartate"] == []
+    assert at.session_state["voci_scelte"] == ["1.02"]
+
+
+def test_gli_scarti_viaggiano_col_progetto():
+    at = _avvia()
+    at.session_state["da_caricare"] = {
+        **PROGETTO_VECCHIO,
+        "voci_scelte": ["1.02"],
+        "voci_scartate": ["1.03", "1.04"],
+    }
+    at.run()
+    assert at.session_state["voci_scartate"] == ["1.03", "1.04"]
+    assert "prendi_1.03" not in _prendibili(at)
+
+
+def test_una_voce_tua_messa_da_parte_resta_da_parte_riaprendo():
+    """Salvata fuori dal computo, non deve rientrarci da sola."""
+    at = _avvia()
+    at.session_state["da_caricare"] = {
+        **PROGETTO_VECCHIO,
+        "voci": [{"categoria": "Idraulico", "codice": "3.90",
+                  "descrizione": "Spostamento colonna", "um": "cad",
+                  "parti": None, "lunghezza": None, "larghezza": None,
+                  "altezza": None, "quantita_manuale": 2.0,
+                  "prezzo": 300.0}],
+        "voci_scelte": ["1.02"],          # la voce tua NON è nel computo
+    }
+    at.run()
+    assert at.session_state["voci_scelte"] == ["1.02"]
+    assert "3.90" in at.session_state["voci_extra"]      # ma esiste ancora
 
 
 def test_la_voce_a_mano_conta_nei_totali():
