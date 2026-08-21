@@ -1121,6 +1121,29 @@ def crea_voce_a_mano():
         "ok", f"{codice} · {descrizione} → {categoria}")
 
 
+def scambia_con_vicina(codice, verso):
+    """Scambia la voce con quella prima (verso −1) o dopo (+1) nella sua
+    categoria.
+
+    L'ordine del computo è quello di `voci_scelte`, che tiene tutte le
+    categorie di fila: qui ci si muove SOLTANTO fra le vicine di casa, così
+    «su» dalla prima delle demolizioni non finisce in mezzo alle pratiche.
+    """
+    scelte_ora = st.session_state.voci_scelte
+    voce = voce_del_computo(codice)
+    if voce is None or codice not in scelte_ora:
+        return
+    sorelle = [c for c in scelte_ora
+               if (v := voce_del_computo(c))
+               and v["categoria"] == voce["categoria"]]
+    posto = sorelle.index(codice) + verso
+    if not 0 <= posto < len(sorelle):
+        return                      # è già in cima o in fondo
+    vicina = sorelle[posto]
+    qui, la = scelte_ora.index(codice), scelte_ora.index(vicina)
+    scelte_ora[qui], scelte_ora[la] = scelte_ora[la], scelte_ora[qui]
+
+
 def sposta_voce_extra(codice):
     """Porta una voce scritta a mano in un'altra categoria.
 
@@ -1460,11 +1483,27 @@ def css_schede_computo():
 [class*="st-key-card_"] [data-testid="stElementContainer"] {{
     margin-bottom: 0;
 }}
+/* ⚠️ UNA SOLA MISURA per tutta la riga. Ogni cella nasceva col corpo che
+   Streamlit dà al suo tipo di widget: il codice di una voce di listino era
+   testo (16 px), quello di una voce tua un bottone (13,8), il parziale
+   ancora testo (16) e la ✕ un'icona (15,2). Sei misure diverse su una
+   riga sola, e la colonna dei codici sembrava scritta da due persone. */
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"] {{
+    font-size: 0.86rem;
+}}
+/* e nessuno se ne riprende una sua: la misura si eredita e basta. Elencare
+   i tipi di elemento non bastava — il valore di una tendina è un div, il
+   parziale un altro, e ognuno tornava al corpo suo. */
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"] * {{
+    font-size: inherit;
+}}
 /* Il codice di una voce tua è un menù (ci si sposta di categoria), ma
    deve restare un codice: stesso grigio, stesso peso, nessuna pastiglia.
    Un bottone vero in quella colonna farebbe sembrare la riga piena di
-   comandi, e il codice non si legge più. */
-[class*="st-key-card_"] [data-testid="stPopover"] button {{
+   comandi, e il codice non si legge più.
+   ⚠️ Il bersaglio è «stPopoverButton»: dentro «stPopover» non c'è: sta in
+   un portale suo, e la regola scritta così non toccava niente. */
+[class*="st-key-card_"] [data-testid="stPopoverButton"] {{
     background: transparent;
     border: none;
     box-shadow: none;
@@ -1472,19 +1511,20 @@ def css_schede_computo():
     min-height: 0;
     color: {TRAVERTINO}99;
     font-weight: 700;
-    font-size: 0.86rem;
+    white-space: nowrap;
 }}
-[class*="st-key-card_"] [data-testid="stPopover"] button:hover {{
+[class*="st-key-card_"] [data-testid="stPopoverButton"] p {{
+    white-space: nowrap;
+    font-weight: 700;
+}}
+[class*="st-key-card_"] [data-testid="stPopoverButton"]:hover {{
     color: {OTTONE};
     background: transparent;
 }}
-/* la freccina del menù ruba spazio a un codice di quattro caratteri, e
-   senza toglierla il codice andava a capo */
-[class*="st-key-card_"] [data-testid="stPopover"] button svg {{
-    display: none;
-}}
-[class*="st-key-card_"] [data-testid="stPopover"] button,
-[class*="st-key-card_"] [data-testid="stPopover"] button p {{
+/* il codice di una voce di listino ha accanto il punto interrogativo della
+   nota: in 45 px andava a capo, e il codice diventava alto due righe */
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"]
+[data-testid="stMarkdownContainer"] p {{
     white-space: nowrap;
 }}
 /* il filo fra una voce e l'altra: c'è, ma non separa due paragrafi */
@@ -1741,18 +1781,29 @@ def riga_voce_computo(voce):
     """
     codice = voce["codice"]
     c_cod, c_desc, c_um, c_qta, c_prezzo, c_parz, c_x = st.columns(
-        [0.45, 2.65, 0.7, 0.9, 0.9, 0.95, 0.5], vertical_alignment="center")
+        [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45],
+        vertical_alignment="center")
     aiuto = voce.get("nota")
     if voce.get("analisi"):
         aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
     descrizione, um = testi_voce(voce)
-    if listino.voce_per_codice(codice) is None:
-        # Una voce tua può aver sbagliato casa: il codice diventa il modo
-        # per cambiarla. Un menù dentro la colonna del codice, non una
-        # colonna in più — la riga è già una tabella stretta, e questa è
-        # una cosa che si fa una volta, non tutti i giorni.
-        with c_cod.popover(codice, help="Spostala in un'altra categoria"):
-            st.markdown(f"**{codice}** · {descrizione}")
+    # Il CODICE è la maniglia della riga: si preme e si apre il pannellino
+    # con tutto quello che riguarda la riga in quanto riga — l'ordine, la
+    # categoria — più la nota del listino, che come suggerimento appeso a
+    # un punto interrogativo in 45 px non si leggeva.
+    with c_cod.popover(codice, help="Ordine, categoria e nota della voce"):
+        st.markdown(f"**{codice}** · {descrizione}")
+        su, giu = st.columns(2)
+        su.button("↑ Su", key=f"su_{codice}", width="stretch",
+                  on_click=scambia_con_vicina, args=(codice, -1),
+                  help="Scambia con la voce sopra, nella sua categoria")
+        giu.button("↓ Giù", key=f"giu_{codice}", width="stretch",
+                   on_click=scambia_con_vicina, args=(codice, 1),
+                   help="Scambia con la voce sotto, nella sua categoria")
+        if listino.voce_per_codice(codice) is None:
+            # Una voce tua può anche aver sbagliato casa. Quelle di listino
+            # no: la categoria è del catalogo, e vale per tutti i cantieri.
+            st.divider()
             st.selectbox(
                 "Sposta nella categoria", listino.CATEGORIE,
                 index=(listino.CATEGORIE.index(voce["categoria"])
@@ -1762,8 +1813,9 @@ def riga_voce_computo(voce):
                       on_click=sposta_voce_extra, args=(codice,),
                       help="Il codice cambia con la categoria: la serie "
                            "dice dove sta di casa la voce.")
-    else:
-        c_cod.markdown(f":gray[**{codice}**]", help=aiuto)
+        if aiuto:
+            st.divider()
+            st.caption(aiuto)
     # Un'AREA di testo, non una casella: le descrizioni vere sono lunghe
     # («Realizzazione di impianti di riscaldamento e raffrescamento in pompa
     # di calore canalizzata a soffitto…») e in una riga sola se ne leggeva
@@ -1786,12 +1838,19 @@ def riga_voce_computo(voce):
                     decimali=2)
     quantita = float(st.session_state.get(f"q_{codice}") or 0.0)
     prezzo = float(st.session_state.get(f"p_{codice}") or voce["prezzo"])
+    # Il parziale sta a DESTRA nella sua colonna: è la cifra della riga, e
+    # incolonnata a filo si legge scorrendo il computo — a sinistra ballava
+    # dietro alla lunghezza del prezzo.
     if quantita > 0:
-        c_parz.markdown(f"**{euro(quantita * prezzo)}**")
+        c_parz.markdown(
+            f"<div style='text-align:right;font-weight:700'>"
+            f"{euro(quantita * prezzo)}</div>", unsafe_allow_html=True)
     else:
         # non è uno zero come gli altri: è una voce che hai scelto e non hai
         # ancora quantificato, e fuori di qui (totali, PDF) non esiste
-        c_parz.markdown(":orange[da quantificare]")
+        c_parz.markdown(
+            f"<div style='text-align:right;color:{OTTONE}'>"
+            "da quantificare</div>", unsafe_allow_html=True)
     # Anche le voci scritte a mano tornano nel pool: una lavorazione
     # inventata per questo cantiere si toglie e si rimette come le altre, e
     # buttarla via al primo ripensamento vorrebbe dire riscriverla da capo.
@@ -1815,14 +1874,21 @@ def voce_trovata(voce, termine):
 
 
 def grafico_totali(totali):
-    """Barre orizzontali: una serie, un solo colore, etichette dirette."""
+    """Barre orizzontali: una barra, la tinta della sua categoria.
+
+    Le stesse tinte delle schede e delle pastiglie del riepilogo: il colore
+    qui non decora, è il modo in cui si riconosce una categoria in tutta la
+    pagina. Con un solo oro per tutte, questo grafico era l'unico posto in
+    cui bisognava rileggere l'etichetta per sapere di che si parla.
+    """
     categorie = sorted(totali, key=totali.get)
     valori = [totali[c] for c in categorie]
     fig = go.Figure(go.Bar(
         x=valori,
         y=categorie,
         orientation="h",
-        marker_color=ORO,
+        marker_color=[COLORI_CATEGORIE.get(c, (OTTONE, ""))[0]
+                      for c in categorie],
         text=[euro(v) for v in valori],
         textposition="outside",
         textfont=dict(color=CREMA),
@@ -3388,7 +3454,7 @@ if "da_caricare" in st.session_state:
                "riv_alt_w", "riv_porte_n_w", "riv_finestre_n_w",
                "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
                "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
-               "apert_larg_w", "apert_alt_w", "auto_computo_w"):
+               "apert_larg_w", "apert_alt_w", "auto_computo_w", "iva_w"):
         st.session_state.pop(_k, None)
     for _chiave in CAMPI_NUMERO_IT:
         st.session_state.pop(f"{_chiave}_txt", None)
@@ -3556,7 +3622,7 @@ for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
             "riv_porte_n", "riv_finestre_n",
             "fin_n", "fin_larg", "fin_alt", "pf_n", "pf_larg", "pf_alt",
             "apert_dem_n", "apert_cos_n", "apert_larg", "apert_alt",
-            "auto_computo"):
+            "auto_computo", "iva"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
 
@@ -3923,13 +3989,15 @@ with tab_computo:
                 if aperta and voci_cat:
                     (h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz,
                      h_x) = st.columns(
-                        [0.45, 2.65, 0.7, 0.9, 0.9, 0.95, 0.5])
+                        [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45])
                     h_cod.caption("Cod.")
                     h_voce.caption("Voce")
                     h_um.caption("U.M.")
                     h_qta.caption("Quantità")
                     h_prezzo.caption("Prezzo €")
-                    h_parz.caption("Parziale")
+                    h_parz.markdown(
+                        "<div style='text-align:right;opacity:.6'>Parziale"
+                        "</div>", unsafe_allow_html=True)
                     for voce in voci_cat:
                         st.divider()
                         riga_voce_computo(voce)
@@ -4112,9 +4180,16 @@ with tab_computo:
         totale_lavori = totale
 
         st.metric("Totale lavori (IVA esclusa)", euro(totale))
+        # ⚠️ Il valore buono vive in `iva`, il widget in `iva_w`. Con la sola
+        # chiave del widget l'aliquota tornava al 10% da sola: Streamlit
+        # tiene lo stato dei widget legato a com'è fatta la pagina, e ogni
+        # volta che il sorgente cambia — cioè a ogni aggiornamento dell'app —
+        # quel legame si spezza e il campo rinasce col valore predefinito.
+        # Chi aveva messo il 22% se lo ritrovava al 10% senza toccare niente,
+        # e il totale finale con lui.
         st.number_input(
             "Aliquota IVA (%)", min_value=0.0, max_value=100.0, step=1.0,
-            key="iva",
+            value=float(st.session_state.iva), key="iva_w",
             help="10% ristrutturazioni (predefinita), 22% ordinaria, "
                  "4% prima casa")
         st.metric(f"IVA {numero_it(st.session_state.iva, 0)}%",

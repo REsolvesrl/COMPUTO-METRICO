@@ -641,3 +641,64 @@ def test_il_battiscopa_si_misura_in_metri_lineari():
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
     assert at.selectbox(key="u_2.14_w").value == "ml"
+
+
+# ------------------------------------------------- l'ordine delle righe
+
+def _tre_demolizioni(at):
+    """Tre voci di demolizione, nell'ordine in cui sono state prese."""
+    for codice in ("1.01", "1.02", "1.03"):
+        at.button(key=f"prendi_{codice}").click().run()
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    return at
+
+
+def test_una_voce_si_sposta_su():
+    at = _tre_demolizioni(_avvia())
+    assert at.session_state["voci_scelte"] == ["1.01", "1.02", "1.03"]
+    at.button(key="su_1.03").click().run()
+    assert at.session_state["voci_scelte"] == ["1.01", "1.03", "1.02"]
+
+
+def test_una_voce_si_sposta_giu():
+    at = _tre_demolizioni(_avvia())
+    at.button(key="giu_1.01").click().run()
+    assert at.session_state["voci_scelte"] == ["1.02", "1.01", "1.03"]
+
+
+def test_la_prima_non_scappa_di_sopra():
+    """«Su» dalla prima non deve portarla in un'altra categoria."""
+    at = _tre_demolizioni(_avvia())
+    at.button(key="su_1.01").click().run()
+    assert at.session_state["voci_scelte"] == ["1.01", "1.02", "1.03"]
+
+
+def test_l_ultima_non_scappa_di_sotto():
+    at = _tre_demolizioni(_avvia())
+    at.button(key="giu_1.03").click().run()
+    assert at.session_state["voci_scelte"] == ["1.01", "1.02", "1.03"]
+
+
+def test_l_ordine_si_muove_solo_dentro_la_categoria():
+    """Fra le demolizioni c'è una voce di un'altra categoria: «su» deve
+    scavalcarla, non fermarsi né mescolare le due tabelle."""
+    at = _avvia()
+    at.button(key="prendi_1.01").click().run()
+    at.button(key="prendi_2.10").click().run()      # ricostruzioni, in mezzo
+    at.button(key="prendi_1.02").click().run()
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    at.button(key="su_1.02").click().run()
+    assert at.session_state["voci_scelte"] == ["1.02", "2.10", "1.01"]
+
+
+def test_l_ordine_si_salva_e_torna():
+    at = _tre_demolizioni(_avvia())
+    at.button(key="su_1.03").click().run()
+    ordine = list(at.session_state["voci_scelte"])
+    riaperta = _avvia()
+    riaperta.session_state["da_caricare"] = {
+        **PROGETTO_VECCHIO, "voci_scelte": ordine}
+    riaperta.run()
+    assert riaperta.session_state["voci_scelte"] == ordine

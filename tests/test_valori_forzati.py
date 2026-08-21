@@ -149,7 +149,10 @@ def test_l_iva_si_comanda_dal_riepilogo_costi():
     predefinito."""
     at = _avvia()
     chiavi = [w.key for w in at.number_input]
-    assert "iva" in chiavi
+    # «iva_w» e non «iva»: il valore buono sta nella chiave di verità, il
+    # widget in quella con la _w. Con la sola chiave del widget l'aliquota
+    # tornava al 10% da sola a ogni aggiornamento dell'app.
+    assert "iva_w" in chiavi
 
 
 def test_gli_imprevisti_non_sono_piu_nel_computo():
@@ -178,12 +181,31 @@ def test_cambiare_l_iva_muove_il_totale():
     at.session_state["q_1.90"] = 1.0
     at.session_state["p_1.90"] = 10000.0
     at.run()
-    at.number_input(key="iva").set_value(10.0).run()
+    at.number_input(key="iva_w").set_value(10.0).run()
     dieci = {m.label: m.value for m in at.metric}
-    at.number_input(key="iva").set_value(22.0).run()
+    at.number_input(key="iva_w").set_value(22.0).run()
     ventidue = {m.label: m.value for m in at.metric}
     assert dieci["IVA 10%"] == "1.000,00 €"
     assert ventidue["IVA 22%"] == "2.200,00 €"
     # e i lavori restano quelli: l'IVA non li tocca
     assert dieci["Totale lavori (IVA esclusa)"] == "10.000,00 €"
     assert ventidue["Totale lavori (IVA esclusa)"] == "10.000,00 €"
+
+
+def test_l_aliquota_iva_vive_in_una_chiave_di_verita():
+    """Il difetto: l'IVA viveva nella chiave del WIDGET, e Streamlit lega
+    lo stato dei widget a com'e' fatta la pagina. A ogni aggiornamento
+    dell'app quel legame si spezzava e il campo rinasceva al 10%: chi
+    aveva messo il 22% se lo ritrovava al 10% senza toccare niente, e il
+    totale finale con lui.
+
+    Adesso il valore sta in «iva» e il widget in «iva_w», che nasce da
+    quello con value=. E' lo stesso schema di alt_locali e delle misure
+    delle porte, per la stessa ragione.
+    """
+    at = _avvia()
+    at.number_input(key="iva_w").set_value(22.0).run()
+    assert at.session_state["iva"] == 22.0
+    at.run()                       # un giro qualunque non la riporta al 10
+    assert at.session_state["iva"] == 22.0
+    assert at.number_input(key="iva_w").value == 22.0
