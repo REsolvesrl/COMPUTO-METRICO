@@ -176,7 +176,7 @@ VOCI = [
     {"codice": "2.10", "categoria": "Ricostruzioni e ripristini", "um": "m²",
      "prezzo": 55.0,
      "descrizione": "Fornitura e posa pavimenti in piastrelle (gres)",
-     "nota": "Superficie netta calpestabile + ~5% di sfrido."},
+     "nota": "Superficie netta calpestabile."},
     {"codice": "2.11", "categoria": "Ricostruzioni e ripristini", "um": "m²",
      "prezzo": 55.0,
      "descrizione": "Fornitura e posa rivestimenti in piastrelle",

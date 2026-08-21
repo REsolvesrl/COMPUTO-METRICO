@@ -590,7 +590,7 @@ VOCI_DA_SUPERFICI = [
     ("1.01", "pavimento", False),         # demolizione pavimenti
     ("1.10", "battiscopa", False),        # rimozione zoccolini
     ("2.03", "pavimento", False),         # rifacimento massetto
-    ("2.10", "pavimento_sfrido", True),   # posa gres (+5% di sfrido)
+    ("2.10", "pavimento", True),          # posa gres
     ("2.14", "battiscopa", True),         # posa battiscopa
     ("2.17", "tinteggiatura", False),     # rasatura muri e soffitti
     ("2.18", "tinteggiatura", True),      # tinteggiatura muri e soffitti
@@ -4767,8 +4767,6 @@ with tab_plan:
 
             grandezze.update({
                 "pavimento": pav_m2,
-                # il listino chiede la superficie netta più ~5% di sfrido
-                "pavimento_sfrido": pav_m2 * 1.05,
                 "battiscopa": batt_m,
                 "tinteggiatura": pareti_m2 + soffitti_m2,
             })

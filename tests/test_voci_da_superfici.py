@@ -26,7 +26,6 @@ SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 # plausibile e sbagliato.
 UM_ATTESA = {
     "pavimento": "m²",
-    "pavimento_sfrido": "m²",
     "battiscopa": "m",
     "tinteggiatura": "m²",
     "muri_demolire": "m²",
