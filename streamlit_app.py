@@ -156,6 +156,18 @@ def css_mondo():
    al posto dell'icona, sovrapposta all'etichetta. Successo il 2026-08-08. */
 .stApp {{ font-family: var(--testo); }}
 
+/* L'eredità però non basta: Streamlit rimette «Source Sans» sui propri
+   elementi con selettori più specifici, e misurando dal vivo la pila
+   dichiarata perdeva 99 foglie di testo a 5. Il carattere scritto in
+   DESIGN.md non era quello a schermo quasi da nessuna parte.
+   ⚠️ span e div restano fuori di proposito, per l'avvertimento qui sopra:
+   qui ci sono solo elementi che non possono essere un'icona. */
+.stApp p, .stApp label, .stApp li, .stApp td, .stApp th,
+.stApp input, .stApp textarea, .stApp button,
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {{
+    font-family: var(--testo);
+}}
+
 /* Le cifre si confrontano di continuo (quantità, prezzi, superfici): vanno
    incolonnate, altrimenti l'occhio non le può sommare a vista. Questa invece
    può essere larga: è una funzione del carattere, non il carattere. */
@@ -197,12 +209,16 @@ def css_mondo():
     color: var(--ottone);
     font-weight: 700;
 }}
-/* L'etichetta di campione: la voce del sistema. Nomina, non racconta. */
+/* L'etichetta di campione: la voce del sistema. Nomina, non racconta.
+   Il cemento pieno su ardesia sta a 3,1:1, sotto la soglia di leggibilità
+   proprio nella riga che nomina le cose. La miscela col travertino era già
+   scritta per le metriche e non era mai arrivata qui, cioè nella classe
+   che la regola nomina. Resta la voce del cemento, ma si legge. */
 .cme-etichetta {{
     font-size: .7rem;
     text-transform: uppercase;
     letter-spacing: .12em;
-    color: var(--cemento);
+    color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
     font-weight: 600;
 }}
 .cme-testata .progetto {{
@@ -281,10 +297,72 @@ def css_mondo():
     background: color-mix(in srgb, var(--ottone) 14%, transparent);
     color: var(--travertino);
 }}
+/* Sull'ottone pieno la cifra è ardesia: la scheda del totale lo fa da
+   sempre e si legge a 6,6:1, ma i bottoni primari tenevano il bianco che
+   ci mette Streamlit e stavano a 2,24:1 — il contrasto peggiore di tutta
+   l'app, proprio sull'azione che si preme di più. Lo stesso difetto era
+   già stato corretto dentro il visualizzatore a luglio, e non era mai
+   arrivato qui.
+   ⚠️ Discendente, non figlio: quando un bottone ha un `help=`, Streamlit
+   gli infila attorno il bersaglio del tooltip, e `.stButton > button` non
+   lo raggiunge più — erano proprio «Salva» e «Prepara il file», cioè i due
+   che si premono di più. E `:not(:disabled)`: un bottone spento ha il
+   fondo trasparente, e l'ardesia su ardesia sparisce (misurato a 1,42:1
+   su «Chiudi l'operazione» prima di questa riga). */
+.stApp .stButton button[kind="primary"]:not(:disabled),
+.stApp .stDownloadButton button[kind="primary"]:not(:disabled),
+.stApp .stFormSubmitButton button[kind="primary"]:not(:disabled) {{
+    color: var(--ardesia);
+    font-weight: 650;
+}}
+.stApp .stButton button[kind="primary"]:not(:disabled):hover,
+.stApp .stDownloadButton button[kind="primary"]:not(:disabled):hover,
+.stApp .stFormSubmitButton button[kind="primary"]:not(:disabled):hover {{
+    color: var(--ardesia);
+}}
+/* Le azioni che distruggono si vestono di cotto: non devono somigliare a
+   un'azione qualsiasi, e nemmeno all'ottone che invece invita a premere. */
+[class*="st-key-nuovo_dopo_ripresa"] button,
+[class*="st-key-nuovo_progetto"] button {{
+    border: 1px solid color-mix(in srgb, var(--cotto) 60%, transparent);
+    color: var(--cotto);
+    background: transparent;
+}}
+[class*="st-key-nuovo_dopo_ripresa"] button:hover:not(:disabled),
+[class*="st-key-nuovo_progetto"] button:hover:not(:disabled) {{
+    border-color: var(--cotto);
+    background: color-mix(in srgb, var(--cotto) 16%, transparent);
+    color: var(--travertino);
+}}
 .stButton > button:focus-visible,
 .stDownloadButton > button:focus-visible {{
     outline: 2px solid var(--ottone);
     outline-offset: 2px;
+}}
+/* L'anello d'ottone copriva i bottoni e basta: su ~250 fra caselle di
+   testo, numeri, date e menù non c'era nulla: il contorno a riposo del
+   contenitore è dello stesso colore del suo fondo, quindi chi va con il
+   Tab attraversava il computo al buio. Il fuoco si mette sul contenitore
+   (`:focus-within`) perché il bordo visibile è suo, non dell'input. */
+.stApp input:focus-visible,
+.stApp textarea:focus-visible,
+.stApp [data-baseweb="input"]:focus-within,
+.stApp [data-baseweb="textarea"]:focus-within,
+.stApp [data-baseweb="select"]:focus-within,
+.stApp [data-baseweb="popover"] li:focus-visible,
+.stApp [role="checkbox"]:focus-visible,
+.stApp [role="radio"]:focus-visible,
+.stApp [role="tab"]:focus-visible,
+.stApp summary:focus-visible,
+.stApp a:focus-visible {{
+    outline: 2px solid var(--ottone);
+    outline-offset: 1px;
+}}
+/* Il fondo del bottoncino su/giù dei campi numerici e il selettore data
+   hanno un contorno proprio: senza questo l'anello resta coperto. */
+.stApp [data-baseweb="input"]:focus-within,
+.stApp [data-baseweb="select"]:focus-within {{
+    border-color: var(--ottone);
 }}
 
 /* ------------------------------------------------ campioni di misura */
@@ -341,6 +419,18 @@ def css_mondo():
     border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
     padding: .5rem;
     margin-bottom: .85rem;
+}}
+/* Il disegno comanda, ma non comandava: il componente è un iframe e
+   Streamlit gli lasciava la larghezza intrinseca, 300 px dentro uno slot
+   da 982. La tela restava un francobollo in mezzo alla cornice d'ottone,
+   e i 682 px vuoti facevano sembrare il guasto una scelta. Stesso
+   `!important` delle tabelle: la misura sbagliata Streamlit la scrive
+   nello stile in riga, e solo così si vince. */
+.st-key-tela [data-testid="stCustomComponentV1"] {{
+    width: 100% !important;
+}}
+.st-key-tela [data-testid="stCustomComponentV1"] iframe {{
+    width: 100% !important;
 }}
 /* I pannelli dei comandi stanno attorno in cemento, mai in competizione col
    disegno: raggruppano i campi che altrimenti sarebbero una fila indistinta
@@ -1471,8 +1561,8 @@ def css_schede_computo():
     # piena, così a colpo d'occhio si vede che il computo è quello sopra.
     regole.append(f"""
 .st-key-card_pool {{
-    background: {ARDESIA}0F;
-    border: 1px solid {ARDESIA}55;
+    background: color-mix(in srgb, var(--cemento) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--cemento) 45%, transparent);
     border-radius: 0;
     padding: 0.7rem 0.9rem 0.3rem;
     margin-top: 0.9rem;
@@ -2364,6 +2454,29 @@ def guardia_prezzi_bp(acquisto, vendita):
   if (doc.__cmeGuardiaPrezzi) return;
   doc.__cmeGuardiaPrezzi = true;
   var CAMPI = [["bp_in_acq", "acq"], ["bp_in_ven", "ven"]];
+  // Il campo contiene un numero all'italiana — «140.000» — e parseFloat lì
+  // legge 140. Il confronto con l'applicato (140000) risultava sempre
+  // diverso, quindi l'avviso «premi Invio» restava acceso PER SEMPRE su
+  // ogni importo da mille euro in su, e premere Invio non lo spegneva mai:
+  // l'unico avviso che avrebbe dovuto contare era diventato rumore fisso
+  // sotto i due numeri principali del business plan.
+  // Queste sono le stesse regole di numero_da_it() in formato.py.
+  function numeroDaIt(testo) {
+    var t = String(testo == null ? "" : testo)
+              .replace(/[€%]/g, "").replace(/[\\s\\u00A0]/g, "");
+    if (!t) return NaN;
+    if (t.indexOf(",") >= 0) {
+      t = t.replace(/\\./g, "").replace(",", ".");
+    } else if (t.indexOf(".") >= 0) {
+      var pezzi = t.replace(/^[+-]/, "").split(".");
+      var migliaia = pezzi.length > 1 && pezzi[0] !== ""
+                     && pezzi.slice(1).every(function (p) {
+                          return p.length === 3;
+                        });
+      if (migliaia) t = t.replace(/\\./g, "");
+    }
+    return Number(t);
+  }
   function controlla() {
     var marcatore = doc.getElementById("cme-prezzi-applicati");
     if (!marcatore) return;
@@ -2373,7 +2486,7 @@ def guardia_prezzi_bp(acquisto, vendita):
       var input = cella.querySelector("input");
       if (!input) return;
       var applicato = parseFloat(marcatore.dataset[campo[1]] || "0");
-      var digitato = parseFloat(input.value);
+      var digitato = numeroDaIt(input.value);
       var diverso = input.value !== "" && !isNaN(digitato)
                     && Math.abs(digitato - applicato) > 0.005;
       var badge = cella.querySelector(".cme-nonapplicato");
@@ -2416,7 +2529,14 @@ def riga_costo_bp(etichetta, centro=None, destra=None, iva=None,
         [1.5, 0.75, 1.15, 0.7, 1.0], vertical_alignment="center")
     c_eti.markdown(f":gray[{etichetta}]")
 
-    def cella(colonna, contenuto, a_destra=False):
+    # ⚠️ L'etichetta accessibile portava la chiave di sessione — «Imposte
+    # d'acquisto bp_imposta», «… bp_imposta_eur», «… bp_iva_imposta» — che
+    # serviva a distinguere i campi fra loro ma è finita dritta in ciò che
+    # legge uno screen reader: tre caselle della stessa riga annunciate con
+    # il nome di una variabile Python. La chiave la unicità la dà già da
+    # sola (`key=`); l'etichetta può quindi dire il ruolo, in italiano.
+    def cella(colonna, contenuto, a_destra=False, ruolo=""):
+        nome = f"{etichetta} · {ruolo}" if ruolo else etichetta
         if contenuto is None:
             colonna.markdown('<div style="text-align:center;'
                              'color:#8FA0BE;">/</div>',
@@ -2431,26 +2551,27 @@ def riga_costo_bp(etichetta, centro=None, destra=None, iva=None,
             chiave = impostazioni.pop("chiave")
             if chiave in CAMPI_NUMERO_IT:
                 # gli importi: casella di testo, per avere le migliaia
-                campo_numero_it(colonna, f"{etichetta} {chiave}", chiave,
+                campo_numero_it(colonna, nome, chiave,
                                 decimali=CAMPI_NUMERO_IT[chiave][0],
                                 segnaposto=None,
                                 aiuto=impostazioni.get("help"))
             else:
                 # le percentuali restano numeriche: niente migliaia da
                 # separare, e il passo a freccette lì serve davvero
-                colonna.number_input(f"{etichetta} {chiave}", key=chiave,
+                colonna.number_input(nome, key=chiave,
                                      label_visibility="collapsed",
                                      **impostazioni)
 
-    cella(c_inp, centro)
-    cella(c_val, destra, a_destra=True)
+    cella(c_inp, centro, ruolo="percentuale")
+    cella(c_val, destra, a_destra=True, ruolo="importo netto")
 
     if iva is None:
         cella(c_ivapct, None)
         cella(c_ivaeur, None)
         return 0.0
     c_ivapct.number_input(
-        f"{etichetta} {iva}", key=iva, min_value=0.0, max_value=50.0,
+        f"{etichetta} · aliquota IVA", key=iva,
+        min_value=0.0, max_value=50.0,
         step=1.0, format="%.2f", label_visibility="collapsed",
         help="Aliquota di questa voce: 22% è l'ordinaria, 10% i lavori "
              "edili, 0% le voci che l'IVA non ce l'hanno (l'imposta di "
@@ -2459,7 +2580,7 @@ def riga_costo_bp(etichetta, centro=None, destra=None, iva=None,
         imponibile = float(st.session_state.get(destra["chiave"], 0.0)
                            if isinstance(destra, dict) else 0.0)
     importo_iva = fattibilita.iva_su(imponibile, st.session_state[iva])
-    cella(c_ivaeur, euro(importo_iva), a_destra=True)
+    cella(c_ivaeur, euro(importo_iva), a_destra=True, ruolo="IVA in euro")
     return importo_iva
 
 
@@ -3365,9 +3486,17 @@ def stato_salvataggio(firma):
     ultimo = st.session_state.get("ultimo_salvataggio")
     modificato = firma != st.session_state.get("firma_salvata")
     if ultimo is None:
-        return (":orange[**Mai salvato in questa sessione.**] Il file .json "
-                "è l'unico salvataggio completo: senza, un aggiornamento "
-                "della pagina perde tutto.")
+        # ⚠️ Diceva che il .json era «l'unico salvataggio completo»: non è
+        # vero da quando c'è il tasto Salva in testata, che scrive in
+        # archivio ed è la fonte da cui riapri_ultimo_lavoro() rimette in
+        # tavola il lavoro al prossimo avvio. Dire a qualcuno che il suo
+        # lavoro è in pericolo quando non lo è brucia il canale d'allarme
+        # per il giorno in cui lo sarà davvero.
+        return (":orange[**Mai salvato in questa sessione.**] Il tasto "
+                "💾 Salva in cima alla pagina scrive in archivio, ed è da "
+                "lì che l'app riapre da sola al prossimo avvio. Il .json è "
+                "la copia da portarsi altrove. Finché non fai né l'uno né "
+                "l'altro, un aggiornamento della pagina perde tutto.")
     quando = ultimo.strftime("%H:%M")
     if modificato:
         return (f":orange[**Modifiche non salvate.**] Ultimo salvataggio "
@@ -3863,7 +3992,12 @@ else:
 if progetto_e_vuoto():
     _stato = ""
 elif st.session_state.get("ultimo_salvataggio") is None:
-    _stato = ('<span class="salvataggio sospeso">mai salvato</span>')
+    # «mai salvato» tutto solo contraddiceva a vista il banner di ripresa
+    # che quattro righe più su dice «Ripreso X, salvato il 21/08 alle 15:28»:
+    # sono due verità diverse — questa sessione contro l'archivio — e senza
+    # dirlo sembravano una bugia.
+    _stato = ('<span class="salvataggio sospeso">'
+              'mai salvato in questa sessione</span>')
 elif firma_progetto() != st.session_state.get("firma_salvata"):
     _stato = ('<span class="salvataggio sospeso">modifiche non salvate</span>')
 else:
@@ -3932,8 +4066,20 @@ with tab_computo:
                      f"{_ripreso['origine']} il "
                      f"{_ripreso['quando'].strftime('%d/%m')} alle "
                      f"{_ripreso['quando'].strftime('%H:%M')}.")
-        r_nuovo.button("Progetto nuovo", width="stretch",
-                       key="nuovo_dopo_ripresa", on_click=azzera_progetto)
+        # Questo bottone stava accanto al banner di ripresa ed era il PRIMO
+        # controllo interattivo della pagina: un click, senza conferma,
+        # svuotava computo, planimetrie con la scala calibrata e le zone
+        # disegnate a mano, business plan, spese e MCA. L'azione identica
+        # dentro il pannello pretende una spunta; qui, dove la mano arriva
+        # per sbaglio mentre legge il banner, non pretendeva niente.
+        # Ora la conferma c'è, e dice cosa si perde.
+        with r_nuovo.popover("Progetto nuovo", width="stretch"):
+            st.markdown(
+                "Svuota **computo, planimetrie, business plan e spese**.\n\n"
+                "Le planimetrie perdono la scala calibrata e le zone "
+                "disegnate a mano: l'annulla non le riporta indietro.")
+            st.button("🗑️ Sì, svuota tutto", width="stretch",
+                      key="nuovo_dopo_ripresa", on_click=azzera_progetto)
 
     # Dati del progetto e archivio (una volta erano nella barra laterale;
     # tolta per dare tutta la larghezza alla planimetria).
@@ -4142,9 +4288,17 @@ with tab_computo:
             # il nome, tutto dentro un'unica marcatura di colore: due nodi
             # affiancati (la freccia fuori dal colore) sarebbero due elementi
             # distinti e il CSS li impaginerebbe uno sotto l'altro.
+            # Il grigio di Streamlit è rgba(250,250,250,.6): accanto a
+            # cinque titoli a tinta piena, «Pratiche e oneri» e «Aree
+            # esterne» non si leggevano come grigie ma come DISATTIVATE.
+            # Senza involucro restano travertino, il colore normale del
+            # testo: la tinta della categoria continua a portarla la
+            # pastiglia, che è il posto dove il campionario la vuole.
+            _eti_cat = f"**{'▾' if aperta else '▸'} {cat}**"
+            if colore_md != "gray":
+                _eti_cat = f":{colore_md}[{_eti_cat}]"
             with st.container(key=f"card_{indice}"):
-                if st.button(f":{colore_md}"
-                             f"[**{'▾' if aperta else '▸'} {cat}**]",
+                if st.button(_eti_cat,
                              key=f"apri_{indice}", width="stretch"):
                     st.session_state.cat_aperte ^= {cat}   # apre o chiude
                     st.rerun()
@@ -4243,8 +4397,12 @@ with tab_computo:
                 # Cercando si aprono da sole: se hai scritto «gres» vuoi
                 # vedere le voci, non le categorie che le contengono.
                 aperta_pool = bool(termine) or cat in st.session_state.pool_aperte
-                if st.button(f":{colore_md}[{'▾' if aperta_pool else '▸'} "
-                             f"**{cat}**] :gray[· {len(disponibili)}]",
+                # Stesso motivo della scheda computo: il grigio di Streamlit
+                # legge «disattivato», non «grigio».
+                _eti_pool = f"{'▾' if aperta_pool else '▸'} **{cat}**"
+                if colore_md != "gray":
+                    _eti_pool = f":{colore_md}[{_eti_pool}]"
+                if st.button(f"{_eti_pool} :gray[· {len(disponibili)}]",
                              key=f"pool_{indice}", width="stretch"):
                     st.session_state.pool_aperte ^= {cat}
                     st.rerun()

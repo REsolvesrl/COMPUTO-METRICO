@@ -9,7 +9,7 @@
        file è statico e il browser se lo tiene, quindi una modifica al
        disegno può restare invisibile anche dopo aver riavviato l'app.
        CAMBIARLO A OGNI MODIFICA DI main.js. -->
-  <script src="./main.js?v=2026-08-11-perimetro"></script>
+  <script src="./main.js?v=2026-08-21-pointer-resize-5"></script>
   <style>
     html, body { margin: 0; padding: 0; overflow: hidden;
                  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -25,6 +25,14 @@
       outline: none;
       touch-action: none;
       user-select: none;
+    }
+    /* La tela prende il fuoco da tastiera (ha tabindex), ma l'anello era
+       spento: chi arrivava col Tab non sapeva di essere sul disegno, cioè
+       proprio dove le scorciatoie da tastiera cominciano a funzionare.
+       Solo :focus-visible, così il click col mouse non lo accende. */
+    #cv:focus-visible {
+      outline: 2px solid #C9A96A;
+      outline-offset: -2px;
     }
     /* Barra strumenti flottante (stile AreaPlan, colori Resolve) */
     #toolbar {

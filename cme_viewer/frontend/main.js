@@ -127,7 +127,12 @@ function sizeCanvas() {
 }
 
 function fit() {
-  if (!img.naturalWidth) return;
+  // Senza immagine si usciva subito, PRIMA di dare una misura alla tela:
+  // e siccome sizeCanvas() vive solo qui dentro, il canvas restava del
+  // formato con cui era nato — 200 px in mezzo a una cornice da 854 —
+  // per tutto il tempo in cui non c'era ancora una planimetria. La misura
+  // non dipende dall'immagine: si dà comunque, poi si esce.
+  if (!img.naturalWidth) { sizeCanvas(); render(); return; }
   const w = Math.max(200, cont.clientWidth);
   let s = Math.min(w / img.naturalWidth, MAXH / img.naturalHeight);
   contH = Math.max(MINH, Math.min(MAXH, Math.round(img.naturalHeight * s)));
@@ -862,9 +867,21 @@ function onRender(event) {
   if (a.src !== curSrc) {
     curSrc = a.src;
     pronto = false;
-    img.src = a.src;          // al termine: img.onload → fit()
+    if (a.src) {
+      img.src = a.src;        // al termine: img.onload → fit()
+    } else {
+      // Nessuna planimetria: `img.onload` non arriverà mai, quindi fit()
+      // non veniva chiamato e la tela restava senza misura — 200 px in
+      // mezzo alla cornice. Lo stato vuoto occupa il posto che gli spetta.
+      sizeCanvas();
+      render();
+    }
   } else {
-    render();
+    // La larghezza dello slot cambia fra un giro e l'altro — si apre la
+    // scheda, si ridimensiona la finestra — e qui si passava dritti a
+    // render(), senza mai ridare una misura alla tela: restava quella con
+    // cui era nata, un francobollo dentro la cornice d'ottone.
+    if (pronto) fit(); else { sizeCanvas(); render(); }
   }
 }
 
@@ -908,14 +925,33 @@ function init() {
     zoomAt(s[0], s[1], Math.exp(-e.deltaY * 0.0012));
   }, { passive: false });
 
-  cv.addEventListener("mousedown", onDown);
+  // Eventi pointer, non mouse: la stessa riga copre mouse, penna e dito.
+  // Con i soli eventi mouse la tela era l'unica parte del programma che su
+  // un tablet non rispondeva — e la misura da planimetria è proprio la
+  // cosa che viene comodo fare in sopralluogo, non alla scrivania.
+  cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("dblclick", onDbl);
   cv.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-  cv.addEventListener("mouseleave", function () { cursorPos = null; render(); });
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  cv.addEventListener("pointerleave", function () { cursorPos = null; render(); });
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
   window.addEventListener("keydown", onKey);
   window.addEventListener("resize", function () { if (pronto) fit(); });
+
+  // La finestra non cambia misura quando è lo SLOT a cambiarla: Streamlit
+  // dà all'iframe la larghezza che vuole lui, e la tela restava del
+  // formato con cui era nata — 300 px dentro una cornice da 982. Il
+  // resize da solo non se ne accorgeva mai; l'osservatore sì.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(function () {
+      // Senza immagine `fit()` esce subito, e la tela restava del formato
+      // con cui era nata: un francobollo da 200 px in mezzo alla cornice
+      // anche quando non c'è ancora niente da disegnare. La misura si dà
+      // lo stesso, così lo stato vuoto occupa il posto che gli spetta.
+      if (pronto) fit(); else { sizeCanvas(); render(); }
+    }).observe(cont);
+  }
 
   Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
   Streamlit.setComponentReady();

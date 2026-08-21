@@ -41,6 +41,25 @@ sistema.** Verde giardino, giallo terrazzo, azzurro vano scale e gli altri
 per distinguere le zone sul disegno. Il mondo governa la cornice; quei colori
 governano il contenuto e non si toccano per ragioni estetiche.
 
+⚠️ **Nemmeno i colori dei sette mestieri appartengono al campionario, e
+restano così per scelta.** `COLORI_CATEGORIE` — rosso Demolizioni, verde
+Ricostruzioni, azzurro Idraulico, arancio Elettricista, viola Serramenti —
+sono tinte da tavolozza generica, non cotto/gres/cemento, e stanno sulla
+scheda del computo, cioè dentro la cornice e non sul disegno. La deroga qui
+sopra, scritta per il disegno, **non** li copriva: la si estende adesso,
+consapevolmente, perché sono i colori con cui l'utente distingue i mestieri
+a colpo d'occhio da prima dell'app. Vale una regola sola: **la tinta vive
+nella pastiglia**, non nel titolo. Il nome della categoria si legge in
+travertino, e quando Streamlit non ha un token che corrisponda alla tinta
+(le due categorie «grigie») il titolo non si colora affatto — il grigio di
+Streamlit è `rgba(250,250,250,.6)` e accanto a cinque tinte piene non legge
+«grigio», legge «disattivato».
+
+Chi un giorno volesse riportarli dentro al mondo sappia che è una decisione
+di prodotto, non un abbellimento: cotto per Demolizioni, gres per
+Ricostruzioni, cemento per Aree esterne, travertino per Pratiche. Non farlo
+di propria iniziativa.
+
 ## Tipografia
 
 Pile di sistema, nessun carattere scaricato dalla rete: **il programma deve
