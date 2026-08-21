@@ -1402,11 +1402,13 @@ def css_schede_computo():
 .st-key-apri_{indice} button::after {{
     content: "{euro(totale)}";
 }}
+/* Il filo che separa due voci: della tinta della categoria e abbastanza
+   marcato da vedersi. Serve un po' d'aria attorno, se no il filo tocca il
+   bordo delle caselle e non si distingue più da loro. */
 .st-key-card_{indice} hr {{
     height: 1px;
-    background-color: {colore}66;
+    background-color: {colore}99;
     border: none;
-    margin: 0.35rem 0 0.6rem;
 }}
 """)
     # Il pool: il magazzino, non il documento. Stessa famiglia di forme —
@@ -1456,8 +1458,18 @@ def css_schede_computo():
 [class*="st-key-card_"] [data-testid="stHorizontalBlock"] {{
     gap: 0.35rem;
 }}
+/* ⚠️ QUI stava lo spazio vero. Dentro le celle si era stretto tutto, ma
+   fra una riga e l'altra ne restavano 32 px: la riga misura 45 e il passo
+   era 77. Sono i 16 px di «gap» che Streamlit mette fra gli elementi
+   impilati, due volte (sopra e sotto il filo di separazione), più i
+   margini del filo. Senza !important non si sposta: la regola di Streamlit
+   nasce da una classe generata, più specifica di questa. */
+/* ⚠️⚠️ Il selettore NON ha lo spazio: quei 16 px stanno sulla scheda
+   STESSA, che è essa stessa un «stVerticalBlock» — scritto come
+   discendente non trovava niente, e lo spazio restava tale e quale. */
+[class*="st-key-card_"][data-testid="stVerticalBlock"],
 [class*="st-key-card_"] [data-testid="stVerticalBlock"] {{
-    gap: 0.15rem;
+    gap: 0.25rem !important;
 }}
 /* ⚠️ LE CELLE SI STRINGONO ATTORNO AL TESTO. Un campo di Streamlit nasce
    alto 40 px perché è pensato per un modulo, dove le caselle stanno larghe
@@ -1466,8 +1478,10 @@ def css_schede_computo():
    Sopra e sotto resta un filo, quel tanto che serve a non far toccare il
    testo al bordo. */
 [class*="st-key-card_"] textarea {{
-    min-height: 2.7rem !important;
-    height: 2.7rem !important;
+    /* tre righe piene: le descrizioni di cantiere ci arrivano spesso, e
+       la terza mezza tagliata era peggio che non averla */
+    min-height: 3.85rem !important;
+    height: 3.85rem !important;
     padding: 0.2rem 0.5rem;
     line-height: 1.3;
     font-size: 0.86rem;
@@ -1566,9 +1580,11 @@ div[data-baseweb="select"] > div > div:first-child {{
 [data-testid="stMarkdownContainer"] p {{
     white-space: nowrap;
 }}
-/* il filo fra una voce e l'altra: c'è, ma non separa due paragrafi */
+/* il filo fra una voce e l'altra: c'è, ma non separa due paragrafi.
+   ⚠️ Un minimo d'aria ci vuole: azzerata del tutto, la linea di confine
+   spariva schiacciata fra due caselle e le righe si impastavano. */
 [class*="st-key-card_"] hr {{
-    margin: 0.25rem 0 !important;
+    margin: 0.2rem 0 !important;
 }}
 """)
 
