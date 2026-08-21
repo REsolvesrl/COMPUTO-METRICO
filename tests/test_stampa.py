@@ -23,9 +23,8 @@ VOCI = [
      "quantita": 88.52, "prezzo": 45.0, "importo": 3983.4},
 ]
 
-TOTALI = {"somma": 13595.4, "imprevisti_pct": 5.0, "imprevisti": 679.77,
-          "totale_lavori": 14275.17, "iva_pct": 10.0, "iva": 1427.52,
-          "totale": 15702.69}
+TOTALI = {"somma": 13595.4, "totale_lavori": 13595.4, "iva_pct": 10.0,
+          "iva": 1359.54, "totale": 14954.94}
 
 
 def _testo_del_pdf(byte):    # nome «privato»: pytest raccoglie
@@ -63,8 +62,15 @@ def test_raggruppa_per_categoria():
 
 def test_il_totale_finale_e_quello_che_si_paga():
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
-    assert "15.702,69" in testo
+    assert "14.954,94" in testo
     assert "IVA 10%" in testo
+
+
+def test_il_computo_consegnato_non_porta_riserve():
+    """Il PDF va all'impresa: sono i lavori computati, non i lavori più un
+    accantonamento che riguarda chi paga. La riserva sta nel business plan."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    assert "mprevisti" not in testo
 
 
 def test_il_computo_vuoto_lo_dice():

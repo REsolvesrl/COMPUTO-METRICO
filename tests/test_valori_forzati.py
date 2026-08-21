@@ -142,25 +142,33 @@ def test_un_progetto_nuovo_riporta_i_predefiniti():
 
 # --------------------------- i comandi del computo restano raggiungibili
 
-def test_iva_e_imprevisti_si_comandano_dal_riepilogo_costi():
-    """Sono usciti dal pannello «Dati del progetto» — non erano anagrafica —
-    e sono andati accanto alle righe che governano. Restano gli UNICI due
-    comandi di quelle percentuali: se sparissero, la coda del computo
-    (imprevisti, IVA, totale finale) si congelerebbe sui predefiniti e il
-    tasto «Porta gli imprevisti a X%» della scheda Cantiere resterebbe
-    senza effetto visibile."""
+def test_l_iva_si_comanda_dal_riepilogo_costi():
+    """È uscita dal pannello «Dati del progetto» — non era anagrafica — ed
+    è andata accanto alle righe che governa. È l'UNICO comando di quella
+    percentuale: se sparisse, la coda del computo si congelerebbe sul
+    predefinito."""
     at = _avvia()
     chiavi = [w.key for w in at.number_input]
-    assert "imprevisti" in chiavi
     assert "iva" in chiavi
 
 
-def test_cambiare_gli_imprevisti_muove_il_totale():
+def test_gli_imprevisti_non_sono_piu_nel_computo():
+    """Il computo è il documento dei lavori. La riserva è una scelta di chi
+    paga e vive nel business plan: tenerla in due posti voleva dire, prima o
+    poi, contarla due volte."""
+    at = _avvia()
+    chiavi = [w.key for w in at.number_input]
+    assert "imprevisti" not in chiavi
+    etichette = [m.label for m in at.metric]
+    assert not [e for e in etichette if e.startswith("Imprevisti")]
+
+
+def test_cambiare_l_iva_muove_il_totale():
     """La prova che il comando e' ancora collegato ai conti, non solo
     presente sullo schermo.
 
-    Serve un computo con dentro qualcosa: su un totale di zero, lo 0% e il
-    20% danno lo stesso numero e la prova non proverebbe niente.
+    Serve un computo con dentro qualcosa: su un totale di zero, il 10% e il
+    22% danno lo stesso numero e la prova non proverebbe niente.
     """
     at = _avvia()
     at.session_state["voci_extra"] = {"1.90": {
@@ -170,12 +178,12 @@ def test_cambiare_gli_imprevisti_muove_il_totale():
     at.session_state["q_1.90"] = 1.0
     at.session_state["p_1.90"] = 10000.0
     at.run()
-    at.number_input(key="imprevisti").set_value(10.0).run()
+    at.number_input(key="iva").set_value(10.0).run()
     dieci = {m.label: m.value for m in at.metric}
-    at.number_input(key="imprevisti").set_value(20.0).run()
-    venti = {m.label: m.value for m in at.metric}
-    assert dieci["Imprevisti 10%"] == "1.000,00 €"
-    assert venti["Imprevisti 20%"] == "2.000,00 €"
-    # e il totale lavori si muove con loro
-    assert dieci["Totale lavori (IVA esclusa)"] == "11.000,00 €"
-    assert venti["Totale lavori (IVA esclusa)"] == "12.000,00 €"
+    at.number_input(key="iva").set_value(22.0).run()
+    ventidue = {m.label: m.value for m in at.metric}
+    assert dieci["IVA 10%"] == "1.000,00 €"
+    assert ventidue["IVA 22%"] == "2.200,00 €"
+    # e i lavori restano quelli: l'IVA non li tocca
+    assert dieci["Totale lavori (IVA esclusa)"] == "10.000,00 €"
+    assert ventidue["Totale lavori (IVA esclusa)"] == "10.000,00 €"

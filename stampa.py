@@ -170,16 +170,20 @@ def _tabella_categoria(categoria, voci_categoria, tinta):
 
 
 def _tabella_totali(totali):
-    """La coda dei conti: somma, imprevisti, IVA, totale finale."""
+    """La coda dei conti: lavori, IVA, totale finale.
+
+    Niente riserva per imprevisti: quello che si consegna all'impresa sono
+    i lavori computati, non i lavori più un accantonamento che riguarda
+    chi paga. La riserva vive nel business plan, dove è una scelta di
+    chi fa l'operazione e si vede accanto alle altre.
+    """
     def riga(etichetta, valore, forte=False):
         stile = STILE_CATEGORIA if forte else STILE_VOCE
         return [Paragraph(etichetta, stile), Paragraph(euro(valore), stile)]
 
-    imprevisti_pct = numero_it(totali.get("imprevisti_pct"), 0)
     iva_pct = numero_it(totali.get("iva_pct"), 0)
     righe = [
         riga("Somma dei lavori", totali.get("somma")),
-        riga(f"Imprevisti {imprevisti_pct}%", totali.get("imprevisti")),
         riga("Totale lavori (IVA esclusa)", totali.get("totale_lavori"),
              forte=True),
         riga(f"IVA {iva_pct}%", totali.get("iva")),
@@ -194,9 +198,9 @@ def _tabella_totali(totali):
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LINEABOVE", (0, 2), (-1, 2), 0.5, colors.HexColor("#D6D2C8")),
-        ("LINEABOVE", (0, 4), (-1, 4), 1, OTTONE),
-        ("BACKGROUND", (0, 4), (-1, 4), colors.HexColor("#F0E9DA")),
+        ("LINEABOVE", (0, 1), (-1, 1), 0.5, colors.HexColor("#D6D2C8")),
+        ("LINEABOVE", (0, 3), (-1, 3), 1, OTTONE),
+        ("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#F0E9DA")),
     ]))
     return [tabella]
 
@@ -207,8 +211,7 @@ def pdf_computo(progetto, voci, totali, tinte=None):
     progetto: {"nome", "committente", "oggetto", "data"}.
     voci: [{"categoria", "codice", "descrizione", "um", "quantita",
         "prezzo", "importo"}] già calcolate.
-    totali: {"somma", "imprevisti_pct", "imprevisti", "totale_lavori",
-        "iva_pct", "iva", "totale"}.
+    totali: {"somma", "totale_lavori", "iva_pct", "iva", "totale"}.
     tinte: {categoria: "#RRGGBB"} per la fascia d'intestazione; le categorie
         senza tinta prendono l'ardesia.
     """

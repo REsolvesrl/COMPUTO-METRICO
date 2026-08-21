@@ -458,8 +458,9 @@ def test_una_voce_tua_messa_da_parte_resta_da_parte_riaprendo():
 def test_la_voce_a_mano_conta_nei_totali():
     at = _avvia()
     _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
-    somma = [m for m in at.metric if m.label == "Somma parziali"]
-    assert somma and somma[0].value == "800,00 €"
+    lavori = [m for m in at.metric
+              if m.label == "Totale lavori (IVA esclusa)"]
+    assert lavori and lavori[0].value == "800,00 €"
 
 
 # ------------------------------------------------- il pool resta aperto

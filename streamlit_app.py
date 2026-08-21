@@ -2496,7 +2496,6 @@ def _payload_progetto():
             "oggetto": st.session_state.prg_oggetto,
             "data": st.session_state.prg_data.isoformat(),
             "aliquota_iva": st.session_state.iva,
-            "imprevisti": st.session_state.imprevisti,
         },
         # le voci inventate: si salvano per intero, il listino non le ha
         "voci": [
@@ -2796,12 +2795,18 @@ def riprendi_mq_planimetria(valore):
 
 
 def applica_imprevisti(percentuale):
-    """Porta gli imprevisti del computo alla percentuale dei cantieri chiusi.
+    """Tara la riserva del business plan sui cantieri già chiusi.
 
-    Da usare come on_click, mai nel corpo dello script: il campo nasce nella
-    scheda Computo e Streamlit vieta di riscriverlo dopo.
+    La riserva sta nel business plan, non nel computo: il computo è il
+    documento dei lavori, e quanto tenere da parte è una scelta di chi fa
+    l'operazione. Qui arriva il numero che i cantieri chiusi hanno detto.
+
+    Da usare come on_click, mai nel corpo dello script: il campo nasce nel
+    sotto-pannello «Studio di fattibilità» e Streamlit vieta di riscriverlo
+    dopo che è stato disegnato.
     """
-    st.session_state.imprevisti = float(percentuale)
+    st.session_state.bp_imprevisti_pct = float(percentuale)
+    bp_ricalcola_euro()
 
 
 def azzera_progetto():
@@ -2885,7 +2890,6 @@ st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 10.0)   # 10%: aliquota tipica in edilizia
 # 10%: è la quota prevista dal contratto d'appalto, non una convenzione.
 # Lo storico dei cantieri chiusi può poi tararla sul tuo sforamento reale.
-st.session_state.setdefault("imprevisti", 10.0)
 # contratto d'appalto: importo, quote dei SAL, extra di fine lavori
 st.session_state.setdefault("cant_contratto", 0.0)
 st.session_state.setdefault("cant_extra", 0.0)
@@ -3003,7 +3007,6 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_committente = progetto.get("committente", "")
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
-    st.session_state.imprevisti = float(progetto.get("imprevisti", 10.0))
     stato_listino = dati.get("listino_stato") or {}
     testi_salvati = dati.get("testi_voci") or {}
     for _voce in listino.VOCI:
@@ -3435,11 +3438,11 @@ with tab_computo:
         d1.text_input("Nome del computo", key="prg_nome",
                       placeholder="Es. Ristrutturazione app.to Via Roma 1")
         d2.text_input("Committente", key="prg_committente")
-        # Qui sta l'anagrafica del progetto, e basta: aliquota IVA e
-        # imprevisti sono andati nel riepilogo costi, accanto alle righe che
-        # governano. Stavano fra il committente e la data come se fossero
-        # dati del committente, e per vedere l'effetto di cambiarli bisognava
-        # chiudere il pannello.
+        # Qui sta l'anagrafica del progetto, e basta: l'aliquota IVA è
+        # andata nel riepilogo costi, accanto alle righe che governa.
+        # Stava fra il committente e la data come se fosse un dato del
+        # committente, e per vederne l'effetto bisognava chiudere il
+        # pannello. Gli imprevisti non ci sono più: sono del business plan.
         d3, d4 = st.columns([3, 1])
         d3.text_input("Oggetto dei lavori", key="prg_oggetto")
         d4.date_input("Data", key="prg_data", format="DD/MM/YYYY")
@@ -3813,29 +3816,22 @@ with tab_computo:
         st.markdown(html_dot, unsafe_allow_html=True)
         st.divider()
 
-        # ⚠️ Le due percentuali si comandano DA QUI, non più dal pannello
-        # «Dati del progetto». Là stavano fra il nome del committente e la
-        # data, come se fossero anagrafica; sono invece i due parametri che
-        # decidono la coda del computo, e stanno accanto alle righe che
-        # governano — dove si vede subito l'effetto di cambiarle.
-        imp_importo, totale_imprevisti = calcoli.totale_con_imprevisti(
-            totale, st.session_state.imprevisti)
+        # ⚠️ L'IVA si comanda DA QUI, non più dal pannello «Dati del
+        # progetto». Là stava fra il nome del committente e la data, come se
+        # fosse anagrafica; è invece il parametro che decide la coda del
+        # computo, e sta accanto alle righe che governa.
+        # ⚠️⚠️ Gli IMPREVISTI non sono più qui. Il computo è il documento
+        # dei lavori: quello che si consegna all'impresa sono le lavorazioni
+        # computate, non i lavori più una riserva che riguarda chi paga.
+        # La riserva è una scelta dell'operazione e vive nel business plan,
+        # riga «Imprevisti e condominio», dove sta accanto alle altre spese
+        # e si vede quanto pesa. Tenerla in due posti voleva dire, prima o
+        # poi, contarla due volte.
         iva_importo, totale_ivato = calcoli.totale_con_iva(
-            totale_imprevisti, st.session_state.iva)
+            totale, st.session_state.iva)
+        totale_lavori = totale
 
-        st.metric("Somma parziali", euro(totale))
-        st.number_input(
-            "Imprevisti (%)", min_value=0.0, max_value=50.0, step=1.0,
-            key="imprevisti",
-            help="Accantonamento sul totale lavori per le sorprese di "
-                 "cantiere, applicato prima dell'IVA. Il predefinito è il "
-                 "**10% previsto dal contratto d'appalto**; quando avrai "
-                 "chiuso qualche cantiere, la scheda Cantiere potrà "
-                 "tararlo sul tuo sforamento reale.")
-        st.metric(
-            f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
-            euro(imp_importo))
-        st.metric("Totale lavori (IVA esclusa)", euro(totale_imprevisti))
+        st.metric("Totale lavori (IVA esclusa)", euro(totale))
         st.number_input(
             "Aliquota IVA (%)", min_value=0.0, max_value=100.0, step=1.0,
             key="iva",
@@ -3899,7 +3895,6 @@ with tab_computo:
         "oggetto": st.session_state.prg_oggetto,
         "data": st.session_state.prg_data.isoformat(),
         "aliquota_iva": st.session_state.iva,
-        "imprevisti": st.session_state.imprevisti,
     }
     incidenze = calcoli.incidenze_percentuali(totali, totale)
     df_riepilogo = pd.DataFrame({
@@ -3911,22 +3906,19 @@ with tab_computo:
         df_riepilogo,
         pd.DataFrame({
             "Categoria": [
-                "Somma lavori",
-                f"Imprevisti {numero_it(st.session_state.imprevisti, 0)}%",
-                "Totale con imprevisti",
+                "Totale lavori (IVA esclusa)",
                 f"IVA {numero_it(st.session_state.iva, 0)}%",
                 "Totale finale (IVA inclusa)"],
-            "Importo": [totale, imp_importo, totale_imprevisti,
-                        iva_importo, totale_ivato],
-            "Incidenza %": [100.0, None, None, None, None],
+            "Importo": [totale_lavori, iva_importo, totale_ivato],
+            "Incidenza %": [100.0, None, None],
         }),
     ], ignore_index=True)
     df_progetto_excel = pd.DataFrame({
         "Campo": ["Nome", "Committente", "Oggetto", "Data",
-                  "Aliquota IVA %", "Imprevisti %"],
+                  "Aliquota IVA %"],
         "Valore": [progetto["nome"], progetto["committente"],
                    progetto["oggetto"], progetto["data"],
-                   progetto["aliquota_iva"], progetto["imprevisti"]],
+                   progetto["aliquota_iva"]],
     })
 
     righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
@@ -3960,8 +3952,7 @@ with tab_computo:
         "🖨️ Stampa PDF",
         data=stampa.pdf_computo(
             progetto, voci_calcolate,
-            {"somma": totale, "imprevisti_pct": st.session_state.imprevisti,
-             "imprevisti": imp_importo, "totale_lavori": totale_imprevisti,
+            {"somma": totale, "totale_lavori": totale_lavori,
              "iva_pct": st.session_state.iva, "iva": iva_importo,
              "totale": totale_ivato},
             tinte={cat: COLORI_CATEGORIE[cat][0]
@@ -5043,7 +5034,7 @@ with tab_bp:
          "🏗️ Cantiere — contratto e SAL", "🏷️ MCA — prezzo di vendita"])
 
     # valori automatici condivisi: superficie commerciale dalla planimetria
-    # e costo di ristrutturazione dal computo (imprevisti inclusi)
+    # e costo di ristrutturazione dal computo
     _, _, mq_da_planimetria, _ = planimetria.riepilogo_superfici(
         st.session_state.piante, mappa_percentuali(),
         escludi=CATEGORIE_SOLO_COMPUTO)
@@ -5056,12 +5047,10 @@ with tab_bp:
     voci_bp = voci_dal_listino()
     totale_computo_bp = calcoli.totale_generale(
         calcoli.calcola_computo(voci_bp))
-    # ⚠️ NETTO, senza gli imprevisti del computo. Gli imprevisti sono UNA
-    # cosa sola: se il computo li porta già dentro e poi il business plan
-    # ne aggiunge un altro 10% sulla riga «Imprevisti e condominio», la
-    # stessa riserva viene contata due volte e il costo dell'operazione
-    # esce gonfiato. Qui arrivano i lavori nudi; la riserva è la riga del
-    # business plan, dove si vede ed è modificabile.
+    # I lavori NUDI: il computo non porta più nessuna riserva: la riserva
+    # è UNA sola, la riga «Imprevisti e condominio» qui sotto, dove si vede
+    # quanto pesa ed è modificabile. Tenerla anche nel computo voleva dire,
+    # prima o poi, contarla due volte.
     ristr_da_computo = totale_computo_bp
 
 
@@ -5307,13 +5296,13 @@ with tab_bp:
             st.subheader("⚖️ Il computo alla prova del cantiere")
             scostamento = round(cantiere_consuntivo - ristr_da_computo, 2)
             # La percentuale è il numero che conta davvero: è la stessa
-            # grandezza con cui lo storico tara gli imprevisti del computo.
+            # grandezza con cui lo storico tara la riserva del business plan.
             # Prima il valore grande e il delta erano la stessa cifra in €,
             # scritta due volte, e la percentuale non c'era.
             scost_pct = (round(scostamento / ristr_da_computo * 100, 2)
                          if ristr_da_computo else None)
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Preventivo (computo, senza imprevisti)",
+            c1.metric("Preventivo (computo)",
                       euro(ristr_da_computo))
             c2.metric("Speso davvero (fatture)", euro(cantiere_sostenuto))
             c3.metric("Ancora da sostenere (stime)", euro(cantiere_previsto))
@@ -5682,8 +5671,7 @@ with tab_bp:
                             "help": "I lavori NUDI, senza riserva: gli "
                                     "imprevisti sono la riga qui sopra e "
                                     "si contano una volta sola. Lasciando "
-                                    "0 arriva il totale del computo, anche "
-                                    "quello al netto dei suoi imprevisti."},
+                                    "0 arriva il totale del computo."},
                     iva="bp_iva_ristr", imponibile=ristr_eff))
                 # A cantiere avviato le fatture reali valgono più di ogni
                 # stima: l'opzione compare solo quando un consuntivo esiste
@@ -5955,32 +5943,32 @@ with tab_bp:
                 # vero; è qui che si decide cosa proporne, e una riserva
                 # negativa non esiste.
                 proposta = max(0.0, consigliati)
+                riserva = float(
+                    st.session_state.get("bp_imprevisti_pct") or 0.0)
                 if consigliati < 0:
                     st.info(
                         f"I tuoi cantieri chiusi hanno chiuso in media "
                         f"**sotto contratto** "
                         f"({numero_it(consigliati, 2)}%): la riserva del "
-                        f"computo, oggi al "
-                        f"**{numero_it(st.session_state.imprevisti, 1)}%**, "
-                        "non è tarata sui tuoi fatti — è prudenza. Tienila "
-                        "se la vuoi, ma sappi che la stai pagando nel "
-                        "business plan.")
-                elif abs(consigliati - st.session_state.imprevisti) > 0.5:
+                        f"business plan, oggi al "
+                        f"**{numero_it(riserva, 1)}%**, non è tarata sui "
+                        "tuoi fatti — è prudenza. Tienila se la vuoi, ma "
+                        "sappi che la stai pagando nel conto dell'operazione.")
+                elif abs(consigliati - riserva) > 0.5:
                     st.info(
-                        f"Nel computo gli imprevisti sono al "
-                        f"**{numero_it(st.session_state.imprevisti, 1)}%**, "
-                        f"ma i tuoi cantieri chiusi dicono "
-                        f"**{numero_it(consigliati, 2)}%**. Quella "
-                        "percentuale gonfia il computo, che a sua volta è il "
-                        "costo di ristrutturazione del business plan: è lì "
-                        "che decidi se l'affare sta in piedi.")
-                if abs(proposta - st.session_state.imprevisti) > 0.5:
-                    # ⚠️ La riscrittura va in una callback: il campo
-                    # «imprevisti» nasce nella scheda Computo, molto più in
-                    # alto, e scriverci sopra qui pianterebbe l'app («cannot
-                    # be modified after the widget is instantiated»). Dentro
-                    # on_click Streamlit lo consente.
-                    st.button(f"Porta gli imprevisti a "
+                        f"Nel business plan la riserva per imprevisti è al "
+                        f"**{numero_it(riserva, 1)}%**, ma i tuoi cantieri "
+                        f"chiusi dicono **{numero_it(consigliati, 2)}%**. "
+                        "È la riga «Imprevisti e condominio» dello studio di "
+                        "fattibilità: è lì che si decide se l'affare sta in "
+                        "piedi.")
+                if abs(proposta - riserva) > 0.5:
+                    # ⚠️ La riscrittura va in una callback: il campo nasce
+                    # nel sotto-pannello «Studio di fattibilità», disegnato
+                    # prima di questo, e scriverci sopra qui pianterebbe
+                    # l'app («cannot be modified after the widget is
+                    # instantiated»). Dentro on_click Streamlit lo consente.
+                    st.button(f"Porta la riserva a "
                               f"{numero_it(proposta, 2)}%",
                               key="applica_imprevisti",
                               on_click=applica_imprevisti,
