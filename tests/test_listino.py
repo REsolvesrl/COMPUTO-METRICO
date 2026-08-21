@@ -18,8 +18,11 @@ def test_ogni_voce_e_completa():
         assert voce["codice"], voce
         assert voce["descrizione"], voce
         assert voce["categoria"] in listino.CATEGORIE, voce
-        assert voce["um"] in {"m", "m²", "m³", "kg", "t", "cad", "h",
-                              "a corpo", "punto", "utenza"}, voce
+        # «ml» e non «m»: il battiscopa e le velette si misurano a metri
+        # LINEARI, ed e' la sigla che si legge su un computo vero.
+        assert voce["um"] in {"ml", "m²", "m³", "kg", "t", "cad", "h",
+                              "a corpo", "punto", "punto luce",
+                              "punto acqua", "utenza"}, voce
         assert voce["prezzo"] > 0, voce
 
 

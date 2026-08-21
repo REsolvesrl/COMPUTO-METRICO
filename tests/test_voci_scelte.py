@@ -102,10 +102,13 @@ def test_la_voce_presa_si_compila_nella_sua_categoria():
     at.button(key="prendi_1.02").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    chiavi = [t.key for t in at.text_input]
-    assert "q_1.02_txt" in chiavi
-    assert "d_1.02_w" in chiavi          # descrizione modificabile
-    assert "u_1.02_w" in chiavi          # unità modificabile
+    assert "q_1.02_txt" in [t.key for t in at.text_input]
+    # la descrizione è un'area: va a capo su due righe
+    assert "d_1.02_w" in [t.key for t in at.text_area]
+    # l'unità è una tendina: le unità di un computo sono sei o sette, e
+    # scriverle a mano vuol dire ritrovarsi «mq», «m2» e «m²» sulla stessa
+    # stampa
+    assert "u_1.02_w" in [s.key for s in at.selectbox]
 
 
 def test_la_x_toglie_la_voce_dal_computo():
@@ -182,10 +185,10 @@ def test_la_descrizione_riscritta_vale_nel_computo():
     at.button(key="prendi_2.10").click().run()
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
-    at.text_input(key="d_2.10_w").set_value("Gres 60x60 a correre").run()
-    at.text_input(key="u_2.10_w").set_value("mq").run()
+    at.text_area(key="d_2.10_w").set_value("Gres 60x60 a correre").run()
+    at.selectbox(key="u_2.10_w").set_value("ml").run()
     assert at.session_state["d_2.10"] == "Gres 60x60 a correre"
-    assert at.session_state["u_2.10"] == "mq"
+    assert at.session_state["u_2.10"] == "ml"
 
 
 def test_i_testi_riscritti_si_salvano_e_tornano():
@@ -311,10 +314,10 @@ def test_nel_computo_a_corpo_propone_uno_solo_se_manca():
     at.button(key="prendi_1.02").click().run()      # m², quantità a zero
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.text_input(key="u_1.02_w").set_value("a corpo").run()
+    at.selectbox(key="u_1.02_w").set_value("a corpo").run()
     assert at.session_state["q_1.02"] == 1.0
-    # e la casella resta scrivibile: 2 vale 2
-    at.text_input(key="q_1.02_txt").set_value("2").run()
+    # e la quantità resta scrivibile: con «a corpo» è la casella a frecce
+    at.number_input(key="qn_1.02_w").set_value(2.0).run()
     assert at.session_state["q_1.02"] == 2.0
 
 
@@ -324,7 +327,7 @@ def test_nel_computo_a_corpo_non_cancella_la_quantita_che_ce():
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
     at.text_input(key="q_1.02_txt").set_value("120").run()
-    at.text_input(key="u_1.02_w").set_value("a corpo").run()
+    at.selectbox(key="u_1.02_w").set_value("a corpo").run()
     assert at.session_state["q_1.02"] == 120.0
 
 
@@ -499,3 +502,142 @@ def test_le_voci_libere_di_prima_diventano_voci_del_computo():
     assert extra[codice]["categoria"] == "Demolizioni"
     assert codice in at.session_state["voci_scelte"]
     assert at.session_state[f"q_{codice}"] == 1.0
+
+
+# ------------------------------------- spostare una voce tua di categoria
+
+def test_una_voce_tua_si_sposta_di_categoria():
+    """Sbagliata la casa: si cambia, e il codice cambia con lei."""
+    at = _avvia()
+    _crea(at, "Ricostruzioni e ripristini", "Assistenza muraria", "a corpo",
+          prezzo=7000.0)
+    assert "2.90" in at.session_state["voci_extra"]
+    at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
+    at.run()
+    at.selectbox(key="spostacat_2.90").set_value("Demolizioni").run()
+    at.button(key="sposta_2.90").click().run()
+    extra = at.session_state["voci_extra"]
+    assert "2.90" not in extra
+    assert extra["1.90"]["categoria"] == "Demolizioni"
+    assert extra["1.90"]["descrizione"] == "Assistenza muraria"
+
+
+def test_spostando_una_voce_prezzo_e_quantita_la_seguono():
+    at = _avvia()
+    _crea(at, "Ricostruzioni e ripristini", "Assistenza muraria", "a corpo",
+          prezzo=7000.0)
+    at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
+    at.run()
+    at.selectbox(key="spostacat_2.90").set_value("Demolizioni").run()
+    at.button(key="sposta_2.90").click().run()
+    assert at.session_state["q_1.90"] == 1.0
+    assert at.session_state["p_1.90"] == 7000.0
+    assert "q_2.90" not in at.session_state
+    # e il totale non si muove: è la stessa voce, in un'altra casa
+    lavori = [m for m in at.metric
+              if m.label == "Totale lavori (IVA esclusa)"]
+    assert lavori and lavori[0].value == "7.000,00 €"
+
+
+def test_la_voce_spostata_resta_al_suo_posto_nell_ordine():
+    """Spostare non è togliere e rimettere in fondo."""
+    at = _avvia()
+    _crea(at, "Ricostruzioni e ripristini", "Prima", "a corpo", prezzo=100.0)
+    _crea(at, "Idraulico", "Seconda", "a corpo", prezzo=200.0)
+    at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
+    at.run()
+    at.selectbox(key="spostacat_2.90").set_value("Demolizioni").run()
+    at.button(key="sposta_2.90").click().run()
+    assert at.session_state["voci_scelte"] == ["1.90", "3.90"]
+
+
+def test_le_voci_del_listino_non_cambiano_categoria():
+    """Il listino è il catalogo: la 1.02 sta nelle demolizioni e basta."""
+    at = _avvia()
+    at.button(key="prendi_1.02").click().run()
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    assert "spostacat_1.02" not in [s.key for s in at.selectbox]
+
+
+# --------------------------------- unità: tendina, e quella giusta per casa
+
+def test_le_quantita_delle_voci_a_mano_si_possono_modificare():
+    """Il difetto: la rilettura del testo digitato girava sulle sole voci di
+    listino, e quelle scritte a mano restavano fuori. Si scriveva 2, si
+    premeva invio, e al giro dopo tornava 1."""
+    at = _avvia()
+    _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    at.number_input(key=f"qn_{codice}_w").set_value(2.0).run()
+    assert at.session_state[f"q_{codice}"] == 2.0
+    lavori = [m for m in at.metric
+              if m.label == "Totale lavori (IVA esclusa)"]
+    assert lavori and lavori[0].value == "1.600,00 €"
+
+
+def test_anche_il_prezzo_di_una_voce_a_mano_si_modifica():
+    at = _avvia()
+    _crea(at, "Demolizioni", "Allestimento cantiere", "a corpo", prezzo=800.0)
+    codice = next(iter(at.session_state["voci_extra"]))
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    at.text_input(key=f"p_{codice}_txt").set_value("2.500").run()
+    assert at.session_state[f"p_{codice}"] == 2500.0
+
+
+def test_dall_elettricista_l_unita_di_casa_e_il_punto_luce():
+    at = _avvia()
+    at.selectbox(key="nuova_cat").set_value("Elettricista").run()
+    assert at.selectbox(key="nuova_um").value == "punto luce"
+
+
+def test_dall_idraulico_l_unita_di_casa_e_il_punto_acqua():
+    at = _avvia()
+    at.selectbox(key="nuova_cat").set_value("Idraulico").run()
+    assert at.selectbox(key="nuova_um").value == "punto acqua"
+
+
+def test_cambiando_categoria_l_unita_non_fa_saltare_l_app():
+    """«punto luce» non esiste fra le demolizioni: il valore deve ricadere
+    sul primo dell'elenco invece di far sollevare un errore."""
+    at = _avvia()
+    at.selectbox(key="nuova_cat").set_value("Elettricista").run()
+    at.selectbox(key="nuova_cat").set_value("Demolizioni").run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.selectbox(key="nuova_um").value == "m²"
+
+
+def test_la_quantita_a_frecce_solo_dove_si_contano_pezzi():
+    """Su «a corpo» le frecce; sui metri quadri la casella scritta."""
+    at = _avvia()
+    at.button(key="prendi_1.02").click().run()       # m²
+    at.session_state["cat_aperte"] = {"Demolizioni"}
+    at.run()
+    assert "qn_1.02_w" not in [n.key for n in at.number_input]
+    assert "q_1.02_txt" in [t.key for t in at.text_input]
+    at.selectbox(key="u_1.02_w").set_value("cad").run()
+    assert "qn_1.02_w" in [n.key for n in at.number_input]
+    assert "q_1.02_txt" not in [t.key for t in at.text_input]
+
+
+def test_nella_riga_l_unita_di_casa_e_in_testa_alla_tendina():
+    """La 4.02 è dell'elettricista: «punto luce» è la prima da scegliere,
+    anche se la voce oggi porta ancora il generico «punto»."""
+    at = _avvia()
+    at.button(key="prendi_4.02").click().run()
+    at.session_state["cat_aperte"] = {"Elettricista"}
+    at.run()
+    tendina = at.selectbox(key="u_4.02_w")
+    assert tendina.options[0] == "punto luce"
+    assert tendina.value == "punto"          # quella che la voce ha oggi
+
+
+def test_il_battiscopa_si_misura_in_metri_lineari():
+    at = _avvia()
+    at.button(key="prendi_2.14").click().run()
+    at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
+    at.run()
+    assert at.selectbox(key="u_2.14_w").value == "ml"

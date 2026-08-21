@@ -63,6 +63,18 @@ def _progetto(rivestito, riv_porte=1, riv_finestre=0):
     }
 
 
+def _con_balcone():
+    """Il bagno di sempre, più un balcone di 2 × 2 m (4 m²)."""
+    progetto = _progetto(rivestito=False)
+    progetto["voci_scelte"] = ["1.01", "2.24"]
+    progetto["piante"][0]["zone"].append({
+        "id": 2, "categoria": "Balcone", "nome": "Balcone",
+        "punti": [[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]],
+        "pavimento": True, "battiscopa": False, "pittura": False,
+        "rivestito": False})
+    return progetto
+
+
 def _apri(progetto):
     at = AppTest.from_file(str(SORGENTE), default_timeout=300)
     at.run()
@@ -166,3 +178,19 @@ def test_le_spunte_non_rifanno_la_tabella():
     at.session_state["piante"][0]["zone"][0]["pavimento"] = False
     at.run()
     assert at.session_state["loc_base_chiave"] == prima
+
+
+# ------------------- la demolizione dei pavimenti è quella DENTRO casa
+
+def test_la_demolizione_pavimenti_non_prende_i_balconi():
+    """1.01 sono le stanze; il balcone è un'altra lavorazione (2.24)."""
+    at = _apri(_con_balcone())
+    assert at.session_state["q_1.01"] == 9.0     # solo il bagno 3 × 3
+    assert at.session_state["q_2.24"] == 4.0     # il balcone, per conto suo
+
+
+def test_la_1_01_arriva_da_sola_senza_spuntare_niente():
+    """È accesa di default nel ponte con la planimetria: appena c'è un
+    pavimento misurato, la quantità è già lì."""
+    at = _apri(_progetto(rivestito=False))
+    assert at.session_state["q_1.01"] == 9.0

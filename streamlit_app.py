@@ -584,10 +584,17 @@ COLORI_CATEGORIE = {
 
 # Voci del listino ricavabili dalle superfici misurate sulla planimetria:
 # (codice, grandezza da cui prendere la quantità, accesa di default).
-# Accese solo quelle che valgono in ogni ristrutturazione; demolizioni e
-# rasatura dipendono da cosa si trova in cantiere, quindi si spuntano a mano.
+# Accese quelle che valgono in ogni ristrutturazione. La demolizione dei
+# pavimenti (1.01) è fra queste: se si rifà il pavimento, prima si butta giù
+# quello che c'è — e i metri sono gli stessi che si riposano. Restano spente
+# la rimozione degli zoccolini, il massetto e la rasatura, che dipendono da
+# cosa si trova in cantiere.
 VOCI_DA_SUPERFICI = [
-    ("1.01", "pavimento", False),         # demolizione pavimenti
+    # ⚠️ «pavimento» sono le stanze e basta: balconi, terrazzi e logge
+    # stanno in «pavimento_esterno» e vanno nella 2.24, che è un'altra
+    # lavorazione. Una demolizione di pavimenti interni non deve portarsi
+    # dentro i metri del balcone.
+    ("1.01", "pavimento", True),          # demolizione pavimenti
     ("1.10", "battiscopa", False),        # rimozione zoccolini
     ("2.03", "pavimento", False),         # rifacimento massetto
     ("2.10", "pavimento", True),          # posa gres
@@ -948,8 +955,43 @@ def dati_fattura_da_file(file):
 # Unità di misura proposte: quelle che compaiono davvero in un computo di
 # ristrutturazione. «a corpo» è a parte — non si misura, vale una volta —
 # ed è per questo che la sua quantità la mette l'app.
-UNITA_MISURA = ["m²", "m", "m³", "cad", "punto", "utenza", "kg", "a corpo"]
+UNITA_MISURA = ["m²", "ml", "m³", "cad", "punto", "utenza", "kg", "a corpo"]
 UM_A_CORPO = "a corpo"
+
+# Un «punto» non vuol dire la stessa cosa dappertutto: dall'elettricista è
+# un punto luce, dall'idraulico un punto acqua. Chiamarli tutti «punto»
+# obbliga a rileggere la descrizione per capire cosa si sta contando — e su
+# un computo consegnato è chi lo riceve a doverlo fare.
+UNITA_DELLA_CATEGORIA = {
+    "Elettricista": "punto luce",
+    "Idraulico": "punto acqua",
+}
+
+# Unità che si contano a pezzi interi: qui la quantità ha le frecce su e giù
+# e non i decimali. Sui metri quadri non le mettiamo — «84 m² + 1» non è un
+# gesto che voglia fare nessuno, e il passo darebbe l'idea sbagliata che si
+# misuri a scatti.
+UM_A_PASSI = {UM_A_CORPO, "cad", "punto", "punto luce", "punto acqua",
+              "utenza"}
+
+
+def unita_per_categoria(categoria):
+    """Le unità proposte in quella categoria, con la sua in testa."""
+    propria = UNITA_DELLA_CATEGORIA.get(categoria)
+    if not propria:
+        return list(UNITA_MISURA)
+    return [propria] + [u for u in UNITA_MISURA if u != propria]
+
+
+def unita_della_voce(voce, um):
+    """L'elenco per la tendina di una riga: quelle di casa più la sua.
+
+    L'unità corrente ci sta sempre, anche se non è fra le proposte: un
+    computo vecchio può portare «m», e una tendina che non contenga il
+    valore che deve mostrare fa saltare Streamlit.
+    """
+    elenco = unita_per_categoria(voce.get("categoria"))
+    return elenco if um in elenco else [um] + elenco
 
 # Le voci aggiunte a mano prendono un codice nella stessa serie della loro
 # categoria, ma da .90 in su: così si riconoscono a colpo d'occhio e non
@@ -1001,7 +1043,7 @@ def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo,
     st.session_state[f"q_{codice}"] = float(quantita or 0.0)
     st.session_state[f"p_{codice}"] = float(prezzo or 0.0)
     for chiave in (f"q_{codice}_txt", f"p_{codice}_txt",
-                   f"d_{codice}_w", f"u_{codice}_w"):
+                   f"d_{codice}_w", f"u_{codice}_w", f"qn_{codice}_w"):
         st.session_state.pop(chiave, None)
     if codice not in st.session_state.voci_scelte:
         st.session_state.voci_scelte.append(codice)
@@ -1028,6 +1070,16 @@ def ripristina_scarti():
 
 def e_scartata(codice):
     return codice in st.session_state.voci_scartate
+
+
+def azzera_unita_nuova():
+    """Cambiando categoria, l'unità riparte da quella di casa.
+
+    L'elenco cambia sotto ai piedi del widget, e un valore che nel nuovo
+    elenco non c'è («punto luce» passando a Demolizioni) farebbe sollevare
+    a Streamlit un errore invece di ricadere sul primo.
+    """
+    st.session_state.pop("nuova_um", None)
 
 
 def proponi_quantita_a_corpo():
@@ -1067,6 +1119,41 @@ def crea_voce_a_mano():
     st.session_state.nuova_desc = ""
     st.session_state._esito_voce = (
         "ok", f"{codice} · {descrizione} → {categoria}")
+
+
+def sposta_voce_extra(codice):
+    """Porta una voce scritta a mano in un'altra categoria.
+
+    Il codice cambia con lei: la serie dice la categoria (Idraulico → 3.9x),
+    e una voce spostata che si tenesse il numero vecchio mentirebbe sul suo
+    posto. Quantità, prezzo e riscritture la seguono, e resta dov'era
+    nell'ordine del computo — spostare non è togliere e rimettere in fondo.
+    """
+    categoria = st.session_state.get(f"spostacat_{codice}")
+    voce = st.session_state.voci_extra.get(codice)
+    if not voce or not categoria or categoria == voce["categoria"]:
+        return
+    nuovo = codice_nuovo(categoria)
+    st.session_state.voci_extra[nuovo] = {**voce, "codice": nuovo,
+                                          "categoria": categoria}
+    del st.session_state.voci_extra[codice]
+    for prefisso in ("q_", "p_", "d_", "u_"):
+        if prefisso + codice in st.session_state:
+            st.session_state[prefisso + nuovo] = st.session_state[
+                prefisso + codice]
+    for chiave in (f"q_{codice}", f"p_{codice}", f"d_{codice}",
+                   f"u_{codice}", f"q_{codice}_txt", f"p_{codice}_txt",
+                   f"d_{codice}_w", f"u_{codice}_w"):
+        st.session_state.pop(chiave, None)
+    scelte_ora = st.session_state.voci_scelte
+    if codice in scelte_ora:
+        scelte_ora[scelte_ora.index(codice)] = nuovo
+    else:
+        scelte_ora.append(nuovo)
+    if codice in st.session_state.voci_scartate:
+        st.session_state.voci_scartate.remove(codice)
+    st.session_state.cat_aperte |= {categoria}
+    st.toast(f"{codice} → {nuovo} · ora in {categoria} ✔")
 
 
 def categorie_del_computo():
@@ -1336,6 +1423,76 @@ def css_schede_computo():
     margin: 0.2rem 0;
 }}
 """)
+    # --------------------------------------------- le righe del computo
+    # Il computo è una tabella, non un modulo: le celle stanno vicine, i
+    # bordi si vedono appena e l'aria va tolta dove non dice niente. Prima
+    # ogni cella era una casella di Streamlit con la sua imbottitura da
+    # form, e fra una colonna e l'altra passava un dito di vuoto.
+    regole.append(f"""
+/* le colonne di una riga: quasi attaccate */
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"] {{
+    gap: 0.35rem;
+}}
+[class*="st-key-card_"] [data-testid="stVerticalBlock"] {{
+    gap: 0.15rem;
+}}
+/* la descrizione: due righe piene, niente maniglia di ridimensionamento
+   (la larghezza la decide la colonna) e niente altezza minima da 68 px */
+[class*="st-key-card_"] textarea {{
+    min-height: 3.1rem !important;
+    height: 3.1rem !important;
+    padding: 0.35rem 0.55rem;
+    line-height: 1.25;
+    font-size: 0.86rem;
+    resize: none;
+    overflow-y: auto;
+}}
+[class*="st-key-card_"] [data-testid="stTextAreaRootElement"] {{
+    min-height: 0;
+}}
+/* le celle dei numeri e dell'unità: stessa aria della descrizione */
+[class*="st-key-card_"] input {{
+    padding: 0.3rem 0.5rem;
+    font-size: 0.86rem;
+}}
+/* Streamlit tiene sotto ogni casella lo spazio per il messaggio d'errore:
+   qui non ce ne sono, ed erano dieci righe di vuoto su un computo lungo */
+[class*="st-key-card_"] [data-testid="stElementContainer"] {{
+    margin-bottom: 0;
+}}
+/* Il codice di una voce tua è un menù (ci si sposta di categoria), ma
+   deve restare un codice: stesso grigio, stesso peso, nessuna pastiglia.
+   Un bottone vero in quella colonna farebbe sembrare la riga piena di
+   comandi, e il codice non si legge più. */
+[class*="st-key-card_"] [data-testid="stPopover"] button {{
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+    color: {TRAVERTINO}99;
+    font-weight: 700;
+    font-size: 0.86rem;
+}}
+[class*="st-key-card_"] [data-testid="stPopover"] button:hover {{
+    color: {OTTONE};
+    background: transparent;
+}}
+/* la freccina del menù ruba spazio a un codice di quattro caratteri, e
+   senza toglierla il codice andava a capo */
+[class*="st-key-card_"] [data-testid="stPopover"] button svg {{
+    display: none;
+}}
+[class*="st-key-card_"] [data-testid="stPopover"] button,
+[class*="st-key-card_"] [data-testid="stPopover"] button p {{
+    white-space: nowrap;
+}}
+/* il filo fra una voce e l'altra: c'è, ma non separa due paragrafi */
+[class*="st-key-card_"] hr {{
+    margin: 0.25rem 0 !important;
+}}
+""")
+
     # ------------------------------------------------ la ✕ che toglie la voce
     # Non è un bottone come gli altri: è il gesto che smonta una riga del
     # documento, e deve stare in disparte finché non lo si cerca. Quindi
@@ -1539,6 +1696,40 @@ def scrivi_unita_voce(codice):
         st.session_state.pop(f"q_{codice}_txt", None)
 
 
+def scrivi_quantita_a_passi(codice):
+    """Riporta la quantità della casella a frecce nella chiave di verità."""
+    st.session_state[f"q_{codice}"] = float(
+        st.session_state.get(f"qn_{codice}_w") or 0.0)
+    st.session_state.pop(f"q_{codice}_txt", None)
+
+
+def campo_quantita(colonna, codice, um):
+    """La quantità: a frecce dove si contano pezzi, scritta dove si misura.
+
+    Le voci «a corpo», «cad» e i punti si contano: due interventi, tre punti
+    luce. Lì le frecce su e giù sono il gesto giusto e i decimali non
+    servono. I metri quadri no: si misurano, spesso al centesimo, e un
+    passo da 1 sarebbe d'intralcio.
+    """
+    if um not in UM_A_PASSI:
+        st.session_state.pop(f"qn_{codice}_w", None)
+        st.session_state.pop(f"_reso_qn_{codice}", None)
+        campo_numero_it(colonna, f"Quantità {codice}", f"q_{codice}",
+                        decimali=2)
+        return
+    # Stessa cautela di campo_numero_it: se il valore di verità è cambiato
+    # da fuori (una quantità arrivata dal disegno, un progetto riaperto) la
+    # casella va riscritta, altrimenti mostra il numero di prima.
+    atteso = float(st.session_state.get(f"q_{codice}") or 0.0)
+    if st.session_state.get(f"_reso_qn_{codice}") != atteso:
+        st.session_state[f"_reso_qn_{codice}"] = atteso
+        st.session_state[f"qn_{codice}_w"] = atteso
+    colonna.number_input(
+        f"Quantità {codice}", min_value=0.0, step=1.0, format="%.0f",
+        key=f"qn_{codice}_w", label_visibility="collapsed",
+        on_change=scrivi_quantita_a_passi, args=(codice,))
+
+
 def riga_voce_computo(voce):
     """Una riga del computo: tutto modificabile, e la ✕ per toglierla.
 
@@ -1555,16 +1746,42 @@ def riga_voce_computo(voce):
     if voce.get("analisi"):
         aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
     descrizione, um = testi_voce(voce)
-    c_cod.markdown(f":gray[**{codice}**]", help=aiuto)
-    c_desc.text_input(
+    if listino.voce_per_codice(codice) is None:
+        # Una voce tua può aver sbagliato casa: il codice diventa il modo
+        # per cambiarla. Un menù dentro la colonna del codice, non una
+        # colonna in più — la riga è già una tabella stretta, e questa è
+        # una cosa che si fa una volta, non tutti i giorni.
+        with c_cod.popover(codice, help="Spostala in un'altra categoria"):
+            st.markdown(f"**{codice}** · {descrizione}")
+            st.selectbox(
+                "Sposta nella categoria", listino.CATEGORIE,
+                index=(listino.CATEGORIE.index(voce["categoria"])
+                       if voce["categoria"] in listino.CATEGORIE else 0),
+                key=f"spostacat_{codice}")
+            st.button("↔️ Sposta", key=f"sposta_{codice}",
+                      on_click=sposta_voce_extra, args=(codice,),
+                      help="Il codice cambia con la categoria: la serie "
+                           "dice dove sta di casa la voce.")
+    else:
+        c_cod.markdown(f":gray[**{codice}**]", help=aiuto)
+    # Un'AREA di testo, non una casella: le descrizioni vere sono lunghe
+    # («Realizzazione di impianti di riscaldamento e raffrescamento in pompa
+    # di calore canalizzata a soffitto…») e in una riga sola se ne leggeva
+    # il primo terzo. Qui vanno a capo, su due righe; l'altezza la stringe
+    # il CSS, perché Streamlit da sé non scende sotto i 68 px.
+    c_desc.text_area(
         f"Descrizione {codice}", value=descrizione, key=f"d_{codice}_w",
-        label_visibility="collapsed", on_change=scrivi_testo_voce,
-        args=(f"d_{codice}",))
-    c_um.text_input(
-        f"Unità {codice}", value=um, key=f"u_{codice}_w",
-        label_visibility="collapsed", on_change=scrivi_unita_voce,
-        args=(codice,))
-    campo_numero_it(c_qta, f"Quantità {codice}", f"q_{codice}", decimali=2)
+        label_visibility="collapsed", height=68,
+        on_change=scrivi_testo_voce, args=(f"d_{codice}",))
+    # L'unità è una tendina, non una casella libera: le unità di un computo
+    # sono sei o sette, e scriverle a mano vuol dire ritrovarsi «mq», «m2» e
+    # «m²» sulla stessa stampa. In testa c'è quella di casa della categoria.
+    scelte_um = unita_della_voce(voce, um)
+    c_um.selectbox(
+        f"Unità {codice}", scelte_um, index=scelte_um.index(um),
+        key=f"u_{codice}_w", label_visibility="collapsed",
+        on_change=scrivi_unita_voce, args=(codice,))
+    campo_quantita(c_qta, codice, um)
     campo_numero_it(c_prezzo, f"Prezzo € {codice}", f"p_{codice}",
                     decimali=2)
     quantita = float(st.session_state.get(f"q_{codice}") or 0.0)
@@ -3075,7 +3292,7 @@ if "da_caricare" in st.session_state:
         # via i widget della sessione precedente: se restassero, le righe
         # rinascerebbero coi valori del progetto vecchio invece che con questi
         for _w in (f"q_{_cod}_txt", f"p_{_cod}_txt",
-                   f"d_{_cod}_w", f"u_{_cod}_w"):
+                   f"d_{_cod}_w", f"u_{_cod}_w", f"qn_{_cod}_w"):
             st.session_state.pop(_w, None)
     # Le voci inventate del progetto. Ci passano anche i vecchi computi,
     # dove questa tabella era libera: quello che aveva una descrizione
@@ -3098,7 +3315,7 @@ if "da_caricare" in st.session_state:
             _riga.get("quantita_manuale") or 0.0)
         st.session_state[f"p_{_cod}"] = float(_riga.get("prezzo") or 0.0)
         for _w in (f"q_{_cod}_txt", f"p_{_cod}_txt",
-                   f"d_{_cod}_w", f"u_{_cod}_w"):
+                   f"d_{_cod}_w", f"u_{_cod}_w", f"qn_{_cod}_w"):
             st.session_state.pop(_w, None)
     # Quali voci sono nel computo. I progetti salvati prima non hanno
     # l'elenco: si ricava da quelli che erano gli unici a comparire, cioè
@@ -3349,8 +3566,14 @@ for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
 # prezzi vivono quindi in chiavi «di verità» (q_/p_), che sopravvivono a
 # tutto; le caselle (q_…_txt / p_…_txt) nascono da quelle e ci riversano
 # dentro il valore appena l'utente lo cambia.
-for _voce in listino.VOCI:
-    _cod = _voce["codice"]
+# ⚠️ Il giro passa da TUTTI i codici del computo, non dalle sole voci di
+# listino. Le voci scritte a mano restavano fuori, e siccome è QUI che il
+# testo digitato torna a essere un numero, le loro quantità e i loro prezzi
+# non si potevano più cambiare: si scriveva nella casella, si premeva
+# invio, e al giro dopo ricompariva la cifra di prima. Il valore c'era
+# — nella casella — ma non arrivava mai alla chiave di verità.
+for _cod in ([v["codice"] for v in listino.VOCI]
+             + list(st.session_state.voci_extra)):
     # Quantità e prezzo si scrivono all'italiana in caselle di testo: si
     # rileggono qui, prima che i totali delle categorie vengano calcolati
     # (li disegna il CSS, molto più in alto delle righe). Il testo che non è
@@ -3727,13 +3950,16 @@ with tab_computo:
                            "si propone da sé — **1**, il prezzo è già "
                            "l'importo — e la puoi cambiare.")
                 n1, n2 = st.columns([1, 2])
-                n1.selectbox("Categoria", listino.CATEGORIE, key="nuova_cat")
+                n1.selectbox("Categoria", listino.CATEGORIE, key="nuova_cat",
+                             on_change=azzera_unita_nuova)
                 n2.text_input("Descrizione", key="nuova_desc",
                               placeholder="Es. Allestimento del cantiere")
                 n3, n4, n5, n6 = st.columns([1, 1, 1, 1.1],
                                             vertical_alignment="bottom")
-                n3.selectbox("U.M.", UNITA_MISURA, key="nuova_um",
-                             on_change=proponi_quantita_a_corpo)
+                n3.selectbox(
+                    "U.M.",
+                    unita_per_categoria(st.session_state.get("nuova_cat")),
+                    key="nuova_um", on_change=proponi_quantita_a_corpo)
                 # La casella c'è sempre, «a corpo» compreso: lì dentro ci
                 # trovi 1, che è il caso normale, e se le volte sono due lo
                 # scrivi. Prima la casella spariva e la quantità la decideva
