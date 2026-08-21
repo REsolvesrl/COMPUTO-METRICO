@@ -1336,6 +1336,60 @@ def css_schede_computo():
     margin: 0.2rem 0;
 }}
 """)
+    # ------------------------------------------------ la ✕ che toglie la voce
+    # Non è un bottone come gli altri: è il gesto che smonta una riga del
+    # documento, e deve stare in disparte finché non lo si cerca. Quindi
+    # niente pastiglia — solo il segno, spento, centrato nella sua colonna.
+    # Passandoci sopra si accende di rosso: sfumato dal centro, così il
+    # colore nasce sotto la ✕ e sfuma via prima del bordo, invece di
+    # accendersi come un quadrato pieno in mezzo alla riga.
+    regole.append(f"""
+/* Streamlit avvolge il bottone in tre gusci che si stringono sul contenuto:
+   senza questi, la ✕ resta un segno da 16 px in una colonna da 25 e il
+   bersaglio non si centra in niente. */
+[class*="st-key-togli_"],
+[class*="st-key-togli_"] .stButton,
+[class*="st-key-togli_"] .stTooltipIcon,
+[class*="st-key-togli_"] [data-testid="stTooltipHoverTarget"] {{
+    width: 100%;
+}}
+[class*="st-key-togli_"] button {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 1.9rem;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: {TRAVERTINO}80;
+    font-size: 0.95rem;
+    line-height: 1;
+    transition: color .15s ease, background .15s ease;
+}}
+/* la ✕ è l'unico contenuto: si centra anche il suo paragrafo, che di suo
+   nasce con i margini del testo e la spinge in alto a sinistra */
+[class*="st-key-togli_"] button p {{
+    margin: 0;
+    line-height: 1;
+}}
+[class*="st-key-togli_"] button:hover,
+[class*="st-key-togli_"] button:focus-visible {{
+    color: {TRAVERTINO};
+    background: radial-gradient(circle at center,
+                                {COTTO}D9 0%, {COTTO}8C 55%,
+                                {COTTO}00 100%);
+    border: none;
+    box-shadow: none;
+}}
+[class*="st-key-togli_"] button:active {{
+    color: {TRAVERTINO};
+    background: radial-gradient(circle at center,
+                                {COTTO}FF 0%, {COTTO}B3 60%,
+                                {COTTO}00 100%);
+}}
+""")
     return "<style>" + "".join(regole) + "</style>"
 
 
@@ -1496,7 +1550,7 @@ def riga_voce_computo(voce):
     """
     codice = voce["codice"]
     c_cod, c_desc, c_um, c_qta, c_prezzo, c_parz, c_x = st.columns(
-        [0.45, 2.8, 0.7, 0.9, 0.9, 0.95, 0.35], vertical_alignment="center")
+        [0.45, 2.65, 0.7, 0.9, 0.9, 0.95, 0.5], vertical_alignment="center")
     aiuto = voce.get("nota")
     if voce.get("analisi"):
         aiuto = (aiuto + "\n\n" if aiuto else "") + voce["analisi"]
@@ -3646,7 +3700,7 @@ with tab_computo:
                 if aperta and voci_cat:
                     (h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz,
                      h_x) = st.columns(
-                        [0.45, 2.8, 0.7, 0.9, 0.9, 0.95, 0.35])
+                        [0.45, 2.65, 0.7, 0.9, 0.9, 0.95, 0.5])
                     h_cod.caption("Cod.")
                     h_voce.caption("Voce")
                     h_um.caption("U.M.")
