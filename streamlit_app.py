@@ -1307,7 +1307,11 @@ def voci_dal_listino():
 # La casella della descrizione si misura sul testo che porta. Sotto: quanti
 # caratteri stanno in una riga della colonna «Voce» (308 px a 0,86rem), e
 # quante righe al massimo — oltre, il testo scorre dentro la casella.
-CARATTERI_PER_RIGA = 42
+# 291 px utili a 13,76 px di corpo: il carattere medio di questo font sta
+# in 6,17 px, e in una riga ci vanno 47 caratteri. Con 42 la stima
+# sbagliava per eccesso e lasciava una riga vuota in fondo alle voci
+# lunghe «quasi» due righe.
+CARATTERI_PER_RIGA = 47
 RIGHE_DESCRIZIONE_MAX = 3
 # altezza di una riga di testo e aria sopra+sotto, in rem: 0,86 × 1,3
 RIGA_TESTO_REM = 1.118
@@ -1331,12 +1335,13 @@ def righe_descrizione(testo):
 
 
 def css_altezze_descrizioni():
-    """Una regola per voce: la casella alta quanto il suo testo.
+    """Le altezze stimate, per i browser senza `field-sizing`.
 
-    Streamlit non sa far crescere un'area di testo col contenuto, e la
-    stessa altezza per tutte lasciava due righe vuote sotto «Allestimento
-    cantiere». La chiave del widget diventa una classe (i punti del codice
-    diventano trattini), e da lì si veste la singola casella.
+    Dove c'è, la casella si misura da sé sul testo e queste regole non
+    servono; dove non c'è — Safari, Firefox — resta la stima sui
+    caratteri, che sbaglia di una riga ogni tanto ma è meglio di tre
+    righe fisse per tutti. La chiave del widget diventa una classe (i
+    punti del codice diventano trattini), e da lì si veste la casella.
     """
     regole = []
     for codice in scelte():
@@ -1350,7 +1355,10 @@ def css_altezze_descrizioni():
             f'.st-key-d_{codice.replace(".", "-")}_w textarea '
             f"{{height:{alta:.2f}rem !important;"
             f"min-height:{alta:.2f}rem !important;}}")
-    return "<style>" + "".join(regole) + "</style>"
+    if not regole:
+        return ""
+    return ("<style>@supports not (field-sizing: content) {"
+            + "".join(regole) + "}</style>")
 
 
 def css_schede_computo():
@@ -1527,12 +1535,18 @@ def css_schede_computo():
    Sopra e sotto resta un filo, quel tanto che serve a non far toccare il
    testo al bordo. */
 [class*="st-key-card_"] textarea {{
-    /* rete di sicurezza: tre righe. L'altezza vera la decide, voce per
-       voce, css_altezze_descrizioni() — una casella alta quanto il testo
-       che porta, che è il motivo per cui una voce di tre parole non
-       occupa più lo spazio di una di trenta. */
-    min-height: 3.85rem !important;
-    height: 3.85rem !important;
+    /* ⚠️ `field-sizing: content` fa crescere la casella col testo che
+       porta, ESATTAMENTE: una riga se il testo sta in una, tre se ne
+       servono tre, mai una riga vuota in fondo. È il browser a misurare,
+       e il browser è l'unico che sappia dove va a capo una parola — la
+       stima sui caratteri sbagliava di una riga su tre voci su quindici.
+       min/max tengono il conto fra una riga e tre; oltre, il testo scorre.
+       Dove `field-sizing` non c'è, subentra la stima: vedi il blocco
+       @supports in css_altezze_descrizioni(). */
+    field-sizing: content;
+    height: auto !important;
+    min-height: 1.52rem !important;
+    max-height: 3.85rem !important;
     padding: 0.2rem 0.5rem;
     line-height: 1.3;
     font-size: 0.86rem;
@@ -1630,6 +1644,28 @@ div[data-baseweb="select"] > div > div:first-child {{
 [class*="st-key-card_"] [data-testid="stHorizontalBlock"]
 [data-testid="stMarkdownContainer"] p {{
     white-space: nowrap;
+}}
+/* Il parziale, incolonnato a destra: è la cifra della riga, e a filo si
+   legge scorrendo il computo invece di ballare dietro alla lunghezza del
+   prezzo. L'allineamento sta qui e non nel testo proprio per poter usare
+   il markdown normale di Streamlit — vedi il commento in riga_voce_computo. */
+[class*="st-key-parz_"] {{
+    text-align: right;
+    /* ⚠️ IL NUMERO STRANO. Una colonna che contiene solo testo — niente
+       caselle — collassa ad altezza ZERO, e Streamlit centra le colonne
+       con un margine calcolato sulla loro altezza: centrava il vuoto, e
+       il testo cominciava dal centro andando in giù. Il parziale finiva
+       sette pixel sotto le cifre accanto, in OGNI riga.
+       Dare un'altezza alla colonna peggiora (il margine resta quello di
+       prima e si somma), toglierlo non si può — è calcolato a valle.
+       Resta lo scarto: −0,63rem, misurato in pagina finché le due cifre
+       non stanno sullo stesso filo. Vale a qualunque altezza di riga:
+       provato a 41, 54, 72 e 74 px, residuo un decimo di pixel. */
+    margin-top: -0.63rem;
+}}
+[class*="st-key-parz_"] p {{
+    text-align: right;
+    margin: 0;
 }}
 /* ⚠️ IL FILO FRA DUE VOCI È IL BORDO DELLA RIGA, non un elemento a sé.
    Come <hr> era una cosa in mezzo a due righe, con l'aria del blocco sopra
@@ -1948,23 +1984,34 @@ def riga_voce_computo(voce):
     # Il parziale sta a DESTRA nella sua colonna: è la cifra della riga, e
     # incolonnata a filo si legge scorrendo il computo — a sinistra ballava
     # dietro alla lunghezza del prezzo.
-    # ⚠️ Il parziale è testo in mezzo a caselle: senza un riquadro proprio
-    # il suo rigo si appoggia dove capita e finisce più in basso delle cifre
-    # accanto. Gli si dà la stessa altezza delle caselle (1,85rem) e lo si
-    # centra dentro: così le cifre di una riga stanno tutte sullo stesso
-    # filo, che è l'unico modo di leggere un computo scorrendolo.
-    riquadro = ("display:flex;align-items:center;justify-content:flex-end;"
-                "height:1.85rem;line-height:1.85rem;")
-    if quantita > 0:
-        c_parz.markdown(
-            f"<div style='{riquadro}font-weight:700'>"
-            f"{euro(quantita * prezzo)}</div>", unsafe_allow_html=True)
-    else:
-        # non è uno zero come gli altri: è una voce che hai scelto e non hai
-        # ancora quantificato, e fuori di qui (totali, PDF) non esiste
-        c_parz.markdown(
-            f"<div style='{riquadro}color:{OTTONE}'>"
-            "da quantificare</div>", unsafe_allow_html=True)
+    # ⚠️ Al parziale NON si dà un'altezza. Gliene avevo messa una (1,85rem,
+    # quanto le caselle) per allinearlo: il guscio che Streamlit mette
+    # attorno a un markdown resta però alto quanto una riga di testo, e il
+    # riquadro gli traboccava sotto — le cifre finivano sette pixel più in
+    # basso di quelle accanto. Senza altezza il guscio cresce col contenuto
+    # e ci pensa Streamlit a centrare la colonna, come fa per il codice.
+    # ⚠️ Un <p>, non un <div>. Streamlit avvolge il markdown in un guscio
+    # alto quanto UNA RIGA DI TESTO, e un <div> con la sua interlinea gli
+    # traboccava sotto: le cifre del parziale finivano sette pixel più in
+    # basso di quelle accanto, in ogni riga. Un <p> è esattamente quello
+    # che Streamlit stesso scrive per il codice della voce — che infatti
+    # era l'unica cella allineata — e si comporta come lui.
+    # ⚠️ Markdown NORMALE, non HTML grezzo. Una colonna che contiene solo
+    # HTML nostro collassa ad altezza ZERO, e Streamlit — che centra le
+    # colonne con un margine calcolato sulla loro altezza — la centrava
+    # come se fosse vuota: il testo finiva sette pixel sotto le cifre
+    # accanto, in ogni riga. Col markdown suo la colonna ha un'altezza
+    # vera, come quella del codice, che infatti era l'unica allineata.
+    # A destra ci va per via del contenitore, che il CSS riconosce dalla
+    # chiave.
+    with c_parz.container(key=f"parz_{codice}"):
+        if quantita > 0:
+            st.markdown(f"**{euro(quantita * prezzo)}**")
+        else:
+            # non è uno zero come gli altri: è una voce che hai scelto e
+            # non hai ancora quantificato, e fuori di qui (totali, PDF)
+            # non esiste
+            st.markdown(":orange[da quantificare]")
     # Anche le voci scritte a mano tornano nel pool: una lavorazione
     # inventata per questo cantiere si toglie e si rimette come le altre, e
     # buttarla via al primo ripensamento vorrebbe dire riscriverla da capo.
@@ -4110,10 +4157,8 @@ with tab_computo:
                     h_um.caption("U.M.")
                     h_qta.caption("Quantità")
                     h_prezzo.caption("Prezzo €")
-                    h_parz.markdown(
-                        "<div style='display:flex;justify-content:flex-end;"
-                        "opacity:.6'>Parziale</div>",
-                        unsafe_allow_html=True)
+                    with h_parz.container(key=f"parz_testata_{indice}"):
+                        st.caption("Parziale")
                     for voce in voci_cat:
                         riga_voce_computo(voce)
                 elif aperta:
