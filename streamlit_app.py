@@ -1304,6 +1304,55 @@ def voci_dal_listino():
     return voci
 
 
+# La casella della descrizione si misura sul testo che porta. Sotto: quanti
+# caratteri stanno in una riga della colonna «Voce» (308 px a 0,86rem), e
+# quante righe al massimo — oltre, il testo scorre dentro la casella.
+CARATTERI_PER_RIGA = 42
+RIGHE_DESCRIZIONE_MAX = 3
+# altezza di una riga di testo e aria sopra+sotto, in rem: 0,86 × 1,3
+RIGA_TESTO_REM = 1.118
+ARIA_DESCRIZIONE_REM = 0.4
+
+
+def righe_descrizione(testo):
+    """Quante righe occupa la descrizione, da 1 a RIGHE_DESCRIZIONE_MAX.
+
+    Una stima sui caratteri, non una misura: il conto esatto lo saprebbe
+    solo il browser. Sbagliare per eccesso di una riga costa venti pixel;
+    tenere tutte le caselle alte quanto la più lunga costava venti pixel
+    su OGNI riga, comprese quelle da tre parole.
+    """
+    if not testo:
+        return 1
+    righe = 0
+    for paragrafo in testo.splitlines() or [""]:
+        righe += max(1, -(-len(paragrafo) // CARATTERI_PER_RIGA))
+    return min(RIGHE_DESCRIZIONE_MAX, max(1, righe))
+
+
+def css_altezze_descrizioni():
+    """Una regola per voce: la casella alta quanto il suo testo.
+
+    Streamlit non sa far crescere un'area di testo col contenuto, e la
+    stessa altezza per tutte lasciava due righe vuote sotto «Allestimento
+    cantiere». La chiave del widget diventa una classe (i punti del codice
+    diventano trattini), e da lì si veste la singola casella.
+    """
+    regole = []
+    for codice in scelte():
+        voce = voce_del_computo(codice)
+        if voce is None:
+            continue
+        descrizione, _ = testi_voce(voce)
+        alta = (righe_descrizione(descrizione) * RIGA_TESTO_REM
+                + ARIA_DESCRIZIONE_REM)
+        regole.append(
+            f'.st-key-d_{codice.replace(".", "-")}_w textarea '
+            f"{{height:{alta:.2f}rem !important;"
+            f"min-height:{alta:.2f}rem !important;}}")
+    return "<style>" + "".join(regole) + "</style>"
+
+
 def css_schede_computo():
     """CSS dei campioni del computo: una categoria, una tinta, un totale.
 
@@ -1402,13 +1451,11 @@ def css_schede_computo():
 .st-key-apri_{indice} button::after {{
     content: "{euro(totale)}";
 }}
-/* Il filo che separa due voci: della tinta della categoria e abbastanza
-   marcato da vedersi. Serve un po' d'aria attorno, se no il filo tocca il
-   bordo delle caselle e non si distingue più da loro. */
-.st-key-card_{indice} hr {{
-    height: 1px;
-    background-color: {colore}99;
-    border: none;
+/* Il filo che separa due voci: il bordo alto della riga, della tinta
+   della categoria. `:has(textarea)` sceglie le righe delle voci e lascia
+   fuori l'intestazione, che una linea sopra non la vuole. */
+.st-key-card_{indice} [data-testid="stHorizontalBlock"]:has(textarea) {{
+    border-top: 1px solid {colore}99;
 }}
 """)
     # Il pool: il magazzino, non il documento. Stessa famiglia di forme —
@@ -1454,9 +1501,11 @@ def css_schede_computo():
     # ogni cella era una casella di Streamlit con la sua imbottitura da
     # form, e fra una colonna e l'altra passava un dito di vuoto.
     regole.append(f"""
-/* le colonne di una riga: quasi attaccate */
+/* Le colonne di una riga: quasi attaccate, con un filo d'aria sopra e
+   sotto — uguale da tutte e due le parti. */
 [class*="st-key-card_"] [data-testid="stHorizontalBlock"] {{
     gap: 0.35rem;
+    padding: 0.3rem 0;
 }}
 /* ⚠️ QUI stava lo spazio vero. Dentro le celle si era stretto tutto, ma
    fra una riga e l'altra ne restavano 32 px: la riga misura 45 e il passo
@@ -1478,8 +1527,10 @@ def css_schede_computo():
    Sopra e sotto resta un filo, quel tanto che serve a non far toccare il
    testo al bordo. */
 [class*="st-key-card_"] textarea {{
-    /* tre righe piene: le descrizioni di cantiere ci arrivano spesso, e
-       la terza mezza tagliata era peggio che non averla */
+    /* rete di sicurezza: tre righe. L'altezza vera la decide, voce per
+       voce, css_altezze_descrizioni() — una casella alta quanto il testo
+       che porta, che è il motivo per cui una voce di tre parole non
+       occupa più lo spazio di una di trenta. */
     min-height: 3.85rem !important;
     height: 3.85rem !important;
     padding: 0.2rem 0.5rem;
@@ -1580,12 +1631,13 @@ div[data-baseweb="select"] > div > div:first-child {{
 [data-testid="stMarkdownContainer"] p {{
     white-space: nowrap;
 }}
-/* il filo fra una voce e l'altra: c'è, ma non separa due paragrafi.
-   ⚠️ Un minimo d'aria ci vuole: azzerata del tutto, la linea di confine
-   spariva schiacciata fra due caselle e le righe si impastavano. */
-[class*="st-key-card_"] hr {{
-    margin: 0.2rem 0 !important;
-}}
+/* ⚠️ IL FILO FRA DUE VOCI È IL BORDO DELLA RIGA, non un elemento a sé.
+   Come <hr> era una cosa in mezzo a due righe, con l'aria del blocco sopra
+   e la sua sotto: cadeva storto nel vuoto — otto pixel da una parte e tre
+   dall'altra — e ogni tentativo di centrarlo si scontrava con margini che
+   si sommano fra loro. Da bordo sta esattamente sul confine, e l'aria è
+   quella della riga: uguale sopra e sotto per costruzione.
+   La tinta la mette la regola della categoria, qui sotto. */
 """)
 
     # ------------------------------------------------ la ✕ che toglie la voce
@@ -1896,15 +1948,22 @@ def riga_voce_computo(voce):
     # Il parziale sta a DESTRA nella sua colonna: è la cifra della riga, e
     # incolonnata a filo si legge scorrendo il computo — a sinistra ballava
     # dietro alla lunghezza del prezzo.
+    # ⚠️ Il parziale è testo in mezzo a caselle: senza un riquadro proprio
+    # il suo rigo si appoggia dove capita e finisce più in basso delle cifre
+    # accanto. Gli si dà la stessa altezza delle caselle (1,85rem) e lo si
+    # centra dentro: così le cifre di una riga stanno tutte sullo stesso
+    # filo, che è l'unico modo di leggere un computo scorrendolo.
+    riquadro = ("display:flex;align-items:center;justify-content:flex-end;"
+                "height:1.85rem;line-height:1.85rem;")
     if quantita > 0:
         c_parz.markdown(
-            f"<div style='text-align:right;font-weight:700'>"
+            f"<div style='{riquadro}font-weight:700'>"
             f"{euro(quantita * prezzo)}</div>", unsafe_allow_html=True)
     else:
         # non è uno zero come gli altri: è una voce che hai scelto e non hai
         # ancora quantificato, e fuori di qui (totali, PDF) non esiste
         c_parz.markdown(
-            f"<div style='text-align:right;color:{OTTONE}'>"
+            f"<div style='{riquadro}color:{OTTONE}'>"
             "da quantificare</div>", unsafe_allow_html=True)
     # Anche le voci scritte a mano tornano nel pool: una lavorazione
     # inventata per questo cantiere si toglie e si rimette come le altre, e
@@ -4009,6 +4068,7 @@ with tab_computo:
     # ------------------------------------------------------ listino guida
     # -------------------------------------- categorie (sx) e riepilogo (dx)
     st.markdown(css_schede_computo(), unsafe_allow_html=True)
+    st.markdown(css_altezze_descrizioni(), unsafe_allow_html=True)
     # 0,7 su 4 non bastava: «Somma parziali» andava a capo e i totali si
     # troncavano in «12.215…», cioè proprio la cifra per cui esiste la
     # colonna. Il computo perde poco, i numeri si leggono per intero.
@@ -4051,10 +4111,10 @@ with tab_computo:
                     h_qta.caption("Quantità")
                     h_prezzo.caption("Prezzo €")
                     h_parz.markdown(
-                        "<div style='text-align:right;opacity:.6'>Parziale"
-                        "</div>", unsafe_allow_html=True)
+                        "<div style='display:flex;justify-content:flex-end;"
+                        "opacity:.6'>Parziale</div>",
+                        unsafe_allow_html=True)
                     for voce in voci_cat:
-                        st.divider()
                         riga_voce_computo(voce)
                 elif aperta:
                     st.caption(":gray[Nessuna voce in questa categoria. "
