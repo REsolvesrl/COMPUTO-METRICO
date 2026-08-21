@@ -1117,9 +1117,10 @@ def aggiungi_voce_computo(categoria, descrizione, um, quantita, prezzo,
                           codice=None):
     """Crea una voce che il listino non ha e la porta NEL computo.
 
-    Non finisce nel pool: il pool è il magazzino del listino, e una voce
-    inventata per questo cantiere non è merce da tenere a scaffale — è già
-    una riga del documento. Ci arrivano le voci scritte a mano e le
+    Nasce direttamente NEL computo, non nel pool: una voce inventata per
+    questo cantiere è già una riga del documento, non merce da scaffale.
+    Nel pool ci finisce solo dopo, se la togli dal computo con la ✕ — da
+    lì si ripesca come le altre. Ci arrivano le voci scritte a mano e le
     superfici portate su dalla planimetria.
     """
     codice = codice or codice_nuovo(categoria)
@@ -1147,6 +1148,12 @@ def scarta_voce(codice):
     sparisce solo da qui, perché su questo lavoro non c'entra e sfogliare
     il pool sia più corto. Niente si perde — gli scarti si contano in
     fondo al pool e si rimettono tutti insieme.
+
+    Vale anche per le voci scritte a mano, e allo stesso modo: scartare
+    non è cancellare. La voce resta in `voci_extra` col suo codice, e
+    «Rimetti tutte» la riporta a galla insieme alle altre. In questo
+    programma non c'è modo di eliminare per sempre una voce tua — è una
+    scelta: quel che hai scritto non lo butta via un clic.
     """
     togli_dal_computo(codice)
     if codice not in st.session_state.voci_scartate:
@@ -2105,7 +2112,8 @@ def riga_voce_computo(voce):
     # Anche le voci scritte a mano tornano nel pool: una lavorazione
     # inventata per questo cantiere si toglie e si rimette come le altre, e
     # buttarla via al primo ripensamento vorrebbe dire riscriverla da capo.
-    # Per cancellarla davvero c'è il cestino, nel pool.
+    # Nemmeno il cestino nel pool la cancella: la mette fra gli scarti, da
+    # cui «Rimetti tutte» la ripesca. Non c'è una via per perderla.
     c_x.button("✕", key=f"togli_{codice}", on_click=togli_dal_computo,
                args=(codice,), help="Rimanda la voce nel pool")
 
