@@ -204,11 +204,23 @@ def riepilogo_locali(piante, escludi=()):
 
 def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
                       n_porte=0, altezza_rivestimento=0.0, n_porte_esterne=0,
-                      aperture=()):
-    """Quantità nette di pavimenti, battiscopa, pareti e soffitti.
+                      aperture=(), n_porte_rivestiti=0,
+                      n_finestre_rivestiti=0, larghezza_finestra=0.0,
+                      altezza_finestra=0.0):
+    """Quantità nette di pavimenti, battiscopa, pareti, soffitti, rivestimenti.
 
     locali: [{"m2", "perimetro", "pavimento", "battiscopa", "pittura",
-    "rivestito"}] — le spunte dicono che cosa si rifà in quel locale.
+    "rivestito", "esterno"}] — le spunte dicono che cosa si rifà in quel
+    locale; `esterno` dice se è un balcone, un terrazzo o una loggia.
+
+    Il pavimento esce in DUE quantità, e non è un capriccio: la pavimentazione
+    di un balcone non è quella di una camera — vuole la spessoratura, la
+    pendenza, spesso un gres diverso — e ha un prezzo suo. Sommandole si
+    finiva per computare i metri del balcone al prezzo del gres da interni.
+
+    I RIVESTIMENTI (la fascia piastrellata di bagni e cucine) escono come
+    quantità positiva, non solo come detrazione della tinteggiatura: sono
+    perimetro × `altezza_rivestimento` dei locali spuntati «rivestito».
 
     Detrazioni applicate:
     - i locali RIVESTITI (bagni, fasce di cucina) non hanno battiscopa: il
@@ -239,6 +251,17 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     larg_p = float(larghezza_porta or 0.0)
     alt_p = float(altezza_porta or 0.0)
 
+    # Della porta e della finestra si toglie solo la parte che cade DENTRO
+    # la fascia rivestita: un vano porta alto 2,10 su una fascia da 1,20
+    # toglie 0,80 × 1,20, non 0,80 × 2,10. Togliere il vano intero sarebbe
+    # una detrazione più grande del muro da cui si detrae.
+    detr_riv_porte = (max(0, int(n_porte_rivestiti or 0))
+                      * float(larghezza_porta or 0.0)
+                      * min(float(altezza_porta or 0.0), h_riv))
+    detr_riv_finestre = (max(0, int(n_finestre_rivestiti or 0))
+                         * float(larghezza_finestra or 0.0)
+                         * min(float(altezza_finestra or 0.0), h_riv))
+
     detr_aperture_ml = detr_aperture_m2 = 0.0
     for apertura in aperture:
         n = max(0, int(apertura.get("n") or 0))
@@ -248,14 +271,18 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
         if apertura.get("battiscopa"):
             detr_aperture_ml += n * larghezza
 
-    pavimento = battiscopa_lordo = pareti_lorde = soffitti = 0.0
+    pavimento = pavimento_esterno = 0.0
+    battiscopa_lordo = pareti_lorde = soffitti = 0.0
     detr_rivestimenti = 0.0
     for locale in locali:
         m2 = float(locale.get("m2") or 0.0)
         perimetro = float(locale.get("perimetro") or 0.0)
         rivestito = bool(locale.get("rivestito"))
         if locale.get("pavimento"):
-            pavimento += m2
+            if locale.get("esterno"):
+                pavimento_esterno += m2
+            else:
+                pavimento += m2
         if locale.get("battiscopa") and not rivestito:
             battiscopa_lordo += perimetro
         if locale.get("pittura"):
@@ -269,6 +296,12 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     return {
         "lati_porta": lati,
         "pavimento": round(pavimento, 3),
+        "pavimento_esterno": round(pavimento_esterno, 3),
+        "rivestimenti": round(max(0.0, detr_rivestimenti - detr_riv_porte
+                                  - detr_riv_finestre), 3),
+        "rivestimenti_lordi": round(detr_rivestimenti, 3),
+        "detr_riv_porte": round(detr_riv_porte, 3),
+        "detr_riv_finestre": round(detr_riv_finestre, 3),
         "battiscopa": round(max(0.0, battiscopa_lordo - detr_porte_ml
                                 - detr_aperture_ml), 3),
         "battiscopa_lordo": round(battiscopa_lordo, 3),

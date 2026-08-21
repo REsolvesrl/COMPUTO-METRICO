@@ -591,6 +591,8 @@ VOCI_DA_SUPERFICI = [
     ("1.10", "battiscopa", False),        # rimozione zoccolini
     ("2.03", "pavimento", False),         # rifacimento massetto
     ("2.10", "pavimento", True),          # posa gres
+    ("2.11", "rivestimenti", True),       # rivestimenti (fascia dei bagni)
+    ("2.24", "pavimento_esterno", True),  # pavimentazione di balconi e terrazzi
     ("2.14", "battiscopa", True),         # posa battiscopa
     ("2.17", "tinteggiatura", False),     # rasatura muri e soffitti
     ("2.18", "tinteggiatura", True),      # tinteggiatura muri e soffitti
@@ -783,6 +785,17 @@ PERCENTUALI_STORICHE = {
 # in pavimenti, battiscopa e tinteggiature, non ostacolano il rilevamento
 # automatico delle stanze e non occupano spazio per le etichette.
 CATEGORIE_INVOLUCRO = ("Superficie commerciale",)
+
+# Categorie che si calpestano ma stanno FUORI: la loro pavimentazione è
+# un'altra lavorazione — spessoratura, pendenza, spesso un gres diverso —
+# e va in una voce sua, non sommata ai metri delle stanze. I giardini non
+# ci sono: non si pavimentano.
+CATEGORIE_ESTERNE = (
+    "Balcone", "Terrazzo", "Loggia",
+    # categorie di lavori precedenti, che restano valide dove sono usate
+    "Balcone scoperto", "Balcone coperto", "Balcone / Lastrico solare",
+    "Terrazzo di attico (a tasca)", "Portico / Patio",
+)
 
 # Categorie che servono SOLO al computo metrico: le stanze interne si
 # misurano per pavimenti, battiscopa e tinteggiature, ma la parte vendibile
@@ -2554,6 +2567,8 @@ def _payload_progetto():
                      "porta_n": st.session_state.porta_n,
                      "porta_n_est": st.session_state.porta_n_est,
                      "riv_alt": st.session_state.riv_alt,
+                     "riv_porte_n": st.session_state.riv_porte_n,
+                     "riv_finestre_n": st.session_state.riv_finestre_n,
                      "fin_n": st.session_state.fin_n,
                      "fin_larg": st.session_state.fin_larg,
                      "fin_alt": st.session_state.fin_alt,
@@ -2889,6 +2904,9 @@ st.session_state.setdefault("pool_aperte", set())
 # le voci tolte dal pool di questo progetto: il listino resta intero, qui si
 # tiene solo l'elenco di quelle che su QUESTO cantiere non c'entrano
 st.session_state.setdefault("voci_scartate", [])
+# porte e finestre dei locali rivestiti: interrompono la fascia piastrellata
+st.session_state.setdefault("riv_porte_n", 1)
+st.session_state.setdefault("riv_finestre_n", 0)
 # categorie del listino aperte in questo momento: solo le loro righe vengono
 # disegnate. Con tutte e 58 le voci a video una riesecuzione costava 390 ms su
 # 595 totali — due terzi del tempo speso per righe che l'utente non guarda.
@@ -3068,6 +3086,8 @@ if "da_caricare" in st.session_state:
     st.session_state.porta_n = int(finiture.get("porta_n", 0))
     st.session_state.porta_n_est = int(finiture.get("porta_n_est", 0))
     st.session_state.riv_alt = float(finiture.get("riv_alt", 1.20))
+    st.session_state.riv_porte_n = int(finiture.get("riv_porte_n", 1))
+    st.session_state.riv_finestre_n = int(finiture.get("riv_finestre_n", 0))
     st.session_state.fin_n = int(finiture.get("fin_n", 0))
     st.session_state.fin_larg = float(finiture.get("fin_larg", 1.20))
     st.session_state.fin_alt = float(finiture.get("fin_alt", 1.40))
@@ -3091,7 +3111,8 @@ if "da_caricare" in st.session_state:
     # sessione vuota lo riportava a zero, e i numeri sembravano non essersi
     # mai salvati.
     for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
-               "riv_alt_w", "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
+               "riv_alt_w", "riv_porte_n_w", "riv_finestre_n_w",
+               "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
                "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
                "apert_larg_w", "apert_alt_w", "auto_computo_w"):
         st.session_state.pop(_k, None)
@@ -3258,6 +3279,7 @@ bp_ricalcola_euro()
 # metà — resta l'ultimo valore buono.
 for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
             "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt",
+            "riv_porte_n", "riv_finestre_n",
             "fin_n", "fin_larg", "fin_alt", "pf_n", "pf_larg", "pf_alt",
             "apert_dem_n", "apert_cos_n", "apert_larg", "apert_alt",
             "auto_computo"):
@@ -4629,6 +4651,8 @@ with tab_plan:
                     "battiscopa": zona["battiscopa"],
                     "pittura": zona["pittura"],
                     "rivestito": zona["rivestito"],
+                    "esterno": (zona.get("categoria") or "")
+                    in CATEGORIE_ESTERNE,
                 })
 
             # ---- vani porta e rivestimenti: quello che va detratto ----
@@ -4674,6 +4698,26 @@ with tab_plan:
                     help="Fascia piastrellata nei locali spuntati «Rivestito» "
                          "(di norma 1,20 m; zona doccia anche 2,40).")
                 st.session_state.riv_alt = h_riv
+                # Quanti vani interrompono la fascia. Sono un dato a parte
+                # dalle porte di tutta la casa: qui contano solo quelle dei
+                # locali rivestiti, e di ciascuna vale UN lato — quello
+                # dentro il bagno, che è l'unico piastrellato.
+                r1, r2 = st.columns(2)
+                n_riv_porte = r1.number_input(
+                    "Porte nei locali rivestiti", min_value=0, max_value=50,
+                    step=1, value=int(st.session_state.riv_porte_n),
+                    key="riv_porte_n_w",
+                    help="Di norma una per bagno. Vale un lato solo: "
+                         "l'altra faccia del vano è fuori dal rivestimento.")
+                st.session_state.riv_porte_n = n_riv_porte
+                n_riv_finestre = r2.number_input(
+                    "Finestre nei locali rivestiti", min_value=0,
+                    max_value=50, step=1,
+                    value=int(st.session_state.riv_finestre_n),
+                    key="riv_finestre_n_w",
+                    help="Zero nei bagni ciechi. Si toglie solo la parte "
+                         "che cade dentro la fascia.")
+                st.session_state.riv_finestre_n = n_riv_finestre
 
             # ---- finestre e porte finestra ----
             with st.container(key="pan_finestre"):
@@ -4730,8 +4774,12 @@ with tab_plan:
                 locali_calcolo, altezza, larghezza_porta=larg_porta,
                 altezza_porta=alt_porta, n_porte=n_porte,
                 altezza_rivestimento=h_riv, n_porte_esterne=n_porte_est,
-                aperture=aperture)
+                aperture=aperture, n_porte_rivestiti=n_riv_porte,
+                n_finestre_rivestiti=n_riv_finestre,
+                larghezza_finestra=larg_fin, altezza_finestra=alt_fin)
             pav_m2 = q["pavimento"]
+            pav_est_m2 = q["pavimento_esterno"]
+            riv_m2 = q["rivestimenti"]
             batt_m = q["battiscopa"]
             pareti_m2 = q["pareti"]
             soffitti_m2 = q["soffitti"]
@@ -4740,7 +4788,7 @@ with tab_plan:
             detr_m2 = (q["detr_porte_m2"] + q["detr_aperture_m2"]
                        + q["detr_rivestimenti"])
             t1, t2, t3, t4 = st.columns(4)
-            t1.metric("Pavimento", f"{numero_it(pav_m2, 2)} m²")
+            t1.metric("Pavimento (interni)", f"{numero_it(pav_m2, 2)} m²")
             t2.metric("Battiscopa", f"{numero_it(batt_m, 2)} m",
                       delta=(f"−{numero_it(detr_ml, 2)} m vani"
                              if detr_ml else None),
@@ -4751,6 +4799,37 @@ with tab_plan:
                              "vani e rivestimenti" if detr_m2 else None),
                       delta_color="off")
             t4.metric("Soffitti", f"{numero_it(soffitti_m2, 2)} m²")
+            # I due che non stavano in nessuna voce: i metri dei balconi,
+            # che finivano sommati a quelli delle stanze, e la fascia
+            # rivestita, che si scontava dalla tinteggiatura senza mai
+            # diventare una quantità da pagare a nessuno.
+            t5, t6 = st.columns(2)
+            t5.metric("Pavimento esterno (balconi, terrazzi)",
+                      f"{numero_it(pav_est_m2, 2)} m²")
+            t6.metric(f"Rivestimenti (fascia h {numero_it(h_riv, 2)} m)",
+                      f"{numero_it(riv_m2, 2)} m²",
+                      # niente detrazione da mostrare se non c'è fascia:
+                      # «0,00 m² −0,96 di vani» non vuol dire niente
+                      delta=(f"−{numero_it(q['detr_riv_porte'] + q['detr_riv_finestre'], 2)} m² vani"
+                             if q["rivestimenti_lordi"]
+                             and (q["detr_riv_porte"] or q["detr_riv_finestre"])
+                             else None),
+                      delta_color="off")
+            if q["rivestimenti_lordi"]:
+                st.caption(
+                    f":gray[Fascia lorda {numero_it(q['rivestimenti_lordi'], 2)} m² "
+                    f"(perimetro dei locali rivestiti × {numero_it(h_riv, 2)} m) − "
+                    f"{numero_it(q['detr_riv_porte'], 2)} m² di vani porta − "
+                    f"{numero_it(q['detr_riv_finestre'], 2)} m² di finestre. "
+                    "Dei vani si toglie solo la parte che cade dentro la "
+                    "fascia: una porta alta 2,10 su una fascia da 1,20 vale "
+                    "0,80 × 1,20.]")
+            elif any(l.get("rivestito") for l in locali_calcolo) is False:
+                st.caption(
+                    ":gray[Nessun locale spuntato **Rivestito**: la voce dei "
+                    "rivestimenti resta a zero. La spunta è nella tabella "
+                    "dei locali qui sopra — di norma i bagni e la fascia "
+                    "della cucina.]")
             if detr_ml or detr_m2:
                 st.caption(
                     f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
@@ -4767,6 +4846,8 @@ with tab_plan:
 
             grandezze.update({
                 "pavimento": pav_m2,
+                "pavimento_esterno": pav_est_m2,
+                "rivestimenti": riv_m2,
                 "battiscopa": batt_m,
                 "tinteggiatura": pareti_m2 + soffitti_m2,
             })

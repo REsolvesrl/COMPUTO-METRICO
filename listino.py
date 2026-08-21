@@ -177,11 +177,19 @@ VOCI = [
      "prezzo": 55.0,
      "descrizione": "Fornitura e posa pavimenti in piastrelle (gres)",
      "nota": "Superficie netta calpestabile."},
+    {"codice": "2.24", "categoria": "Ricostruzioni e ripristini", "um": "m²",
+     "prezzo": 48.0,
+     "descrizione": "Posa pavimentazione esterna (balconi e terrazzi) con "
+                    "spessoratura",
+     "nota": "I metri calpestabili delle zone disegnate come balcone, "
+             "terrazzo o loggia. Lavorazione diversa da quella interna: "
+             "spessoratura, pendenze e stuccatura per esterni."},
     {"codice": "2.11", "categoria": "Ricostruzioni e ripristini", "um": "m²",
      "prezzo": 55.0,
      "descrizione": "Fornitura e posa rivestimenti in piastrelle",
-     "nota": "Oggi si piastrella a ~1,20 m (zona doccia ~2,40 m), non più "
-             "a 1,80 m; il lato senza utenze può restare senza rivestimento."},
+     "nota": "Perimetro dei locali spuntati «Rivestito» per l'altezza della "
+             "fascia (~1,20 m; zona doccia ~2,40 m), meno vani porta e "
+             "finestre. Il lato senza utenze può restare senza rivestimento."},
     {"codice": "2.12", "categoria": "Ricostruzioni e ripristini", "um": "m²",
      "prezzo": 18.0,
      "descrizione": "Sistemazione planarità con malta autolivellante",

@@ -647,3 +647,78 @@ def test_calpestabile_senza_scala_e_segnalato():
 
 def test_calpestabile_senza_zone():
     assert superficie_calpestabile([], PERCENTUALI_CALP) == (0.0, [])
+
+
+# ------------------- pavimento esterno e rivestimenti (le due grandezze
+# che prima non finivano in nessuna voce)
+
+LOCALI_MISTI = [
+    {"m2": 20.0, "perimetro": 18.0, "pavimento": True, "battiscopa": True,
+     "pittura": True, "rivestito": False, "esterno": False},
+    {"m2": 5.0, "perimetro": 9.0, "pavimento": True, "battiscopa": False,
+     "pittura": True, "rivestito": True, "esterno": False},      # bagno
+    {"m2": 4.0, "perimetro": 8.0, "pavimento": True, "battiscopa": False,
+     "pittura": False, "rivestito": False, "esterno": True},     # balcone
+]
+
+
+def test_il_balcone_non_finisce_nel_pavimento_delle_stanze():
+    """Sommarli voleva dire pagare i metri del balcone al prezzo del gres."""
+    q = quantita_finiture(LOCALI_MISTI, 3.0)
+    assert q["pavimento"] == 25.0            # 20 + 5, il bagno è dentro
+    assert q["pavimento_esterno"] == 4.0     # il balcone, per conto suo
+
+
+def test_i_rivestimenti_sono_perimetro_per_altezza_della_fascia():
+    """9 m di perimetro × 1,20 = 10,80 m², senza vani da togliere."""
+    q = quantita_finiture(LOCALI_MISTI, 3.0, altezza_rivestimento=1.20)
+    assert q["rivestimenti_lordi"] == 10.8
+    assert q["rivestimenti"] == 10.8
+
+
+def test_del_vano_porta_si_toglie_solo_la_parte_dentro_la_fascia():
+    """Porta 0,80 × 2,10 su fascia 1,20: vale 0,80 × 1,20 = 0,96 m².
+
+    Togliere il vano intero (1,68) sarebbe una detrazione più alta del
+    muro da cui si detrae.
+    """
+    q = quantita_finiture(LOCALI_MISTI, 3.0, altezza_rivestimento=1.20,
+                          larghezza_porta=0.80, altezza_porta=2.10,
+                          n_porte_rivestiti=1)
+    assert q["detr_riv_porte"] == 0.96
+    assert q["rivestimenti"] == 9.84         # 10,80 − 0,96
+
+
+def test_la_finestra_del_bagno_si_toglie_dai_rivestimenti():
+    q = quantita_finiture(LOCALI_MISTI, 3.0, altezza_rivestimento=1.20,
+                          n_finestre_rivestiti=1, larghezza_finestra=0.60,
+                          altezza_finestra=0.60)
+    assert q["detr_riv_finestre"] == 0.36    # tutta dentro la fascia
+    assert q["rivestimenti"] == 10.44
+
+
+def test_i_rivestimenti_non_vanno_sotto_zero():
+    """Dieci porte in un bagno sono un errore di battitura, non un credito."""
+    q = quantita_finiture(LOCALI_MISTI, 3.0, altezza_rivestimento=1.20,
+                          larghezza_porta=0.80, altezza_porta=2.10,
+                          n_porte_rivestiti=50)
+    assert q["rivestimenti"] == 0.0
+
+
+def test_senza_locali_rivestiti_i_rivestimenti_sono_zero():
+    """E la detrazione dei vani non li fa diventare negativi."""
+    soli_interni = [dict(LOCALI_MISTI[0])]
+    q = quantita_finiture(soli_interni, 3.0, altezza_rivestimento=1.20,
+                          larghezza_porta=0.80, altezza_porta=2.10,
+                          n_porte_rivestiti=1)
+    assert q["rivestimenti"] == 0.0
+    assert q["rivestimenti_lordi"] == 0.0
+
+
+def test_la_fascia_rivestita_si_toglie_ancora_dalla_tinteggiatura():
+    """La stessa fascia non si tinteggia: era già così, resta così."""
+    q = quantita_finiture(LOCALI_MISTI, 3.0, altezza_rivestimento=1.20)
+    # pareti lorde: (18 + 9) × 3 = 81, meno 9 × 1,20 = 10,80 di fascia
+    assert q["pareti_lorde"] == 81.0
+    assert q["detr_rivestimenti"] == 10.8
+    assert q["pareti"] == 70.2
