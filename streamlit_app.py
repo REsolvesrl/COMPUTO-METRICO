@@ -1459,24 +1459,63 @@ def css_schede_computo():
 [class*="st-key-card_"] [data-testid="stVerticalBlock"] {{
     gap: 0.15rem;
 }}
-/* la descrizione: due righe piene, niente maniglia di ridimensionamento
-   (la larghezza la decide la colonna) e niente altezza minima da 68 px */
+/* ⚠️ LE CELLE SI STRINGONO ATTORNO AL TESTO. Un campo di Streamlit nasce
+   alto 40 px perché è pensato per un modulo, dove le caselle stanno larghe
+   e distanti; qui sono le celle di una tabella, e per una riga di testo
+   alta 17 px c'erano 23 px di aria — più di quanta ne occupasse la scritta.
+   Sopra e sotto resta un filo, quel tanto che serve a non far toccare il
+   testo al bordo. */
 [class*="st-key-card_"] textarea {{
-    min-height: 3.1rem !important;
-    height: 3.1rem !important;
-    padding: 0.35rem 0.55rem;
-    line-height: 1.25;
+    min-height: 2.7rem !important;
+    height: 2.7rem !important;
+    padding: 0.2rem 0.5rem;
+    line-height: 1.3;
     font-size: 0.86rem;
     resize: none;
     overflow-y: auto;
 }}
-[class*="st-key-card_"] [data-testid="stTextAreaRootElement"] {{
+/* ⚠️ I gusci della descrizione seguono la sua altezza, non la impongono:
+   con un'altezza fissa addosso stringevano il testo e la seconda riga
+   veniva tagliata a metà. */
+[class*="st-key-card_"] [data-testid="stTextAreaRootElement"],
+[class*="st-key-card_"] [data-testid="stTextArea"] > div {{
+    height: auto;
     min-height: 0;
 }}
-/* le celle dei numeri e dell'unità: stessa aria della descrizione */
-[class*="st-key-card_"] input {{
-    padding: 0.3rem 0.5rem;
-    font-size: 0.86rem;
+/* Le celle dei NUMERI e dell'unità: qui lo spazio vuoto c'è davvero — una
+   riga di testo alta 17 px dentro una casella da 40. Si stringe a 30, che
+   è la scritta più un filo sopra e sotto.
+   ⚠️ Il bersaglio sono le caselle di testo e i campi numerici per nome, non
+   un generico «base-input»: quello prende anche il guscio della
+   descrizione, che è un'area e ha bisogno di crescere. */
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"] input {{
+    padding: 0.1rem 0.5rem;
+    line-height: 1.3;
+}}
+[class*="st-key-card_"] [data-testid="stTextInput"] [data-baseweb="base-input"],
+[class*="st-key-card_"] [data-testid="stNumberInput"] [data-baseweb="base-input"],
+[class*="st-key-card_"] [data-testid="stTextInput"] [data-baseweb="input"],
+[class*="st-key-card_"] [data-testid="stNumberInput"] [data-baseweb="input"] {{
+    min-height: 1.85rem;
+    height: 1.85rem;
+}}
+/* la casella con le frecce: il guscio restava alto 40 px anche con la
+   casella dentro a 30, e la cella della quantità sporgeva sulle vicine */
+[class*="st-key-card_"] [data-testid="stNumberInputContainer"] {{
+    height: 1.85rem;
+    min-height: 1.85rem;
+}}
+/* la tendina dell'unità: baseweb le imbottisce il valore di 8 px per lato */
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"]
+div[data-baseweb="select"] > div,
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"]
+div[data-baseweb="select"] > div > div {{
+    min-height: 1.85rem;
+    height: 1.85rem;
+}}
+[class*="st-key-card_"] [data-testid="stHorizontalBlock"]
+div[data-baseweb="select"] > div > div:first-child {{
+    padding: 0 0.4rem;
 }}
 /* Streamlit tiene sotto ogni casella lo spazio per il messaggio d'errore:
    qui non ce ne sono, ed erano dieci righe di vuoto su un computo lungo */
