@@ -109,3 +109,60 @@ def test_la_fascia_si_toglie_ancora_dalla_tinteggiatura(bagno_rivestito):
 def test_il_bagno_rivestito_non_prende_battiscopa(bagno_rivestito):
     """Un locale piastrellato non ha zoccolino: la 2.14 resta fuori."""
     assert bagno_rivestito.session_state["q_2.14"] == 0.0
+
+
+# ------------------- la tabella dei locali segue il disegno, sempre
+# La tabella si ricostruisce solo quando cambia la sua «impronta», per non
+# perdere il primo clic sulle spunte. Finché l'impronta era il solo elenco
+# degli id, ogni modifica che non fosse aggiungere o togliere una zona la
+# lasciava indietro — e i metri quadri fermi lì dentro sono quelli che
+# finiscono nel computo.
+
+def _con_una_zona():
+    at = AppTest.from_file(str(SORGENTE), default_timeout=300)
+    at.run()
+    at.session_state["da_caricare"] = _progetto(rivestito=True)
+    at.run()
+    return at
+
+
+def test_rinominare_un_locale_si_vede_subito_in_tabella():
+    at = _con_una_zona()
+    at.session_state["piante"][0]["zone"][0]["nome"] = "bagno trilo"
+    at.run()
+    assert list(at.session_state["loc_base_df"]["Locale"]) == ["bagno trilo"]
+
+
+def test_allargare_una_stanza_aggiorna_i_mq_del_computo():
+    """Il difetto grosso: la stanza cresceva e il computo restava fermo."""
+    at = _con_una_zona()
+    assert at.session_state["q_2.10"] == 9.0
+    # da 300 a 500 px di lato: 9 m² diventano 25
+    at.session_state["piante"][0]["zone"][0]["punti"] = [
+        [0.0, 0.0], [500.0, 0.0], [500.0, 500.0], [0.0, 500.0]]
+    at.run()
+    assert list(at.session_state["loc_base_df"]["Superficie (m²)"]) == [25.0]
+    assert at.session_state["q_2.10"] == 25.0
+    # e la fascia segue il perimetro nuovo: 20 m × 1,20 − 0,96 = 23,04
+    assert at.session_state["q_2.11"] == 23.04
+
+
+def test_una_zona_nuova_compare_in_tabella():
+    at = _con_una_zona()
+    at.session_state["piante"][0]["zone"].append({
+        "id": 2, "categoria": "Superficie interna", "nome": "bagno trilo",
+        "punti": [[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]]})
+    at.run()
+    assert list(at.session_state["loc_base_df"]["Locale"]) == ["Bagno",
+                                                              "bagno trilo"]
+    assert at.session_state["q_2.10"] == 13.0        # 9 + 4
+
+
+def test_le_spunte_non_rifanno_la_tabella():
+    """Se l'impronta cambiasse anche per le spunte, il primo clic su una
+    casella andrebbe perso: bisognava cliccare due volte."""
+    at = _con_una_zona()
+    prima = at.session_state["loc_base_chiave"]
+    at.session_state["piante"][0]["zone"][0]["pavimento"] = False
+    at.run()
+    assert at.session_state["loc_base_chiave"] == prima

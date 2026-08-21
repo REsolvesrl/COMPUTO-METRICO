@@ -4597,11 +4597,27 @@ with tab_plan:
                 })
                 riferimenti.append((r["uid"], r["id"]))
 
-            chiave_tab = "edloc_" + str(abs(hash(tuple(riferimenti))) % 10 ** 8)
-            # Al data_editor va passata SEMPRE la stessa tabella di partenza:
-            # ricostruirla a ogni giro (dai valori appena scritti nelle zone)
-            # gli faceva perdere il primo clic sulle spunte — bisognava
-            # cliccare due volte. La rigeneriamo solo quando cambiano i locali.
+            # ⚠️ L'IMPRONTA fa da chiave, e comprende TUTTO quello che la
+            # tabella mostra senza che lo si possa scrivere qui dentro: quali
+            # locali ci sono, come si chiamano, quanto misurano. Prima era il
+            # solo elenco degli id, e allora ogni modifica che non fosse
+            # aggiungere o togliere una zona lasciava la tabella indietro:
+            # rinominare un locale non ne cambiava il nome in elenco, e —
+            # molto peggio — ALLARGARE una stanza sul disegno non ne cambiava
+            # i metri quadri. Quei metri sono quelli che finiscono nel
+            # computo: la stanza cresceva e il computo restava fermo alla
+            # misura di prima, fino a quando non si chiudeva l'app.
+            # Le colonne che si spuntano QUI (pavimento, battiscopa,
+            # tinteggiatura, rivestito) restano fuori dall'impronta di
+            # proposito: se ci fossero, ogni clic rifarebbe la tabella e il
+            # primo clic andrebbe perso — bisognava cliccare due volte.
+            # Rifarla non perde le spunte: rinascono da zona[...], dove le
+            # riversiamo a ogni giro poche righe più sotto.
+            impronta = tuple(
+                (rif, riga["Locale"], riga["Superficie (m²)"],
+                 riga["Perimetro (m)"])
+                for rif, riga in zip(riferimenti, righe_tab))
+            chiave_tab = "edloc_" + str(abs(hash(impronta)) % 10 ** 8)
             if st.session_state.get("loc_base_chiave") != chiave_tab:
                 st.session_state.loc_base_chiave = chiave_tab
                 st.session_state.loc_base_df = pd.DataFrame(righe_tab)
