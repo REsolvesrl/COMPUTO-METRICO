@@ -373,7 +373,8 @@ def muri_al_netto(m2, aperture_m2):
     return round(max(0.0, float(m2 or 0.0) - float(aperture_m2 or 0.0)), 3)
 
 
-def voci_da_riscrivere(mappa, grandezze, attuali, tolleranza=0.005):
+def voci_da_riscrivere(mappa, grandezze, attuali, escluse=(),
+                       tolleranza=0.005):
     """Quali voci del computo la planimetria deve riscrivere, e con quanto.
 
     È il cuore del collegamento automatico: si confronta quello che il disegno
@@ -386,14 +387,19 @@ def voci_da_riscrivere(mappa, grandezze, attuali, tolleranza=0.005):
         voce di listino (es. ("1.02", "muri_demolire")).
     grandezze: {nome_grandezza: quantità misurata sul disegno}.
     attuali: {codice_voce: quantità già nel computo}.
+    escluse: codici da non toccare — chi ha scritto una quantità a mano ha
+        deciso lui, e il disegno non gliela riscrive sopra.
     tolleranza: sotto questa differenza si considera già a posto (evita di
         rincorrere l'ultimo centesimo all'infinito).
 
     Le quantità NULLE non si scrivono: una misura che non c'è (nessun muro
     tracciato) non deve cancellare un numero battuto a mano.
     """
+    escluse = set(escluse)
     da_scrivere = {}
     for codice, grandezza in mappa:
+        if codice in escluse:
+            continue
         quantita = round(float(grandezze.get(grandezza) or 0.0), 2)
         if quantita <= 0:
             continue

@@ -753,3 +753,12 @@ def test_le_aperture_si_tolgono_anche_al_cartongesso():
     riep, _ = riepilogo_pareti(PIANTA_TRE_MURI, 3.0)
     vano = superficie_aperture(1, 0.80, 2.10)       # 1,68 m²
     assert muri_al_netto(riep["cartongesso"]["m2"], vano) == 10.32
+
+
+def test_voci_da_riscrivere_lascia_stare_quelle_scritte_a_mano():
+    """Chi ha scritto una quantita' a mano ha deciso lui: il disegno non
+    gliela riscrive sopra."""
+    proposte = voci_da_riscrivere(
+        MAPPA, {"muri_demolire": 21.6, "muri_costruire": 10.8}, {},
+        escluse=["1.02"])
+    assert proposte == {"2.01": 10.8}

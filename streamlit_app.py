@@ -1308,6 +1308,25 @@ def nome_file(estensione):
 # i totali e la stampa lo leggono da qui.
 
 
+def segna_a_mano(codice):
+    """Da adesso quella quantità la decide chi l'ha scritta, non il disegno.
+
+    Vale per TUTTE le voci: quelle che il disegno non alimenta non se ne
+    accorgono nemmeno, ma l'elenco è uno solo — e il giorno in cui una
+    misura nuova cominciasse ad alimentarle, troverebbe già il segno.
+    """
+    if codice not in st.session_state.voci_a_mano:
+        st.session_state.voci_a_mano.append(codice)
+
+
+def riaggancia_al_disegno(codice=None):
+    """Ridà al disegno il comando: su una voce, o su tutte."""
+    if codice is None:
+        st.session_state.voci_a_mano = []
+    elif codice in st.session_state.voci_a_mano:
+        st.session_state.voci_a_mano.remove(codice)
+
+
 def scelte():
     """I codici delle voci di listino portate nel computo."""
     return list(st.session_state.voci_scelte)
@@ -1775,11 +1794,18 @@ div[data-baseweb="select"] > div > div:first-child {{
        Resta lo scarto: −0,63rem, misurato in pagina finché le due cifre
        non stanno sullo stesso filo. Vale a qualunque altezza di riga:
        provato a 41, 54, 72 e 74 px, residuo un decimo di pixel. */
-    margin-top: -0.63rem;
+    margin-top: -0.674rem;
 }}
-[class*="st-key-parz_"] p {{
+/* Le cifre del parziale, un punto più grandi del resto della riga: sono
+   il numero che si legge scorrendo il computo. L'intestazione no — è una
+   didascalia, e resta della misura delle altre.
+   ⚠️ Serve la specificità della scheda: la regola che uniforma i corpi
+   («… stHorizontalBlock *») è più specifica di un solo attributo, e senza
+   il prefisso vincerebbe lei. */
+[class*="st-key-card_"] [class*="st-key-parz_"] p {{
     text-align: right;
     margin: 0;
+    font-size: 0.94rem;
 }}
 /* L'intestazione della colonna: a destra come le cifre che intesta, ma
    senza la correzione — è una didascalia in fila con le altre. */
@@ -2001,8 +2027,11 @@ def scrivi_unita_voce(codice):
 
 def scrivi_quantita_a_passi(codice):
     """Riporta la quantità della casella a frecce nella chiave di verità."""
-    st.session_state[f"q_{codice}"] = float(
-        st.session_state.get(f"qn_{codice}_w") or 0.0)
+    nuovo = float(st.session_state.get(f"qn_{codice}_w") or 0.0)
+    reso = st.session_state.get(f"_reso_qn_{codice}")
+    if reso is not None and abs(nuovo - float(reso)) > 0.005:
+        segna_a_mano(codice)       # l'hai premuta tu: da ora comandi tu
+    st.session_state[f"q_{codice}"] = nuovo
     st.session_state.pop(f"q_{codice}_txt", None)
 
 
@@ -2054,8 +2083,19 @@ def riga_voce_computo(voce):
     # con tutto quello che riguarda la riga in quanto riga — l'ordine, la
     # categoria — più la nota del listino, che come suggerimento appeso a
     # un punto interrogativo in 45 px non si leggeva.
-    with c_cod.popover(codice, help="Ordine, categoria e nota della voce"):
+    # La ✎ accanto al codice dice che quella quantità l'hai scritta tu e
+    # che il disegno non la tocca: senza un segno, una voce sganciata è
+    # indistinguibile da una che il disegno aggiorna ancora.
+    a_mano = codice in st.session_state.voci_a_mano
+    with c_cod.popover(codice + (" ✎" if a_mano else ""),
+                       help="Ordine, categoria e nota della voce"):
         st.markdown(f"**{codice}** · {descrizione}")
+        if a_mano:
+            st.caption(":orange[✎ Quantità scritta a mano: il disegno non "
+                       "la aggiorna più.]")
+            st.button("↺ Riaggancia al disegno", key=f"riagg_{codice}",
+                      width="stretch", on_click=riaggancia_al_disegno,
+                      args=(codice,))
         su, giu = st.columns(2)
         su.button("↑ Su", key=f"su_{codice}", width="stretch",
                   on_click=scambia_con_vicina, args=(codice, -1),
@@ -3173,6 +3213,9 @@ def _payload_progetto():
         # e quali sono state tolte dal pool: è una scelta del progetto,
         # non una modifica al listino, e va con lui
         "voci_scartate": list(st.session_state.voci_scartate),
+        # le quantità scritte a mano restano a mano anche riaprendo: sono
+        # una decisione, non un caso
+        "voci_a_mano": list(st.session_state.voci_a_mano),
         # e come sono state riscritte: solo quelle che si discostano dal
         # listino, così il file non porta 69 copie di quello che c'è già
         "testi_voci": {
@@ -3567,6 +3610,8 @@ st.session_state.setdefault("pool_aperte", set())
 # le voci tolte dal pool di questo progetto: il listino resta intero, qui si
 # tiene solo l'elenco di quelle che su QUESTO cantiere non c'entrano
 st.session_state.setdefault("voci_scartate", [])
+# le voci la cui quantità è stata scritta a mano: il disegno le lascia stare
+st.session_state.setdefault("voci_a_mano", [])
 # porte e finestre dei locali rivestiti: interrompono la fascia piastrellata
 st.session_state.setdefault("apert_car_n", 0)
 st.session_state.setdefault("riv_porte_n", 1)
@@ -3720,6 +3765,7 @@ if "da_caricare" in st.session_state:
     st.session_state.voci_scartate = [
         c for c in (dati.get("voci_scartate") or [])
         if c not in st.session_state.voci_scelte]
+    st.session_state.voci_a_mano = list(dati.get("voci_a_mano") or [])
     if dati.get("voci_scelte") is None:
         # Progetto vecchio: non c'era un elenco, e le voci scritte a mano
         # erano nel computo per definizione. Con l'elenco, invece, comanda
@@ -3977,7 +4023,17 @@ for _cod in ([v["codice"] for v in listino.VOCI]
         _valore = numero_da_it(_testo)
         if _valore is None:
             continue
-        st.session_state[_verita] = max(0.0, _valore)
+        _nuovo = max(0.0, _valore)
+        # ⚠️ Se il numero è DIVERSO da quello con cui la casella è nata, l'ha
+        # cambiato una persona: da quel momento quella quantità è sua e il
+        # disegno non gliela riscrive più sopra. Prima l'aggancio automatico
+        # la rimetteva com'era al giro dopo, e la modifica spariva sotto gli
+        # occhi senza che niente lo spiegasse.
+        if _verita.startswith("q_"):
+            _reso = st.session_state.get("_reso_" + _verita)
+            if _reso is not None and abs(_nuovo - float(_reso)) > 0.005:
+                segna_a_mano(_cod)
+        st.session_state[_verita] = _nuovo
         if _testo != numero_it(st.session_state[_verita], 2):
             st.session_state.pop(_verita + "_txt")   # rinasce formattato
 
@@ -5768,9 +5824,27 @@ with tab_plan:
             if not selezionate:
                 st.caption(":gray[Nessuna voce selezionata.]")
 
+            # Le voci scritte a mano restano fuori: chi ha battuto quel
+            # numero ha deciso lui, e riscriverglielo sopra al giro dopo è
+            # il modo più sicuro di far perdere fiducia a uno strumento.
+            a_mano_qui = [c for c, _ in selezionate
+                          if c in st.session_state.voci_a_mano]
             proposte = planimetria.voci_da_riscrivere(
                 selezionate, grandezze,
-                {c: st.session_state.get(f"q_{c}") for c, _ in selezionate})
+                {c: st.session_state.get(f"q_{c}") for c, _ in selezionate},
+                escluse=a_mano_qui)
+            if a_mano_qui:
+                m_txt, m_btn = st.columns([4, 1],
+                                          vertical_alignment="center")
+                m_txt.caption(
+                    ":orange[✎ Scritte a mano, quindi non aggiornate dal "
+                    "disegno: " + ", ".join(sorted(a_mano_qui)) + ".]")
+                m_btn.button("↺ Riaggancia", key="riaggancia_tutte",
+                             width="stretch",
+                             on_click=riaggancia_al_disegno,
+                             help="Ridà al disegno il comando su queste "
+                                  "voci: le quantità tornano quelle "
+                                  "misurate.")
 
             if auto:
                 if proposte:

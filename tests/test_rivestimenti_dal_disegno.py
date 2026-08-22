@@ -194,3 +194,50 @@ def test_la_1_01_arriva_da_sola_senza_spuntare_niente():
     pavimento misurato, la quantità è già lì."""
     at = _apri(_progetto(rivestito=False))
     assert at.session_state["q_1.01"] == 9.0
+
+
+# ------------------- la quantita' scritta a mano vince sul disegno
+
+def _con_pavimento():
+    """Il bagno di sempre, con la 2.10 nel computo: 9 m² dal disegno."""
+    progetto = _progetto(rivestito=False)
+    progetto["voci_scelte"] = ["2.10"]
+    return progetto
+
+
+def test_il_disegno_alimenta_la_voce_finche_nessuno_la_tocca():
+    at = _apri(_con_pavimento())
+    assert at.session_state["q_2.10"] == 9.0
+
+
+def test_la_quantita_scritta_a_mano_non_viene_riscritta():
+    """Il difetto: si correggeva un metro quadro e al giro dopo tornava
+    quello misurato, senza che niente lo spiegasse."""
+    at = _apri(_con_pavimento())
+    at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
+    at.run()
+    at.text_input(key="q_2.10_txt").set_value("12").run()
+    assert at.session_state["q_2.10"] == 12.0
+    assert "2.10" in at.session_state["voci_a_mano"]
+    at.run()                      # un altro giro: il disegno non la tocca
+    at.run()
+    assert at.session_state["q_2.10"] == 12.0
+
+
+def test_riagganciare_rida_il_comando_al_disegno():
+    at = _apri(_con_pavimento())
+    at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
+    at.run()
+    at.text_input(key="q_2.10_txt").set_value("12").run()
+    at.button(key="riaggancia_tutte").click().run()
+    assert at.session_state["voci_a_mano"] == []
+    at.run()
+    assert at.session_state["q_2.10"] == 9.0
+
+
+def test_la_scelta_a_mano_si_salva_col_progetto():
+    at = _apri({**_con_pavimento(), "voci_a_mano": ["2.10"],
+                "listino_stato": {"2.10": {"q": 12.0, "p": 55.0}}})
+    assert at.session_state["voci_a_mano"] == ["2.10"]
+    at.run()
+    assert at.session_state["q_2.10"] == 12.0
