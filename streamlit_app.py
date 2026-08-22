@@ -1574,10 +1574,21 @@ def css_schede_computo():
     padding: 0.7rem 0.9rem 0.3rem;
     margin-top: 0.9rem;
 }}
-.st-key-card_pool h4 {{
+/* Il titolo della scheda: un paragrafo, vestito da titolo.
+   ⚠️ Il margine sotto sta sul CONTENITORE, ed è di un rem esatto: il
+   guscio che Streamlit mette attorno a un testo è alto SEDICI PIXEL MENO
+   del testo che contiene (misurato: contenuto 30,7 → guscio 14,7;
+   contenuto 22,4 → guscio 6,4). Quello che segue si posiziona sul guscio,
+   e la casella della ricerca finiva addosso al titolo, tagliandolo a
+   metà. Il rem qui rimette i sedici pixel che il guscio si mangia. */
+.st-key-card_pool > [data-testid="stElementContainer"]:first-child {{
+    margin-bottom: 1rem;
+}}
+.st-key-card_pool > [data-testid="stElementContainer"]:first-child p {{
     font-size: 1.05rem;
     font-weight: 650;
-    padding: 0 0 0.35rem;
+    line-height: 1.4;
+    margin: 0;
 }}
 .st-key-card_pool [data-testid="stExpander"] details {{
     background: transparent;
@@ -4381,7 +4392,13 @@ with tab_computo:
         # serve pescare, e il resto del tempo non occupa la pagina.
         st.markdown("")
         with st.container(key="card_pool"):
-            st.markdown("#### 🧰 Pool voci · scegli cosa portare nel computo")
+            # ⚠️ Non un «####». Il titolo di Streamlit esce dal contenitore
+            # che lo ospita — 53 px di riquadro dentro 37 di guscio, anche
+            # senza una riga di CSS nostra — e in una scheda stretta ci
+            # finisce sotto la casella della ricerca, tagliato a metà.
+            # Un paragrafo normale, vestito da titolo dal CSS, sta al posto
+            # suo: le dimensioni le decide chi legge, non l'anchor link.
+            st.markdown("🧰 **Pool voci** · scegli cosa portare nel computo")
             # La ricerca è una casella sola e senza etichetta: si vede che è
             # una ricerca dalla lente e dal testo dentro. Cerca su tutte le
             # categorie insieme, anche quelle chiuse — è l'unico modo di
