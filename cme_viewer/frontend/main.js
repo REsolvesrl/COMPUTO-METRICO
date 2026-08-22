@@ -292,9 +292,12 @@ function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile) {
         p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
     seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
         p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
-  } else if (stile === "costruire") {
-    // giunti dei mattoni: trattini trasversali a passo regolare
-    const passo = 26 / scale, h = 5.5 / scale;
+  } else if (stile === "costruire" || stile === "cartongesso") {
+    // «costruire» sono i giunti dei mattoni: trattini trasversali a passo
+    // regolare. Il CARTONGESSO no — è una lastra, non una muratura: due
+    // file di trattini corti e ravvicinati, il segno delle pareti leggere.
+    const doppio = (stile === "cartongesso");
+    const passo = (doppio ? 16 : 26) / scale, h = (doppio ? 3.5 : 5.5) / scale;
     for (let d = passo; d < L - passo * 0.4; d += passo) {
       const cx = p1[0] + ux * d, cy = p1[1] + uy * d;
       seg(cx - nx * h, cy - ny * h, cx + nx * h, cy + ny * h);
@@ -507,6 +510,7 @@ function coloreParete() {
   // costruire), così durante il tracciamento si vede già cosa si sta facendo
   if (tipoParete === "demolire") return "#E53935";
   if (tipoParete === "costruire") return "#FFD400";
+  if (tipoParete === "cartongesso") return "#43A047";
   return "#C9A96A";
 }
 

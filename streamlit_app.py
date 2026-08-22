@@ -696,6 +696,7 @@ VOCI_DA_SUPERFICI = [
     # dai muri tracciati sulla planimetria (lunghezza × altezza)
     ("1.02", "muri_demolire", True),      # demolizione murature
     ("2.01", "muri_costruire", True),     # ricostruzione muri in forati
+    ("2.08", "muri_cartongesso", True),   # pareti in cartongesso
 ]
 
 # Business plan: colonne delle tabelle e impostazioni predefinite
@@ -912,8 +913,13 @@ TIPI_PARETE = {
     "esistente": {"nome": "Esistente", "colore": "#C9A96A"},
     "demolire": {"nome": "Da demolire", "colore": "#E53935"},
     "costruire": {"nome": "Da costruire", "colore": "#FFD400"},
+    # Il cartongesso è un'altra lavorazione dal muro in forati: altro
+    # prezzo, altra impresa spesso, e sul disegno si distingue a colpo
+    # d'occhio — verde.
+    "cartongesso": {"nome": "Da costruire in cartongesso",
+                    "colore": "#43A047"},
 }
-TIPI_PARETE_SCELTA = ["demolire", "costruire"]
+TIPI_PARETE_SCELTA = ["demolire", "costruire", "cartongesso"]
 
 
 # ------------------------------------------------------------------ utilità
@@ -3220,6 +3226,7 @@ def _payload_progetto():
                      "pf_alt": st.session_state.pf_alt,
                      "apert_dem_n": st.session_state.apert_dem_n,
                      "apert_cos_n": st.session_state.apert_cos_n,
+                     "apert_car_n": st.session_state.apert_car_n,
                      "apert_larg": st.session_state.apert_larg,
                      "apert_alt": st.session_state.apert_alt},
         "auto_computo": st.session_state.auto_computo,
@@ -3561,6 +3568,7 @@ st.session_state.setdefault("pool_aperte", set())
 # tiene solo l'elenco di quelle che su QUESTO cantiere non c'entrano
 st.session_state.setdefault("voci_scartate", [])
 # porte e finestre dei locali rivestiti: interrompono la fascia piastrellata
+st.session_state.setdefault("apert_car_n", 0)
 st.session_state.setdefault("riv_porte_n", 1)
 st.session_state.setdefault("riv_finestre_n", 0)
 # categorie del listino aperte in questo momento: solo le loro righe vengono
@@ -3751,6 +3759,7 @@ if "da_caricare" in st.session_state:
     st.session_state.pf_alt = float(finiture.get("pf_alt", 2.30))
     st.session_state.apert_dem_n = int(finiture.get("apert_dem_n", 0))
     st.session_state.apert_cos_n = int(finiture.get("apert_cos_n", 0))
+    st.session_state.apert_car_n = int(finiture.get("apert_car_n", 0))
     st.session_state.apert_larg = float(finiture.get("apert_larg", 0.80))
     st.session_state.apert_alt = float(finiture.get("apert_alt", 2.10))
     st.session_state.auto_computo = bool(dati.get("auto_computo", True))
@@ -3769,7 +3778,8 @@ if "da_caricare" in st.session_state:
                "riv_alt_w", "riv_porte_n_w", "riv_finestre_n_w",
                "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
                "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
-               "apert_larg_w", "apert_alt_w", "auto_computo_w", "iva_w"):
+               "apert_car_n_w", "apert_larg_w", "apert_alt_w",
+               "auto_computo_w", "iva_w"):
         st.session_state.pop(_k, None)
     for _chiave in CAMPI_NUMERO_IT:
         st.session_state.pop(f"{_chiave}_txt", None)
@@ -3936,7 +3946,8 @@ for _et in ("et_font", "et_nome", "et_m2", "et_pct", "et_perim",
             "porta_larg", "porta_alt", "porta_n", "porta_n_est", "riv_alt",
             "riv_porte_n", "riv_finestre_n",
             "fin_n", "fin_larg", "fin_alt", "pf_n", "pf_larg", "pf_alt",
-            "apert_dem_n", "apert_cos_n", "apert_larg", "apert_alt",
+            "apert_dem_n", "apert_cos_n", "apert_car_n",
+            "apert_larg", "apert_alt",
             "auto_computo", "iva"):
     if _et + "_w" in st.session_state:
         st.session_state[_et] = st.session_state[_et + "_w"]
@@ -4797,7 +4808,8 @@ with tab_plan:
             codici_tipi = list(TIPI_PARETE_SCELTA)
             tipo_scelto = r_par.selectbox(
                 "Tipo per le nuove pareti 🧱", nomi_tipi, key="tipo_parete",
-                help="Da demolire = rosso · Da costruire = giallo")
+                help="Da demolire = rosso · Da costruire = giallo · "
+                     "In cartongesso = verde")
             st.session_state.tipo_parete_codice = codici_tipi[
                 nomi_tipi.index(tipo_scelto)]
 
@@ -5585,7 +5597,8 @@ with tab_plan:
             })
 
         # ------------------------------- dai muri tracciati alle demolizioni
-        st.subheader("🧱 Dai muri al computo (demolire / costruire)")
+        st.subheader("🧱 Dai muri al computo "
+                     "(demolire / costruire / cartongesso)")
         riep_muri, senza_scala_muri = planimetria.riepilogo_pareti(
             piante, altezza)
         if senza_scala_muri:
@@ -5593,19 +5606,21 @@ with tab_plan:
                        "scala**: " + ", ".join(senza_scala_muri))
         if not riep_muri:
             st.info("Traccia i muri con lo strumento **PARETE** sul disegno "
-                    "(scegli sopra se sono da demolire o da costruire): qui "
-                    "trovi metri lineari e superfici pronti per il computo.")
+                    "(scegli sopra se sono da demolire, da costruire o in "
+                    "cartongesso): qui trovi metri lineari e superfici "
+                    "pronti per il computo.")
         else:
             vuoto = {"n": 0, "ml": 0.0, "m2": 0.0}
             dem = riep_muri.get("demolire", vuoto)
             cos = riep_muri.get("costruire", vuoto)
+            car = riep_muri.get("cartongesso", vuoto)
             esi = riep_muri.get("esistente", vuoto)
             st.caption(f"Superficie = lunghezza × altezza "
                        f"(**{numero_it(altezza, 2)} m**), al netto delle "
                        "aperture dichiarate qui sotto: dove c'è un vano non "
                        "c'è muratura da buttare giù né da tirare su.")
             with st.container(key="pan_aperture"):
-                a1, a2, a3, a4 = st.columns(4)
+                a1, a2, a5, a3, a4 = st.columns(5)
                 n_apert_dem = a1.number_input(
                     "Aperture nei muri da demolire", min_value=0,
                     max_value=200, step=1,
@@ -5623,6 +5638,14 @@ with tab_plan:
                     help="Vani previsti nei muri gialli: quella superficie "
                          "non va murata.")
                 st.session_state.apert_cos_n = n_apert_cos
+                n_apert_car = a5.number_input(
+                    "Aperture nei muri in cartongesso", min_value=0,
+                    max_value=200, step=1,
+                    value=int(st.session_state.apert_car_n),
+                    key="apert_car_n_w",
+                    help="Vani previsti nei muri verdi: quella superficie "
+                         "non va lastrata.")
+                st.session_state.apert_car_n = n_apert_car
                 larg_apert = a3.number_input(
                     "Larghezza apertura (m)", min_value=0.0, max_value=6.0,
                     step=0.05, format="%.2f",
@@ -5642,17 +5665,22 @@ with tab_plan:
                 n_apert_dem, larg_apert, alt_apert)
             apert_cos = planimetria.superficie_aperture(
                 n_apert_cos, larg_apert, alt_apert)
-            if apert_dem or apert_cos:
+            apert_car = planimetria.superficie_aperture(
+                n_apert_car, larg_apert, alt_apert)
+            if apert_dem or apert_cos or apert_car:
                 st.caption(
                     f":gray[Un vano da {numero_it(larg_apert, 2)} × "
                     f"{numero_it(alt_apert, 2)} m vale "
                     f"**{numero_it(larg_apert * alt_apert, 2)} m²**: "
                     f"{n_apert_dem} da demolire = "
                     f"{numero_it(apert_dem, 2)} m², {n_apert_cos} da "
-                    f"costruire = {numero_it(apert_cos, 2)} m².]")
+                    f"costruire = {numero_it(apert_cos, 2)} m², "
+                    f"{n_apert_car} in cartongesso = "
+                    f"{numero_it(apert_car, 2)} m².]")
 
             dem_netto = planimetria.muri_al_netto(dem["m2"], apert_dem)
             cos_netto = planimetria.muri_al_netto(cos["m2"], apert_cos)
+            car_netto = planimetria.muri_al_netto(car["m2"], apert_car)
             w1, w2, w3, w4 = st.columns(4)
             w1.metric(f"🔴 Da demolire ({dem['n']})",
                       f"{numero_it(dem['ml'], 2)} m")
@@ -5664,16 +5692,24 @@ with tab_plan:
             w4.metric("→ superficie", f"{numero_it(cos_netto, 2)} m²",
                       delta=(f"−{numero_it(apert_cos, 2)} m² aperture"
                              if apert_cos else None), delta_color="off")
-            if apert_dem or apert_cos:
+            w5, w6 = st.columns(2)
+            w5.metric(f"🟢 In cartongesso ({car['n']})",
+                      f"{numero_it(car['ml'], 2)} m")
+            w6.metric("→ superficie", f"{numero_it(car_netto, 2)} m²",
+                      delta=(f"−{numero_it(apert_car, 2)} m² aperture"
+                             if apert_car else None), delta_color="off")
+            if apert_dem or apert_cos or apert_car:
                 st.caption(f":gray[Muri lordi: "
-                           f"{numero_it(dem['m2'], 2)} m² da demolire e "
-                           f"{numero_it(cos['m2'], 2)} m² da costruire.]")
+                           f"{numero_it(dem['m2'], 2)} m² da demolire, "
+                           f"{numero_it(cos['m2'], 2)} m² da costruire e "
+                           f"{numero_it(car['m2'], 2)} m² in cartongesso.]")
             if esi["n"]:
                 st.caption(f":gray[Esclusi {esi['n']} muri «esistenti» "
                            f"({numero_it(esi['ml'], 2)} m): non sono "
                            "lavorazioni.]")
             grandezze["muri_demolire"] = dem_netto
             grandezze["muri_costruire"] = cos_netto
+            grandezze["muri_cartongesso"] = car_netto
 
         # ------------------------- i totali tornano su, accanto al disegno
         # Adesso i numeri ci sono: si scrivono nel segnaposto lasciato sotto

@@ -722,3 +722,34 @@ def test_la_fascia_rivestita_si_toglie_ancora_dalla_tinteggiatura():
     assert q["pareti_lorde"] == 81.0
     assert q["detr_rivestimenti"] == 10.8
     assert q["pareti"] == 70.2
+
+
+# ---------------- il cartongesso e' un muro suo, non un muro da costruire
+
+PIANTA_TRE_MURI = [{
+    "nome": "Piano", "mpp": 0.01,
+    "pareti": [
+        {"tipo": "demolire", "p1": [0, 0], "p2": [300, 0]},       # 3 m
+        {"tipo": "costruire", "p1": [0, 100], "p2": [500, 100]},  # 5 m
+        {"tipo": "cartongesso", "p1": [0, 200], "p2": [400, 200]},   # 4 m
+    ],
+}]
+
+
+def test_i_muri_in_cartongesso_si_contano_a_parte():
+    """Altro prezzo e spesso altra impresa: sommarli ai forati vorrebbe dire
+    pagare una lastra al prezzo di una muratura."""
+    riep, _ = riepilogo_pareti(PIANTA_TRE_MURI, 3.0)
+    assert riep["cartongesso"]["n"] == 1
+    assert riep["cartongesso"]["ml"] == 4.0
+    assert riep["cartongesso"]["m2"] == 12.0        # 4 × 3
+    # e non finiscono in mezzo agli altri
+    assert riep["costruire"]["ml"] == 5.0
+    assert riep["demolire"]["ml"] == 3.0
+
+
+def test_le_aperture_si_tolgono_anche_al_cartongesso():
+    """Dove c'e' un vano non c'e' lastra da montare."""
+    riep, _ = riepilogo_pareti(PIANTA_TRE_MURI, 3.0)
+    vano = superficie_aperture(1, 0.80, 2.10)       # 1,68 m²
+    assert muri_al_netto(riep["cartongesso"]["m2"], vano) == 10.32
