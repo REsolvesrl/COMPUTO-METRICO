@@ -105,3 +105,68 @@ def test_i_caratteri_italiani_arrivano_nel_pdf(simbolo):
              "quantita": 1.0, "prezzo": 1.0, "importo": 1.0}]
     testo = _testo_del_pdf(pdf_computo(PROGETTO, voci, TOTALI))
     assert simbolo in testo
+
+
+# ------------------- il foglio per le imprese: le stesse opere, nessun prezzo
+
+def test_senza_prezzi_restano_lavorazioni_e_quantita():
+    """E' il foglio su cui l'impresa scrive la SUA offerta."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                       con_prezzi=False))
+    assert "Demolizione murature" in testo
+    assert "11,82" in testo          # la quantita' c'e'
+    assert "Codice" in testo and "U.M." in testo
+
+
+def test_senza_prezzi_non_esce_nessuna_cifra_in_euro():
+    """Un prezzo gia' stampato sopra non e' una richiesta di preventivo, e'
+    una proposta — e quello che torna indietro non e' piu' un confronto."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                       con_prezzi=False))
+    assert "€" not in testo
+    assert "Prezzo" not in testo
+    assert "Importo" not in testo
+    assert "TOTALE" not in testo
+    # nemmeno i totali di categoria, che sono importi come gli altri
+    assert "Totale demolizioni" not in testo
+
+
+def test_col_prezzi_i_totali_ci_sono_ancora():
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    assert "Prezzo" in testo and "Importo" in testo
+    assert "TOTALE (IVA inclusa)" in testo
+
+
+# ------------------------------- la coda: la clausola e le due firme
+
+def test_la_nota_della_tolleranza_chiude_il_computo():
+    """E' la clausola che regge il totale: chi firma la sta accettando
+    insieme alla cifra."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    assert "tolleranza massima del 10%" in testo
+    assert "riquadratura spallette" in testo
+
+
+def test_senza_importi_niente_clausola_sull_importo():
+    """Una tolleranza sul totale, su un foglio che il totale non ce l'ha,
+    sarebbe una clausola su una cifra che non c'e'."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                       con_prezzi=False))
+    assert "tolleranza" not in testo
+
+
+def test_il_gruppo_firma_c_e_in_tutt_e_due():
+    for con_prezzi in (True, False):
+        testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                           con_prezzi=con_prezzi))
+        assert "PER ACCETTAZIONE:" in testo, con_prezzi
+        assert "Resolve S.r.l." in testo, con_prezzi
+        # due righe di penna: una per parte
+        assert testo.count("_" * 20) >= 2, con_prezzi
+
+
+def test_il_posto_dell_impresa_resta_vuoto():
+    """Il nome se lo scrive lei: finche' non firma non sappiamo quale sia."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    # l'unico nome stampato e' quello del committente
+    assert testo.count("Resolve S.r.l.") == 2   # cartiglio + firma

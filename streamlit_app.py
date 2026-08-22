@@ -4567,8 +4567,11 @@ with tab_computo:
     st.caption("Il file **.json** è il salvataggio del lavoro (comprese le "
                "planimetrie): conservalo e ricaricalo dal pannello "
                "**📋 Dati del progetto · Apri / Nuovo** in cima alla "
-               "pagina. Il **PDF** è il documento da consegnare all'impresa; "
-               "Excel e CSV servono a rielaborare i numeri.")
+               "pagina. Il **PDF** è il computo completo, con i totali e le "
+               "firme; il **PDF senza prezzi** è lo stesso elenco di "
+               "lavorazioni e quantità da mandare alle imprese perché ci "
+               "facciano il preventivo. Excel e CSV servono a rielaborare "
+               "i numeri.")
 
     progetto = {
         "nome": st.session_state.prg_nome,
@@ -4626,21 +4629,34 @@ with tab_computo:
     # Tre bottoni grigi identici non dicevano che solo il primo mette al
     # sicuro il lavoro: quello resta in evidenza, con accanto il suo stato.
     st.markdown(stato_salvataggio(st.session_state._firma_progetto))
-    col_json, col_pdf, col_xlsx, col_csv = st.columns(4)
+    (col_json, col_pdf, col_pdf_muto, col_xlsx,
+     col_csv) = st.columns(5)
     bottone_salva_json(col_json, "computo", st.session_state._firma_progetto,
                        primario=True)
+    _totali_pdf = {"somma": totale, "totale_lavori": totale_lavori,
+                   "iva_pct": st.session_state.iva, "iva": iva_importo,
+                   "totale": totale_ivato}
+    _tinte_pdf = {cat: COLORI_CATEGORIE[cat][0] for cat in COLORI_CATEGORIE}
     col_pdf.download_button(
         "🖨️ Stampa PDF",
-        data=stampa.pdf_computo(
-            progetto, voci_calcolate,
-            {"somma": totale, "totale_lavori": totale_lavori,
-             "iva_pct": st.session_state.iva, "iva": iva_importo,
-             "totale": totale_ivato},
-            tinte={cat: COLORI_CATEGORIE[cat][0]
-                   for cat in COLORI_CATEGORIE}),
+        data=stampa.pdf_computo(progetto, voci_calcolate, _totali_pdf,
+                                tinte=_tinte_pdf),
         help="Il computo come documento da consegnare: le voci per "
-             "categoria e i totali.",
+             "categoria, i totali e le firme.",
         file_name=nome_file("pdf"),
+        mime="application/pdf",
+    )
+    # Lo stesso computo senza una cifra: è quello che si manda alle imprese
+    # perché ci scrivano la LORO offerta. Un prezzo già stampato sopra non
+    # è una richiesta di preventivo, è una proposta — e quello che torna
+    # indietro non è più un confronto.
+    col_pdf_muto.download_button(
+        "📄 PDF senza prezzi",
+        data=stampa.pdf_computo(progetto, voci_calcolate, _totali_pdf,
+                                tinte=_tinte_pdf, con_prezzi=False),
+        help="Da mandare alle imprese per il preventivo: lavorazioni e "
+             "quantità, senza prezzi né importi.",
+        file_name=nome_file("pdf").replace(".pdf", "_senza_prezzi.pdf"),
         mime="application/pdf",
     )
     col_xlsx.download_button(

@@ -61,11 +61,38 @@ STILE_INTESTAZIONE = ParagraphStyle(
 STILE_NOTA = ParagraphStyle(
     "nota", fontName="Helvetica-Oblique", fontSize=7.5, leading=10,
     textColor=CEMENTO)
+# «un carattere più piccolo» della nota di voce: 6,5 contro 7,5. Non è
+# corsivo come le altre note — è una clausola, non un commento.
+STILE_NOTA_FINALE = ParagraphStyle(
+    "nota_finale", fontName="Helvetica", fontSize=6.5, leading=9,
+    textColor=ARDESIA)
+STILE_FIRMA = ParagraphStyle(
+    "firma", fontName="Helvetica", fontSize=8.5, leading=12,
+    textColor=ARDESIA)
+STILE_FIRMA_ETICHETTA = ParagraphStyle(
+    "firma_etichetta", fontName="Helvetica-Bold", fontSize=8.5, leading=12,
+    textColor=ARDESIA)
 STILE_TOTALE = ParagraphStyle(
     "totale", fontName="Helvetica-Bold", fontSize=12, leading=15,
     textColor=ARDESIA, alignment=TA_RIGHT)
 
 COLONNE_VOCI = [17 * mm, 80 * mm, 13 * mm, 22 * mm, 22 * mm, 26 * mm]
+# Senza prezzi le due colonne dei soldi spariscono e il posto va alla
+# descrizione: è il foglio su cui l'impresa scrive la SUA offerta, e quello
+# che deve capire bene è che cosa le stiamo chiedendo di fare.
+COLONNE_VOCI_MUTE = [17 * mm, 128 * mm, 13 * mm, 22 * mm]
+
+# La riserva del 10% e l'elenco delle opere comprese: sta in fondo, in
+# piccolo, ed è la clausola che regge il totale — chi firma la sta
+# accettando insieme alla cifra.
+NOTA_FINALE = (
+    "<b>N.B:</b> L'importo totale indicato considera una tolleranza massima "
+    "del 10% tra le opere elencate nel computo metrico e le opere "
+    "effettivamente realizzate. L'importo totale comprende le seguenti "
+    "opere: smontaggio e smaltimento finestre, porte interne, battiscopa, "
+    "impianti e riquadratura spallette")
+
+COMMITTENTE_FIRMATARIO = "Resolve S.r.l."
 
 
 def _pie_di_pagina(canvas, documento):
@@ -123,10 +150,17 @@ def _raggruppa(voci):
     return gruppi
 
 
-def _tabella_categoria(categoria, voci_categoria, tinta):
-    """Un blocco: intestazione della categoria, le sue voci, il suo totale."""
+def _tabella_categoria(categoria, voci_categoria, tinta, con_prezzi=True):
+    """Un blocco: intestazione della categoria, le sue voci, il suo totale.
+
+    Senza prezzi restano codice, descrizione, unità e quantità: è il foglio
+    che si dà all'impresa perché ci scriva la sua offerta, e un prezzo già
+    stampato sopra non è una richiesta di preventivo — è una proposta.
+    """
     intestazioni = ["Codice", "Descrizione", "U.M.", "Quantità", "Prezzo",
                     "Importo"]
+    if not con_prezzi:
+        intestazioni = intestazioni[:4]
     # Le tinte delle categorie sono scelte per lo schermo scuro: sul bianco
     # alcune sono chiare (il grigio delle aree esterne) e il bianco sopra non
     # si leggerebbe. Il colore del testo lo decide la tinta, non l'abitudine.
@@ -135,33 +169,42 @@ def _tabella_categoria(categoria, voci_categoria, tinta):
         textColor=colors.HexColor(colore_testo_su(tinta.hexval()[2:])))
     righe = [[Paragraph(t, stile_intestazione) for t in intestazioni]]
     for voce in voci_categoria:
-        righe.append([
+        riga = [
             Paragraph(str(voce.get("codice") or ""), STILE_VOCE),
             Paragraph(str(voce.get("descrizione") or ""), STILE_VOCE),
             Paragraph(str(voce.get("um") or ""), STILE_VOCE),
             Paragraph(numero_it(voce.get("quantita"), 2), STILE_VOCE),
-            Paragraph(euro(voce.get("prezzo")), STILE_VOCE),
-            Paragraph(euro(voce.get("importo")), STILE_VOCE),
-        ])
-    totale = round(sum(float(v.get("importo") or 0.0)
-                       for v in voci_categoria), 2)
-    righe.append([Paragraph("", STILE_VOCE),
-                  Paragraph(f"Totale {categoria.lower()}", STILE_CATEGORIA),
-                  "", "", "",
-                  Paragraph(f"<b>{euro(totale)}</b>", STILE_VOCE)])
+        ]
+        if con_prezzi:
+            riga += [Paragraph(euro(voce.get("prezzo")), STILE_VOCE),
+                     Paragraph(euro(voce.get("importo")), STILE_VOCE)]
+        righe.append(riga)
+    if con_prezzi:
+        totale = round(sum(float(v.get("importo") or 0.0)
+                           for v in voci_categoria), 2)
+        righe.append([Paragraph("", STILE_VOCE),
+                      Paragraph(f"Totale {categoria.lower()}",
+                                STILE_CATEGORIA),
+                      "", "", "",
+                      Paragraph(f"<b>{euro(totale)}</b>", STILE_VOCE)])
 
-    tabella = Table(righe, colWidths=COLONNE_VOCI, repeatRows=1)
+    tabella = Table(righe, colWidths=COLONNE_VOCI if con_prezzi
+                    else COLONNE_VOCI_MUTE, repeatRows=1)
     stile = [
         ("BACKGROUND", (0, 0), (-1, 0), tinta),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor("#D6D2C8")),
-        ("LINEABOVE", (0, -1), (-1, -1), 0.75, OTTONE),
-        ("SPAN", (1, -1), (4, -1)),
+        ("LINEBELOW", (0, 0), (-1, -1 if not con_prezzi else -2), 0.25,
+         colors.HexColor("#D6D2C8")),
     ]
-    for i in range(1, len(righe) - 1):
+    if con_prezzi:
+        stile += [
+            ("LINEABOVE", (0, -1), (-1, -1), 0.75, OTTONE),
+            ("SPAN", (1, -1), (4, -1)),
+        ]
+    for i in range(1, len(righe) - (1 if con_prezzi else 0)):
         if i % 2 == 0:
             stile.append(("BACKGROUND", (0, i), (-1, i), RIGA_ALTERNA))
     tabella.setStyle(TableStyle(stile))
@@ -205,7 +248,39 @@ def _tabella_totali(totali):
     return [tabella]
 
 
-def pdf_computo(progetto, voci, totali, tinte=None):
+def _gruppo_firma():
+    """Le due firme in fondo: chi commissiona e chi esegue.
+
+    A sinistra il committente, che è sempre lo stesso; a destra il posto
+    per l'impresa, VUOTO — il nome se lo scrive lei, perché finché non
+    firma non sappiamo quale sia. Due righe di penna, alla stessa altezza:
+    un foglio che si firma in due deve mostrarlo a colpo d'occhio.
+    """
+    meta = LARGHEZZA_UTILE / 2
+    riga_penna = "_" * 34
+    righe = [
+        [Paragraph("PER ACCETTAZIONE:", STILE_FIRMA_ETICHETTA), ""],
+        [Spacer(1, 6 * mm), Spacer(1, 6 * mm)],
+        [Paragraph(COMMITTENTE_FIRMATARIO, STILE_FIRMA),
+         Paragraph("", STILE_FIRMA)],
+        [Spacer(1, 12 * mm), Spacer(1, 12 * mm)],
+        [Paragraph(riga_penna, STILE_FIRMA),
+         Paragraph(riga_penna, STILE_FIRMA)],
+    ]
+    tabella = Table(righe, colWidths=[meta, meta])
+    tabella.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, -1), 8 * mm),
+        ("LEFTPADDING", (1, 0), (1, -1), 8 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    # KeepTogether: un blocco firma spezzato fra due pagine — il nome di qua
+    # e la riga di là — è un documento che nessuno firma volentieri.
+    return [Spacer(1, 10 * mm), KeepTogether([tabella])]
+
+
+def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     """Il computo come PDF pronto da consegnare. Ritorna i byte del file.
 
     progetto: {"nome", "committente", "oggetto", "data"}.
@@ -214,13 +289,20 @@ def pdf_computo(progetto, voci, totali, tinte=None):
     totali: {"somma", "totale_lavori", "iva_pct", "iva", "totale"}.
     tinte: {categoria: "#RRGGBB"} per la fascia d'intestazione; le categorie
         senza tinta prendono l'ardesia.
+    con_prezzi: falso per il foglio da dare alle imprese perché ci facciano
+        il preventivo — restano le lavorazioni e le quantità, spariscono
+        prezzi, importi, totali di categoria e la coda dei conti. Sparisce
+        anche la nota della tolleranza, che parla dell'importo totale: in
+        un foglio senza importi sarebbe una clausola su una cifra che non
+        c'è. Il gruppo firma resta in tutt'e due.
     """
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
         buffer, pagesize=A4,
         leftMargin=MARGINE, rightMargin=MARGINE,
         topMargin=MARGINE, bottomMargin=20 * mm,
-        title=f"Computo — {progetto.get('nome') or 'senza nome'}",
+        title=("Computo" + ("" if con_prezzi else " (senza prezzi)")
+               + f" — {progetto.get('nome') or 'senza nome'}"),
         author="CME — Computo Metrico Estimativo",
     )
     documento.titolo_corrente = str(progetto.get("nome")
@@ -236,9 +318,14 @@ def pdf_computo(progetto, voci, totali, tinte=None):
         tinta = tinte.get(categoria)
         elementi.extend(_tabella_categoria(
             categoria, voci_categoria,
-            colors.HexColor(tinta) if tinta else ARDESIA))
-    elementi.append(Spacer(1, 3 * mm))
-    elementi.extend(_tabella_totali(totali))
+            colors.HexColor(tinta) if tinta else ARDESIA,
+            con_prezzi=con_prezzi))
+    if con_prezzi:
+        elementi.append(Spacer(1, 3 * mm))
+        elementi.extend(_tabella_totali(totali))
+        elementi.append(Spacer(1, 5 * mm))
+        elementi.append(Paragraph(NOTA_FINALE, STILE_NOTA_FINALE))
+    elementi.extend(_gruppo_firma())
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,
                     onLaterPages=_pie_di_pagina)
