@@ -64,10 +64,12 @@ STILE_NOTA = ParagraphStyle(
 # «un carattere più piccolo» della nota di voce: 6,5 contro 7,5. Non è
 # corsivo come le altre note — è una clausola, non un commento.
 STILE_NOTA_FINALE = ParagraphStyle(
-    "nota_finale", fontName="Helvetica", fontSize=6.5, leading=9,
+    "nota_finale", fontName="Helvetica", fontSize=7.5, leading=10.5,
     textColor=ARDESIA)
+# Il nome di chi firma non è una didascalia: sta sopra la riga della penna
+# e si legge da lontano, come su un contratto.
 STILE_FIRMA = ParagraphStyle(
-    "firma", fontName="Helvetica", fontSize=8.5, leading=12,
+    "firma", fontName="Helvetica-Bold", fontSize=10.5, leading=14,
     textColor=ARDESIA)
 STILE_FIRMA_ETICHETTA = ParagraphStyle(
     "firma_etichetta", fontName="Helvetica-Bold", fontSize=8.5, leading=12,
@@ -77,10 +79,6 @@ STILE_TOTALE = ParagraphStyle(
     textColor=ARDESIA, alignment=TA_RIGHT)
 
 COLONNE_VOCI = [17 * mm, 80 * mm, 13 * mm, 22 * mm, 22 * mm, 26 * mm]
-# Senza prezzi le due colonne dei soldi spariscono e il posto va alla
-# descrizione: è il foglio su cui l'impresa scrive la SUA offerta, e quello
-# che deve capire bene è che cosa le stiamo chiedendo di fare.
-COLONNE_VOCI_MUTE = [17 * mm, 128 * mm, 13 * mm, 22 * mm]
 
 # La riserva del 10% e l'elenco delle opere comprese: sta in fondo, in
 # piccolo, ed è la clausola che regge il totale — chi firma la sta
@@ -153,14 +151,13 @@ def _raggruppa(voci):
 def _tabella_categoria(categoria, voci_categoria, tinta, con_prezzi=True):
     """Un blocco: intestazione della categoria, le sue voci, il suo totale.
 
-    Senza prezzi restano codice, descrizione, unità e quantità: è il foglio
-    che si dà all'impresa perché ci scriva la sua offerta, e un prezzo già
-    stampato sopra non è una richiesta di preventivo — è una proposta.
+    Senza prezzi le colonne del prezzo e dell'importo restano, VUOTE: è il
+    foglio che si dà all'impresa perché ci scriva la sua offerta, e le
+    caselle da riempire devono esserci — un prezzo già stampato sopra non
+    è una richiesta di preventivo, è una proposta.
     """
     intestazioni = ["Codice", "Descrizione", "U.M.", "Quantità", "Prezzo",
                     "Importo"]
-    if not con_prezzi:
-        intestazioni = intestazioni[:4]
     # Le tinte delle categorie sono scelte per lo schermo scuro: sul bianco
     # alcune sono chiare (il grigio delle aree esterne) e il bianco sopra non
     # si leggerebbe. Il colore del testo lo decide la tinta, non l'abitudine.
@@ -178,33 +175,38 @@ def _tabella_categoria(categoria, voci_categoria, tinta, con_prezzi=True):
         if con_prezzi:
             riga += [Paragraph(euro(voce.get("prezzo")), STILE_VOCE),
                      Paragraph(euro(voce.get("importo")), STILE_VOCE)]
+        else:
+            riga += ["", ""]          # da riempire a penna, o al computer
         righe.append(riga)
-    if con_prezzi:
-        totale = round(sum(float(v.get("importo") or 0.0)
-                           for v in voci_categoria), 2)
-        righe.append([Paragraph("", STILE_VOCE),
-                      Paragraph(f"Totale {categoria.lower()}",
-                                STILE_CATEGORIA),
-                      "", "", "",
-                      Paragraph(f"<b>{euro(totale)}</b>", STILE_VOCE)])
+    totale = round(sum(float(v.get("importo") or 0.0)
+                       for v in voci_categoria), 2)
+    righe.append([Paragraph("", STILE_VOCE),
+                  Paragraph(f"Totale {categoria.lower()}",
+                            STILE_CATEGORIA),
+                  "", "", "",
+                  Paragraph(f"<b>{euro(totale)}</b>", STILE_VOCE)
+                  if con_prezzi else ""])
 
-    tabella = Table(righe, colWidths=COLONNE_VOCI if con_prezzi
-                    else COLONNE_VOCI_MUTE, repeatRows=1)
+    tabella = Table(righe, colWidths=COLONNE_VOCI, repeatRows=1)
     stile = [
         ("BACKGROUND", (0, 0), (-1, 0), tinta),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LINEBELOW", (0, 0), (-1, -1 if not con_prezzi else -2), 0.25,
-         colors.HexColor("#D6D2C8")),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor("#D6D2C8")),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.75, OTTONE),
+        ("SPAN", (1, -1), (4, -1)),
     ]
-    if con_prezzi:
+    if not con_prezzi:
+        # le caselle da compilare si vedono: un riquadro leggero attorno
+        # alle due colonne vuote, righe dei totali comprese
         stile += [
-            ("LINEABOVE", (0, -1), (-1, -1), 0.75, OTTONE),
-            ("SPAN", (1, -1), (4, -1)),
+            ("BOX", (4, 1), (5, -1), 0.5, colors.HexColor("#B9B4A8")),
+            ("INNERGRID", (4, 1), (5, -1), 0.25,
+             colors.HexColor("#D6D2C8")),
         ]
-    for i in range(1, len(righe) - (1 if con_prezzi else 0)):
+    for i in range(1, len(righe) - 1):
         if i % 2 == 0:
             stile.append(("BACKGROUND", (0, i), (-1, i), RIGA_ALTERNA))
     tabella.setStyle(TableStyle(stile))
@@ -212,7 +214,7 @@ def _tabella_categoria(categoria, voci_categoria, tinta, con_prezzi=True):
             tabella, Spacer(1, 5 * mm)]
 
 
-def _tabella_totali(totali):
+def _tabella_totali(totali, con_prezzi=True):
     """La coda dei conti: lavori, IVA, totale finale.
 
     Niente riserva per imprevisti: quello che si consegna all'impresa sono
@@ -222,7 +224,8 @@ def _tabella_totali(totali):
     """
     def riga(etichetta, valore, forte=False):
         stile = STILE_CATEGORIA if forte else STILE_VOCE
-        return [Paragraph(etichetta, stile), Paragraph(euro(valore), stile)]
+        return [Paragraph(etichetta, stile),
+                Paragraph(euro(valore), stile) if con_prezzi else ""]
 
     iva_pct = numero_it(totali.get("iva_pct"), 0)
     righe = [
@@ -244,7 +247,10 @@ def _tabella_totali(totali):
         ("LINEABOVE", (0, 1), (-1, 1), 0.5, colors.HexColor("#D6D2C8")),
         ("LINEABOVE", (0, 3), (-1, 3), 1, OTTONE),
         ("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#F0E9DA")),
-    ]))
+    ] + ([] if con_prezzi else [
+        ("BOX", (1, 0), (1, -1), 0.5, colors.HexColor("#B9B4A8")),
+        ("INNERGRID", (1, 0), (1, -1), 0.25, colors.HexColor("#D6D2C8")),
+    ])))
     return [tabella]
 
 
@@ -290,11 +296,12 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     tinte: {categoria: "#RRGGBB"} per la fascia d'intestazione; le categorie
         senza tinta prendono l'ardesia.
     con_prezzi: falso per il foglio da dare alle imprese perché ci facciano
-        il preventivo — restano le lavorazioni e le quantità, spariscono
-        prezzi, importi, totali di categoria e la coda dei conti. Sparisce
-        anche la nota della tolleranza, che parla dell'importo totale: in
-        un foglio senza importi sarebbe una clausola su una cifra che non
-        c'è. Il gruppo firma resta in tutt'e due.
+        il preventivo. Le colonne del prezzo e dell'importo restano, e
+        anche la coda dei conti: sono VUOTE, riquadrate, da riempire —
+        l'impresa deve poter mettere i suoi prezzi e fare la somma. Resta
+        fuori solo la nota della tolleranza, che parla dell'importo totale:
+        dove il totale è una casella da riempire, sarebbe una condizione su
+        una cifra che ancora non esiste. Il gruppo firma c'è in tutt'e due.
     """
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
@@ -320,9 +327,12 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
             categoria, voci_categoria,
             colors.HexColor(tinta) if tinta else ARDESIA,
             con_prezzi=con_prezzi))
+    elementi.append(Spacer(1, 3 * mm))
+    elementi.extend(_tabella_totali(totali, con_prezzi=con_prezzi))
     if con_prezzi:
-        elementi.append(Spacer(1, 3 * mm))
-        elementi.extend(_tabella_totali(totali))
+        # La clausola parla dell'importo totale: dove il totale è una
+        # casella da riempire, sarebbe una condizione su una cifra che
+        # ancora non esiste — e la scrive l'impresa, non noi.
         elementi.append(Spacer(1, 5 * mm))
         elementi.append(Paragraph(NOTA_FINALE, STILE_NOTA_FINALE))
     elementi.extend(_gruppo_firma())

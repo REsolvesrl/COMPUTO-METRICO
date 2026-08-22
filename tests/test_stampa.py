@@ -118,17 +118,25 @@ def test_senza_prezzi_restano_lavorazioni_e_quantita():
     assert "Codice" in testo and "U.M." in testo
 
 
+def test_senza_prezzi_le_caselle_da_riempire_ci_sono():
+    """Le colonne del prezzo e dell'importo restano, e con loro la coda dei
+    conti: l'impresa deve poter mettere i suoi prezzi e fare la somma."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                       con_prezzi=False))
+    assert "Prezzo" in testo and "Importo" in testo
+    assert "Totale demolizioni" in testo
+    assert "TOTALE (IVA inclusa)" in testo
+
+
 def test_senza_prezzi_non_esce_nessuna_cifra_in_euro():
     """Un prezzo gia' stampato sopra non e' una richiesta di preventivo, e'
-    una proposta — e quello che torna indietro non e' piu' un confronto."""
+    una proposta — e quello che torna indietro non e' piu' un confronto.
+    Le caselle ci sono, i numeri dentro no."""
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
                                        con_prezzi=False))
     assert "€" not in testo
-    assert "Prezzo" not in testo
-    assert "Importo" not in testo
-    assert "TOTALE" not in testo
-    # nemmeno i totali di categoria, che sono importi come gli altri
-    assert "Totale demolizioni" not in testo
+    for cifra in ("13.595,40", "1.359,54", "14.954,94", "100,00"):
+        assert cifra not in testo, cifra
 
 
 def test_col_prezzi_i_totali_ci_sono_ancora():
@@ -148,8 +156,9 @@ def test_la_nota_della_tolleranza_chiude_il_computo():
 
 
 def test_senza_importi_niente_clausola_sull_importo():
-    """Una tolleranza sul totale, su un foglio che il totale non ce l'ha,
-    sarebbe una clausola su una cifra che non c'e'."""
+    """Dove il totale e' una casella da riempire, la tolleranza sarebbe una
+    condizione su una cifra che ancora non esiste — e la scrive l'impresa,
+    non noi."""
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
                                        con_prezzi=False))
     assert "tolleranza" not in testo

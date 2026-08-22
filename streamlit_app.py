@@ -1764,6 +1764,12 @@ div[data-baseweb="select"] > div > div:first-child {{
     text-align: right;
     margin: 0;
 }}
+/* L'intestazione della colonna: a destra come le cifre che intesta, ma
+   senza la correzione — è una didascalia in fila con le altre. */
+[class*="st-key-tparz_"],
+[class*="st-key-tparz_"] p {{
+    text-align: right;
+}}
 /* ⚠️ IL FILO FRA DUE VOCI È IL BORDO DELLA RIGA, non un elemento a sé.
    Come <hr> era una cosa in mezzo a due righe, con l'aria del blocco sopra
    e la sua sotto: cadeva storto nel vuoto — otto pixel da una parte e tre
@@ -4319,7 +4325,12 @@ with tab_computo:
                     h_um.caption("U.M.")
                     h_qta.caption("Quantità")
                     h_prezzo.caption("Prezzo €")
-                    with h_parz.container(key=f"parz_testata_{indice}"):
+                    # ⚠️ Chiave DIVERSA da quella delle righe: la
+                    # correzione di −0,63rem serve al parziale delle voci,
+                    # che sta in una colonna collassata; l'intestazione sta
+                    # in fila con le altre didascalie, e con quella
+                    # correzione addosso finiva dieci pixel più in alto.
+                    with h_parz.container(key=f"tparz_{indice}"):
                         st.caption("Parziale")
                     for voce in voci_cat:
                         riga_voce_computo(voce)
