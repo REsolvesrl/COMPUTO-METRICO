@@ -32,11 +32,12 @@ def _avvia():
 
 def _progetto(nome, quantita):
     return {
+        "versione_codici": 2,
         "progetto": {"nome": nome, "committente": "", "oggetto": "",
                      "data": "2026-08-11", "aliquota_iva": 10.0,
                      "imprevisti": 10.0},
         "voci": [], "piante": [],
-        "listino_stato": {"1.02": {"q": quantita, "p": 100.0}},
+        "listino_stato": {"2.2": {"q": quantita, "p": 100.0}},
     }
 
 
@@ -50,7 +51,7 @@ def test_riprende_l_ultimo_progetto_archiviato():
         "La Spezia", json.dumps(_progetto("La Spezia", 42.0)).encode("utf-8"))
     at = _avvia()
     assert at.session_state["prg_nome"] == "La Spezia"
-    assert at.session_state["q_1.02"] == 42.0
+    assert at.session_state["q_2.2"] == 42.0
 
 
 def test_lo_dice_che_cosa_ha_ripreso():
@@ -92,12 +93,12 @@ def test_la_ripresa_avviene_una_volta_sola():
     assert not any("Ripreso" in str(i.value) for i in at.info)
 
 
-@pytest.mark.parametrize("chiave", ["prg_nome", "q_1.02"])
+@pytest.mark.parametrize("chiave", ["prg_nome", "q_2.2"])
 def test_il_progetto_ripreso_e_completo(chiave):
     archivio_locale.salva_progetto(
         "Completo", json.dumps(_progetto("Completo", 12.0)).encode("utf-8"))
     at = _avvia()
-    atteso = {"prg_nome": "Completo", "q_1.02": 12.0}[chiave]
+    atteso = {"prg_nome": "Completo", "q_2.2": 12.0}[chiave]
     assert at.session_state[chiave] == atteso
 
 

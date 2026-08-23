@@ -19,11 +19,12 @@ from streamlit.testing.v1 import AppTest
 SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 
 PROGETTO = {
+    "versione_codici": 2,
     "progetto": {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
                  "oggetto": "Ristrutturazione", "data": "2026-08-09",
                  "aliquota_iva": 10.0, "imprevisti": 10.0},
     "voci": [],
-    "listino_stato": {"1.02": {"q": 120.0, "p": 115.0}},
+    "listino_stato": {"2.2": {"q": 120.0, "p": 115.0}},
     "piante": [],
     "business_plan": {"bp_acquisto": 145000.0, "bp_vendita": 300000.0,
                       "bp_ristr": 65000.0, "bp_notaio": 4200.0,
@@ -71,8 +72,8 @@ def test_le_caselle_mostrano_i_valori_caricati(progetto_riaperto):
 
 
 def test_tornano_anche_quantita_e_prezzi_del_listino(progetto_riaperto):
-    assert progetto_riaperto.session_state["q_1.02"] == 120.0
-    assert progetto_riaperto.session_state["p_1.02"] == 115.0
+    assert progetto_riaperto.session_state["q_2.2"] == 120.0
+    assert progetto_riaperto.session_state["p_2.2"] == 115.0
 
 
 def test_torna_il_nome_del_progetto(progetto_riaperto):

@@ -23,7 +23,7 @@ def test_df_vuoto_ha_le_colonne_e_i_tipi_giusti():
 
 
 def test_voci_da_df_legge_le_righe_piene():
-    df = pd.DataFrame([{"categoria": "Demolizioni", "codice": "1.01",
+    df = pd.DataFrame([{"categoria": "Demolizioni", "codice": "2.1",
                         "descrizione": "Demolizione", "um": "m²",
                         "parti": 1.0, "lunghezza": 5.0, "larghezza": 4.0,
                         "altezza": None, "quantita_manuale": None,

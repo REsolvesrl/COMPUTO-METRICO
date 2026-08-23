@@ -20,6 +20,15 @@ from datetime import date
 from pathlib import Path
 
 import archivio_locale
+import listino
+
+# ⚠️ La numerazione del listino è cambiata una volta (la serie di una voce
+# ora è il numero della sua categoria). I file salvati PRIMA vanno convertiti
+# leggendoli; quelli salvati DOPO no — e non c'è modo di distinguerli dal
+# solo codice, perché «3.10» è insieme un codice di ieri e uno di oggi.
+# Quindi ogni file dice quale numerazione parla. Senza il numero è di ieri:
+# è vero per definizione, il marcatore non esisteva.
+VERSIONE_CODICI = 2
 
 
 def percorso():
@@ -91,6 +100,7 @@ def salva(prezzi, quando=None):
     file = percorso()
     file.parent.mkdir(parents=True, exist_ok=True)
     contenuto = {
+        "versione_codici": VERSIONE_CODICI,
         "prezzi": {c: round(float(p), 2) for c, p in (prezzi or {}).items()},
         "aggiornato": (quando or date.today()).isoformat(),
     }
@@ -113,7 +123,14 @@ def carica():
         return {}, None
     try:
         dati = json.loads(file.read_text(encoding="utf-8"))
-        prezzi = {str(c): float(p)
+        # I codici di ieri diventano quelli di oggi, ma SOLO se il file è di
+        # ieri: senza il controllo, un listino salvato oggi verrebbe
+        # riconvertito domani — «3.10» finirebbe su «4.10» — e i prezzi
+        # sparirebbero senza dire niente, che è il modo peggiore di perdere
+        # un lavoro.
+        vecchio = int(dati.get("versione_codici") or 1) < VERSIONE_CODICI
+        prezzi = {(listino.codice_aggiornato(str(c)) if vecchio else str(c)):
+                  float(p)
                   for c, p in (dati.get("prezzi") or {}).items()}
         return prezzi, dati.get("aggiornato")
     except Exception:  # noqa: BLE001 — file rovinato: si riparte dalla guida

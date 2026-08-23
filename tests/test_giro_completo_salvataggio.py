@@ -70,11 +70,11 @@ def giro(tmp_path_factory, monkeypatch_module):
     # aperto sulla categoria, altrimenti i suoi ＋ non sono disegnati.
     at.session_state["pool_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.text_input(key="q_1.02_txt").set_value("120").run()
-    at.text_input(key="p_1.02_txt").set_value("115").run()
+    at.text_input(key="q_2.2_txt").set_value("120").run()
+    at.text_input(key="p_2.2_txt").set_value("115").run()
     # la griglia di merito del soggetto: tendine e una spunta, cioe' l'unico
     # pezzo del business plan che non e' ne' numero ne' testo battuto.
     # Il giardino torna a «—» apposta: serve una voce NON indicata per
@@ -119,8 +119,8 @@ def test_il_file_salvato_contiene_quello_che_ho_scritto(giro, chiave, atteso):
 
 def test_il_file_salvato_contiene_il_computo(giro):
     salvato, _ = giro
-    assert salvato["listino_stato"]["1.02"]["q"] == 120.0
-    assert salvato["listino_stato"]["1.02"]["p"] == 115.0
+    assert salvato["listino_stato"]["2.2"]["q"] == 120.0
+    assert salvato["listino_stato"]["2.2"]["p"] == 115.0
 
 
 def test_il_file_salvato_contiene_i_dati_del_progetto(giro):
@@ -137,8 +137,8 @@ def test_riaprendo_i_valori_tornano(giro, chiave, atteso):
 
 def test_riaprendo_torna_anche_il_computo(giro):
     _, riaperta = giro
-    assert riaperta.session_state["q_1.02"] == 120.0
-    assert riaperta.session_state["p_1.02"] == 115.0
+    assert riaperta.session_state["q_2.2"] == 120.0
+    assert riaperta.session_state["p_2.2"] == 115.0
 
 
 def test_il_file_salvato_contiene_la_griglia_del_soggetto(giro):

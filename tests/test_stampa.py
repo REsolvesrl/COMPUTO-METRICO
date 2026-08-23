@@ -13,13 +13,13 @@ PROGETTO = {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
             "oggetto": "Ristrutturazione appartamento", "data": "09/08/2026"}
 
 VOCI = [
-    {"categoria": "Demolizioni", "codice": "1.01",
+    {"categoria": "Demolizioni", "codice": "2.1",
      "descrizione": "Demolizione pavimenti", "um": "m²",
      "quantita": 84.3, "prezzo": 100.0, "importo": 8430.0},
-    {"categoria": "Demolizioni", "codice": "1.02",
+    {"categoria": "Demolizioni", "codice": "2.2",
      "descrizione": "Demolizione murature", "um": "m²",
      "quantita": 11.82, "prezzo": 100.0, "importo": 1182.0},
-    {"categoria": "Ricostruzioni e ripristini", "codice": "2.10",
+    {"categoria": "Ricostruzioni e ripristini", "codice": "3.10",
      "descrizione": "Posa pavimenti in gres", "um": "m²",
      "quantita": 88.52, "prezzo": 45.0, "importo": 3983.4},
 ]
@@ -50,7 +50,7 @@ def test_riporta_i_dati_del_progetto():
 
 def test_riporta_le_voci_con_codice_e_importo():
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
-    assert "1.01" in testo
+    assert "2.1" in testo
     assert "Demolizione pavimenti" in testo
     assert "8.430,00" in testo
 

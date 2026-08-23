@@ -20,15 +20,16 @@ SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 # Un progetto vecchio: nessun elenco di voci scelte, solo le quantità.
 # Erano quelle a decidere che cosa si vedeva, ed è da lì che si migra.
 PROGETTO_VECCHIO = {
+    "versione_codici": 2,
     "progetto": {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
                  "oggetto": "Ristrutturazione", "data": "2026-08-09",
                  "aliquota_iva": 10.0, "imprevisti": 10.0},
     "voci": [],
-    "listino_stato": {"1.02": {"q": 120.0, "p": 115.0},
-                      "2.01": {"q": 30.0, "p": 80.0},
+    "listino_stato": {"2.2": {"q": 120.0, "p": 115.0},
+                      "3.1": {"q": 30.0, "p": 80.0},
                       # prezzo ritoccato ma quantità zero: non era nel
                       # computo prima, non deve esserci nemmeno adesso
-                      "2.10": {"q": 0.0, "p": 60.0}},
+                      "3.10": {"q": 0.0, "p": 60.0}},
     "piante": [],
     "business_plan": {},
 }
@@ -85,64 +86,64 @@ def test_senza_voci_scelte_non_ci_sono_righe_da_compilare(app):
 
 def test_il_piu_porta_la_voce_nel_computo():
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
-    assert at.session_state["voci_scelte"] == ["1.02"]
+    at.button(key="prendi_2.2").click().run()
+    assert at.session_state["voci_scelte"] == ["2.2"]
     assert not at.exception, [e.value for e in at.exception]
 
 
 def test_una_voce_presa_sparisce_dal_pool():
     """Il pool è il magazzino: quello che è uscito non è più lì."""
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
-    assert "prendi_1.02" not in _prendibili(at)
+    at.button(key="prendi_2.2").click().run()
+    assert "prendi_2.2" not in _prendibili(at)
 
 
 def test_la_voce_presa_si_compila_nella_sua_categoria():
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    assert "q_1.02_txt" in [t.key for t in at.text_input]
+    assert "q_2.2_txt" in [t.key for t in at.text_input]
     # la descrizione è un'area: va a capo su due righe
-    assert "d_1.02_w" in [t.key for t in at.text_area]
+    assert "d_2.2_w" in [t.key for t in at.text_area]
     # l'unità è una tendina: le unità di un computo sono sei o sette, e
     # scriverle a mano vuol dire ritrovarsi «mq», «m2» e «m²» sulla stessa
     # stampa
-    assert "u_1.02_w" in [s.key for s in at.selectbox]
+    assert "u_2.2_w" in [s.key for s in at.selectbox]
 
 
 def test_la_x_toglie_la_voce_dal_computo():
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="togli_1.02").click().run()
+    at.button(key="togli_2.2").click().run()
     assert at.session_state["voci_scelte"] == []
-    assert "prendi_1.02" in _prendibili(at)      # torna nel pool
+    assert "prendi_2.2" in _prendibili(at)      # torna nel pool
 
 
 def test_togliere_una_voce_non_ne_cancella_la_quantita():
     """Ripescandola si ritrova com'era: la ✕ toglie dal foglio, non i dati."""
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.text_input(key="q_1.02_txt").set_value("120").run()
-    at.button(key="togli_1.02").click().run()
-    at.button(key="prendi_1.02").click().run()
-    assert at.session_state["q_1.02"] == 120.0
+    at.text_input(key="q_2.2_txt").set_value("120").run()
+    at.button(key="togli_2.2").click().run()
+    at.button(key="prendi_2.2").click().run()
+    assert at.session_state["q_2.2"] == 120.0
 
 
 def test_solo_le_voci_scelte_contano_nel_totale():
     """Una quantità in una voce non scelta non è nel computo."""
     at = _avvia()
-    at.session_state["q_1.02"] = 100.0
-    at.session_state["p_1.02"] = 10.0
+    at.session_state["q_2.2"] = 100.0
+    at.session_state["p_2.2"] = 10.0
     at.run()
     assert at.session_state["voci_scelte"] == []
     # la si prende, e solo allora entra nei conti
-    at.button(key="prendi_1.02").click().run()
-    assert at.session_state["voci_scelte"] == ["1.02"]
+    at.button(key="prendi_2.2").click().run()
+    assert at.session_state["voci_scelte"] == ["2.2"]
 
 
 # ---------------------------------------------------------- la ricerca
@@ -151,8 +152,8 @@ def test_la_ricerca_restringe_il_pool():
     at = _avvia()
     at.text_input(key="cerca_voce").set_value("battiscopa").run()
     prendibili = _prendibili(at)
-    assert "prendi_2.14" in prendibili        # posa battiscopa
-    assert "prendi_0.01" not in prendibili    # progetto architettonico
+    assert "prendi_3.15" in prendibili        # posa battiscopa
+    assert "prendi_1.1" not in prendibili    # progetto architettonico
     assert not at.exception, [e.value for e in at.exception]
 
 
@@ -161,14 +162,14 @@ def test_la_ricerca_a_piu_parole_le_vuole_tutte():
     at = _avvia()
     at.text_input(key="cerca_voce").set_value("posa gres").run()
     prendibili = _prendibili(at)
-    assert prendibili == ["prendi_2.10"]
+    assert prendibili == ["prendi_3.10"]
 
 
 def test_la_ricerca_trova_anche_per_codice():
     at = _avvia()
-    at.text_input(key="cerca_voce").set_value("3.05").run()
+    at.text_input(key="cerca_voce").set_value("4.5").run()
     prendibili = _prendibili(at)
-    assert prendibili == ["prendi_3.05"]
+    assert prendibili == ["prendi_4.5"]
 
 
 def test_una_ricerca_senza_esito_non_rompe_niente():
@@ -182,32 +183,33 @@ def test_una_ricerca_senza_esito_non_rompe_niente():
 
 def test_la_descrizione_riscritta_vale_nel_computo():
     at = _avvia()
-    at.button(key="prendi_2.10").click().run()
+    at.button(key="prendi_3.10").click().run()
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
-    at.text_area(key="d_2.10_w").set_value("Gres 60x60 a correre").run()
-    at.selectbox(key="u_2.10_w").set_value("ml").run()
-    assert at.session_state["d_2.10"] == "Gres 60x60 a correre"
-    assert at.session_state["u_2.10"] == "ml"
+    at.text_area(key="d_3.10_w").set_value("Gres 60x60 a correre").run()
+    at.selectbox(key="u_3.10_w").set_value("ml").run()
+    assert at.session_state["d_3.10"] == "Gres 60x60 a correre"
+    assert at.session_state["u_3.10"] == "ml"
 
 
 def test_i_testi_riscritti_si_salvano_e_tornano():
     """Riscritture e scelta viaggiano nel file, e tornano riaprendolo."""
     riaperta = _avvia()
     riaperta.session_state["da_caricare"] = {
+        "versione_codici": 2,
         "progetto": {"nome": "x", "committente": "", "oggetto": "",
                      "data": "2026-08-20", "aliquota_iva": 10.0,
                      "imprevisti": 10.0},
         "voci": [], "piante": [], "business_plan": {},
-        "listino_stato": {"2.10": {"q": 50.0, "p": 55.0}},
-        "voci_scelte": ["2.10"],
-        "testi_voci": {"2.10": {"d": "Gres 60x60", "u": "mq"}},
+        "listino_stato": {"3.10": {"q": 50.0, "p": 55.0}},
+        "voci_scelte": ["3.10"],
+        "testi_voci": {"3.10": {"d": "Gres 60x60", "u": "mq"}},
     }
     riaperta.run()
     assert not riaperta.exception, [e.value for e in riaperta.exception]
-    assert riaperta.session_state["voci_scelte"] == ["2.10"]
-    assert riaperta.session_state["d_2.10"] == "Gres 60x60"
-    assert riaperta.session_state["u_2.10"] == "mq"
+    assert riaperta.session_state["voci_scelte"] == ["3.10"]
+    assert riaperta.session_state["d_3.10"] == "Gres 60x60"
+    assert riaperta.session_state["u_3.10"] == "mq"
 
 
 # --------------------------------------------------- i progetti di prima
@@ -218,24 +220,24 @@ def test_un_progetto_vecchio_riapre_le_voci_che_aveva():
     at.session_state["da_caricare"] = PROGETTO_VECCHIO
     at.run()
     assert not at.exception, [e.value for e in at.exception]
-    assert sorted(at.session_state["voci_scelte"]) == ["1.02", "2.01"]
+    assert sorted(at.session_state["voci_scelte"]) == ["2.2", "3.1"]
 
 
 def test_un_progetto_vecchio_non_porta_su_le_voci_a_zero():
     at = _avvia()
     at.session_state["da_caricare"] = PROGETTO_VECCHIO
     at.run()
-    assert "2.10" not in at.session_state["voci_scelte"]
+    assert "3.10" not in at.session_state["voci_scelte"]
 
 
 def test_un_codice_sparito_dal_listino_non_pianta_l_apertura():
     """Un progetto che nomina una voce che non esiste più si apre lo stesso."""
     at = _avvia()
     at.session_state["da_caricare"] = {
-        **PROGETTO_VECCHIO, "voci_scelte": ["1.02", "9.99"]}
+        **PROGETTO_VECCHIO, "voci_scelte": ["2.2", "9.99"]}
     at.run()
     assert not at.exception, [e.value for e in at.exception]
-    assert at.session_state["voci_scelte"] == ["1.02"]
+    assert at.session_state["voci_scelte"] == ["2.2"]
 
 
 # --------------------------------------------- le voci scritte a mano
@@ -264,11 +266,13 @@ def test_la_voce_scritta_a_mano_finisce_nel_computo():
 
 
 def test_il_codice_lo_mette_l_app_nella_serie_della_categoria():
-    """Idraulico è la quarta categoria (serie 3): 3.90, poi 3.91."""
+    """Idraulico è la quarta categoria e ha 13 voci di listino: la prima
+    scritta a mano prende 4.14, la seconda 4.15. Non piu' un blocco a
+    parte (le vecchie 3.90): la numerazione continua, senza buchi."""
     at = _avvia()
     _crea(at, "Idraulico", "Prima voce", "cad", 1.0, 100.0)
     _crea(at, "Idraulico", "Seconda voce", "cad", 1.0, 100.0)
-    assert sorted(at.session_state["voci_extra"]) == ["3.90", "3.91"]
+    assert sorted(at.session_state["voci_extra"]) == ["4.14", "4.15"]
 
 
 def test_il_codice_inventato_non_pesta_i_piedi_al_listino():
@@ -311,24 +315,24 @@ def test_a_corpo_non_calpesta_una_quantita_gia_scritta():
 
 def test_nel_computo_a_corpo_propone_uno_solo_se_manca():
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()      # m², quantità a zero
+    at.button(key="prendi_2.2").click().run()      # m², quantità a zero
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.selectbox(key="u_1.02_w").set_value("a corpo").run()
-    assert at.session_state["q_1.02"] == 1.0
+    at.selectbox(key="u_2.2_w").set_value("a corpo").run()
+    assert at.session_state["q_2.2"] == 1.0
     # e la quantità resta scrivibile: con «a corpo» è la casella a frecce
-    at.number_input(key="qn_1.02_w").set_value(2.0).run()
-    assert at.session_state["q_1.02"] == 2.0
+    at.number_input(key="qn_2.2_w").set_value(2.0).run()
+    assert at.session_state["q_2.2"] == 2.0
 
 
 def test_nel_computo_a_corpo_non_cancella_la_quantita_che_ce():
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.text_input(key="q_1.02_txt").set_value("120").run()
-    at.selectbox(key="u_1.02_w").set_value("a corpo").run()
-    assert at.session_state["q_1.02"] == 120.0
+    at.text_input(key="q_2.2_txt").set_value("120").run()
+    at.selectbox(key="u_2.2_w").set_value("a corpo").run()
+    assert at.session_state["q_2.2"] == 120.0
 
 
 def test_la_voce_a_mano_nasce_nel_computo_non_nel_pool():
@@ -380,17 +384,17 @@ def test_la_voce_tua_ripescata_si_ritrova_com_era():
 def test_il_cestino_toglie_una_voce_dal_pool():
     """Le voci che su questo cantiere non c'entrano si levano di mezzo."""
     at = _avvia()
-    at.button(key="cestina_1.02").click().run()
-    assert at.session_state["voci_scartate"] == ["1.02"]
-    assert "prendi_1.02" not in _prendibili(at)
+    at.button(key="cestina_2.2").click().run()
+    assert at.session_state["voci_scartate"] == ["2.2"]
+    assert "prendi_2.2" not in _prendibili(at)
 
 
 def test_scartare_non_tocca_il_listino():
     """È una scelta di questo progetto, non una modifica al catalogo."""
     import listino
     at = _avvia()
-    at.button(key="cestina_1.02").click().run()
-    assert listino.voce_per_codice("1.02") is not None
+    at.button(key="cestina_2.2").click().run()
+    assert listino.voce_per_codice("2.2") is not None
 
 
 def test_si_scarta_anche_una_voce_tua():
@@ -409,36 +413,36 @@ def test_si_scarta_anche_una_voce_tua():
 def test_gli_scarti_si_rimettono_tutti_insieme():
     """Nessun clic sbagliato perde una voce per sempre."""
     at = _avvia()
-    at.button(key="cestina_1.02").click().run()
-    at.button(key="cestina_1.03").click().run()
+    at.button(key="cestina_2.2").click().run()
+    at.button(key="cestina_2.3").click().run()
     at.button(key="ripristina_scarti").click().run()
     assert at.session_state["voci_scartate"] == []
-    assert "prendi_1.02" in _prendibili(at)
-    assert "prendi_1.03" in _prendibili(at)
+    assert "prendi_2.2" in _prendibili(at)
+    assert "prendi_2.3" in _prendibili(at)
 
 
 def test_riprendere_una_voce_scartata_la_toglie_dagli_scarti():
     at = _avvia()
-    at.button(key="cestina_1.02").click().run()
-    at.session_state["voci_scartate"] = ["1.02"]
+    at.button(key="cestina_2.2").click().run()
+    at.session_state["voci_scartate"] = ["2.2"]
     at.session_state["voci_scelte"] = []
     at.run()
     at.button(key="ripristina_scarti").click().run()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     assert at.session_state["voci_scartate"] == []
-    assert at.session_state["voci_scelte"] == ["1.02"]
+    assert at.session_state["voci_scelte"] == ["2.2"]
 
 
 def test_gli_scarti_viaggiano_col_progetto():
     at = _avvia()
     at.session_state["da_caricare"] = {
         **PROGETTO_VECCHIO,
-        "voci_scelte": ["1.02"],
-        "voci_scartate": ["1.03", "1.04"],
+        "voci_scelte": ["2.2"],
+        "voci_scartate": ["2.3", "2.4"],
     }
     at.run()
-    assert at.session_state["voci_scartate"] == ["1.03", "1.04"]
-    assert "prendi_1.03" not in _prendibili(at)
+    assert at.session_state["voci_scartate"] == ["2.3", "2.4"]
+    assert "prendi_2.3" not in _prendibili(at)
 
 
 def test_una_voce_tua_messa_da_parte_resta_da_parte_riaprendo():
@@ -446,16 +450,16 @@ def test_una_voce_tua_messa_da_parte_resta_da_parte_riaprendo():
     at = _avvia()
     at.session_state["da_caricare"] = {
         **PROGETTO_VECCHIO,
-        "voci": [{"categoria": "Idraulico", "codice": "3.90",
+        "voci": [{"categoria": "Idraulico", "codice": "4.14",
                   "descrizione": "Spostamento colonna", "um": "cad",
                   "parti": None, "lunghezza": None, "larghezza": None,
                   "altezza": None, "quantita_manuale": 2.0,
                   "prezzo": 300.0}],
-        "voci_scelte": ["1.02"],          # la voce tua NON è nel computo
+        "voci_scelte": ["2.2"],          # la voce tua NON è nel computo
     }
     at.run()
-    assert at.session_state["voci_scelte"] == ["1.02"]
-    assert "3.90" in at.session_state["voci_extra"]      # ma esiste ancora
+    assert at.session_state["voci_scelte"] == ["2.2"]
+    assert "4.14" in at.session_state["voci_extra"]     # ma esiste ancora
 
 
 def test_la_voce_a_mano_conta_nei_totali():
@@ -473,10 +477,10 @@ def test_prendere_una_voce_non_richiude_il_pool():
     at = _avvia()
     at.session_state["pool_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="prendi_1.01").click().run()
+    at.button(key="prendi_2.1").click().run()
     assert at.session_state["pool_aperte"] == {"Demolizioni"}
     # e la voce dopo è lì, pronta da prendere senza riaprire niente
-    assert "prendi_1.03" in _prendibili(at)
+    assert "prendi_2.3" in _prendibili(at)
 
 
 # ----------------------------------------- i vecchi progetti con la tabella
@@ -511,15 +515,15 @@ def test_una_voce_tua_si_sposta_di_categoria():
     at = _avvia()
     _crea(at, "Ricostruzioni e ripristini", "Assistenza muraria", "a corpo",
           prezzo=7000.0)
-    assert "2.90" in at.session_state["voci_extra"]
+    assert "3.25" in at.session_state["voci_extra"]
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
-    at.selectbox(key="spostacat_2.90").set_value("Demolizioni").run()
-    at.button(key="sposta_2.90").click().run()
+    at.selectbox(key="spostacat_3.25").set_value("Demolizioni").run()
+    at.button(key="sposta_3.25").click().run()
     extra = at.session_state["voci_extra"]
-    assert "2.90" not in extra
-    assert extra["1.90"]["categoria"] == "Demolizioni"
-    assert extra["1.90"]["descrizione"] == "Assistenza muraria"
+    assert "3.25" not in extra
+    assert extra["2.11"]["categoria"] == "Demolizioni"
+    assert extra["2.11"]["descrizione"] == "Assistenza muraria"
 
 
 def test_spostando_una_voce_prezzo_e_quantita_la_seguono():
@@ -528,11 +532,11 @@ def test_spostando_una_voce_prezzo_e_quantita_la_seguono():
           prezzo=7000.0)
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
-    at.selectbox(key="spostacat_2.90").set_value("Demolizioni").run()
-    at.button(key="sposta_2.90").click().run()
-    assert at.session_state["q_1.90"] == 1.0
-    assert at.session_state["p_1.90"] == 7000.0
-    assert "q_2.90" not in at.session_state
+    at.selectbox(key="spostacat_3.25").set_value("Demolizioni").run()
+    at.button(key="sposta_3.25").click().run()
+    assert at.session_state["q_2.11"] == 1.0
+    assert at.session_state["p_2.11"] == 7000.0
+    assert "q_3.25" not in at.session_state
     # e il totale non si muove: è la stessa voce, in un'altra casa
     lavori = [m for m in at.metric
               if m.label == "Totale lavori (IVA esclusa)"]
@@ -546,18 +550,18 @@ def test_la_voce_spostata_resta_al_suo_posto_nell_ordine():
     _crea(at, "Idraulico", "Seconda", "a corpo", prezzo=200.0)
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
-    at.selectbox(key="spostacat_2.90").set_value("Demolizioni").run()
-    at.button(key="sposta_2.90").click().run()
-    assert at.session_state["voci_scelte"] == ["1.90", "3.90"]
+    at.selectbox(key="spostacat_3.25").set_value("Demolizioni").run()
+    at.button(key="sposta_3.25").click().run()
+    assert at.session_state["voci_scelte"] == ["2.11", "4.14"]
 
 
 def test_le_voci_del_listino_non_cambiano_categoria():
     """Il listino è il catalogo: la 1.02 sta nelle demolizioni e basta."""
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    assert "spostacat_1.02" not in [s.key for s in at.selectbox]
+    assert "spostacat_2.2" not in [s.key for s in at.selectbox]
 
 
 # --------------------------------- unità: tendina, e quella giusta per casa
@@ -613,41 +617,41 @@ def test_cambiando_categoria_l_unita_non_fa_saltare_l_app():
 def test_la_quantita_a_frecce_solo_dove_si_contano_pezzi():
     """Su «a corpo» le frecce; sui metri quadri la casella scritta."""
     at = _avvia()
-    at.button(key="prendi_1.02").click().run()       # m²
+    at.button(key="prendi_2.2").click().run()       # m²
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    assert "qn_1.02_w" not in [n.key for n in at.number_input]
-    assert "q_1.02_txt" in [t.key for t in at.text_input]
-    at.selectbox(key="u_1.02_w").set_value("cad").run()
-    assert "qn_1.02_w" in [n.key for n in at.number_input]
-    assert "q_1.02_txt" not in [t.key for t in at.text_input]
+    assert "qn_2.2_w" not in [n.key for n in at.number_input]
+    assert "q_2.2_txt" in [t.key for t in at.text_input]
+    at.selectbox(key="u_2.2_w").set_value("cad").run()
+    assert "qn_2.2_w" in [n.key for n in at.number_input]
+    assert "q_2.2_txt" not in [t.key for t in at.text_input]
 
 
 def test_nella_riga_l_unita_di_casa_e_in_testa_alla_tendina():
     """La 4.02 è dell'elettricista: «punto luce» è la prima da scegliere,
     anche se la voce oggi porta ancora il generico «punto»."""
     at = _avvia()
-    at.button(key="prendi_4.02").click().run()
+    at.button(key="prendi_5.2").click().run()
     at.session_state["cat_aperte"] = {"Elettricista"}
     at.run()
-    tendina = at.selectbox(key="u_4.02_w")
+    tendina = at.selectbox(key="u_5.2_w")
     assert tendina.options[0] == "punto luce"
     assert tendina.value == "punto"          # quella che la voce ha oggi
 
 
 def test_il_battiscopa_si_misura_in_metri_lineari():
     at = _avvia()
-    at.button(key="prendi_2.14").click().run()
+    at.button(key="prendi_3.15").click().run()
     at.session_state["cat_aperte"] = {"Ricostruzioni e ripristini"}
     at.run()
-    assert at.selectbox(key="u_2.14_w").value == "ml"
+    assert at.selectbox(key="u_3.15_w").value == "ml"
 
 
 # ------------------------------------------------- l'ordine delle righe
 
 def _tre_demolizioni(at):
     """Tre voci di demolizione, nell'ordine in cui sono state prese."""
-    for codice in ("1.01", "1.02", "1.03"):
+    for codice in ("2.1", "2.2", "2.3"):
         at.button(key=f"prendi_{codice}").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
@@ -656,46 +660,46 @@ def _tre_demolizioni(at):
 
 def test_una_voce_si_sposta_su():
     at = _tre_demolizioni(_avvia())
-    assert at.session_state["voci_scelte"] == ["1.01", "1.02", "1.03"]
-    at.button(key="su_1.03").click().run()
-    assert at.session_state["voci_scelte"] == ["1.01", "1.03", "1.02"]
+    assert at.session_state["voci_scelte"] == ["2.1", "2.2", "2.3"]
+    at.button(key="su_2.3").click().run()
+    assert at.session_state["voci_scelte"] == ["2.1", "2.3", "2.2"]
 
 
 def test_una_voce_si_sposta_giu():
     at = _tre_demolizioni(_avvia())
-    at.button(key="giu_1.01").click().run()
-    assert at.session_state["voci_scelte"] == ["1.02", "1.01", "1.03"]
+    at.button(key="giu_2.1").click().run()
+    assert at.session_state["voci_scelte"] == ["2.2", "2.1", "2.3"]
 
 
 def test_la_prima_non_scappa_di_sopra():
     """«Su» dalla prima non deve portarla in un'altra categoria."""
     at = _tre_demolizioni(_avvia())
-    at.button(key="su_1.01").click().run()
-    assert at.session_state["voci_scelte"] == ["1.01", "1.02", "1.03"]
+    at.button(key="su_2.1").click().run()
+    assert at.session_state["voci_scelte"] == ["2.1", "2.2", "2.3"]
 
 
 def test_l_ultima_non_scappa_di_sotto():
     at = _tre_demolizioni(_avvia())
-    at.button(key="giu_1.03").click().run()
-    assert at.session_state["voci_scelte"] == ["1.01", "1.02", "1.03"]
+    at.button(key="giu_2.3").click().run()
+    assert at.session_state["voci_scelte"] == ["2.1", "2.2", "2.3"]
 
 
 def test_l_ordine_si_muove_solo_dentro_la_categoria():
     """Fra le demolizioni c'è una voce di un'altra categoria: «su» deve
     scavalcarla, non fermarsi né mescolare le due tabelle."""
     at = _avvia()
-    at.button(key="prendi_1.01").click().run()
-    at.button(key="prendi_2.10").click().run()      # ricostruzioni, in mezzo
-    at.button(key="prendi_1.02").click().run()
+    at.button(key="prendi_2.1").click().run()
+    at.button(key="prendi_3.10").click().run()      # ricostruzioni, in mezzo
+    at.button(key="prendi_2.2").click().run()
     at.session_state["cat_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="su_1.02").click().run()
-    assert at.session_state["voci_scelte"] == ["1.02", "2.10", "1.01"]
+    at.button(key="su_2.2").click().run()
+    assert at.session_state["voci_scelte"] == ["2.2", "3.10", "2.1"]
 
 
 def test_l_ordine_si_salva_e_torna():
     at = _tre_demolizioni(_avvia())
-    at.button(key="su_1.03").click().run()
+    at.button(key="su_2.3").click().run()
     ordine = list(at.session_state["voci_scelte"])
     riaperta = _avvia()
     riaperta.session_state["da_caricare"] = {
@@ -717,10 +721,10 @@ def test_una_voce_che_ha_gia_utenza_se_la_tiene():
     deve cambiare l'unita' di chi ce l'ha gia' — ne' far saltare la
     tendina, che il valore da mostrare deve contenerlo."""
     at = _avvia()
-    at.button(key="prendi_3.01").click().run()
+    at.button(key="prendi_4.1").click().run()
     at.session_state["cat_aperte"] = {"Idraulico"}
     at.run()
-    tendina = at.selectbox(key="u_3.01_w")
+    tendina = at.selectbox(key="u_4.1_w")
     assert tendina.value == "utenza"
     assert "utenza" in tendina.options
     assert not at.exception, [e.value for e in at.exception]

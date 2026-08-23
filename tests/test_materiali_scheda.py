@@ -63,9 +63,9 @@ def con_materiali():
     at.run()
     at.session_state["pool_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="prendi_1.02").click().run()
-    at.session_state["q_1.02"] = 10.0
-    at.session_state["p_1.02"] = 100.0
+    at.button(key="prendi_2.2").click().run()
+    at.session_state["q_2.2"] = 10.0
+    at.session_state["p_2.2"] = 100.0
     at.session_state["df_materiali"] = tabelle.df_materiali_da_righe(ELENCO)
     at.run()
     assert not at.exception, [e.value for e in at.exception]
@@ -123,9 +123,9 @@ def con_consuntivo():
     at.run()
     at.session_state["pool_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="prendi_1.02").click().run()
-    at.session_state["q_1.02"] = 10.0
-    at.session_state["p_1.02"] = 100.0
+    at.button(key="prendi_2.2").click().run()
+    at.session_state["q_2.2"] = 10.0
+    at.session_state["p_2.2"] = 100.0
     at.session_state["df_materiali"] = tabelle.df_materiali_da_righe(ELENCO)
     at.session_state["df_spese"] = tabelle.df_spese_da_righe(
         [{"importo": 1000.0, "aliquota_iva": 10.0, "categoria": "LAVORI",

@@ -43,11 +43,11 @@ def test_dimensione_listino():
 def test_prezzi_chiave_del_listino():
     """Prezzi di riferimento presi dal computo d'esempio."""
     per_codice = {v["codice"]: v for v in listino.VOCI}
-    assert per_codice["1.01"]["prezzo"] == 100.0      # demolizione pavimenti
-    assert per_codice["4.02"]["prezzo"] == 73.0       # punto elettrico
-    assert per_codice["5.01"]["prezzo"] == 450.0      # serramenti al m²
-    assert per_codice["5.04"]["prezzo"] == 1450.0     # porta blindata
-    assert per_codice["3.01"]["um"] == "utenza"
+    assert per_codice["2.1"]["prezzo"] == 100.0      # demolizione pavimenti
+    assert per_codice["5.2"]["prezzo"] == 73.0       # punto elettrico
+    assert per_codice["6.1"]["prezzo"] == 450.0      # serramenti al m²
+    assert per_codice["6.4"]["prezzo"] == 1450.0     # porta blindata
+    assert per_codice["4.1"]["um"] == "utenza"
 
 
 def test_voci_della_categoria_filtra():

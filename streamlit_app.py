@@ -688,22 +688,22 @@ COLORI_CATEGORIE = {
 # cosa si trova in cantiere.
 VOCI_DA_SUPERFICI = [
     # ⚠️ «pavimento» sono le stanze e basta: balconi, terrazzi e logge
-    # stanno in «pavimento_esterno» e vanno nella 2.24, che è un'altra
+    # stanno in «pavimento_esterno» e vanno nella 3.11, che è un'altra
     # lavorazione. Una demolizione di pavimenti interni non deve portarsi
     # dentro i metri del balcone.
-    ("1.01", "pavimento", True),          # demolizione pavimenti
-    ("1.10", "battiscopa", False),        # rimozione zoccolini
-    ("2.03", "pavimento", False),         # rifacimento massetto
-    ("2.10", "pavimento", True),          # posa gres
-    ("2.11", "rivestimenti", True),       # rivestimenti (fascia dei bagni)
-    ("2.24", "pavimento_esterno", True),  # pavimentazione di balconi e terrazzi
-    ("2.14", "battiscopa", True),         # posa battiscopa
-    ("2.17", "tinteggiatura", False),     # rasatura muri e soffitti
-    ("2.18", "tinteggiatura", True),      # tinteggiatura muri e soffitti
+    ("2.1", "pavimento", True),           # demolizione pavimenti
+    ("2.10", "battiscopa", False),        # rimozione zoccolini
+    ("3.3", "pavimento", False),          # rifacimento massetto
+    ("3.10", "pavimento", True),          # posa gres
+    ("3.12", "rivestimenti", True),       # rivestimenti (fascia dei bagni)
+    ("3.11", "pavimento_esterno", True),  # pavimentazione di balconi e terrazzi
+    ("3.15", "battiscopa", True),         # posa battiscopa
+    ("3.18", "tinteggiatura", False),     # rasatura muri e soffitti
+    ("3.19", "tinteggiatura", True),      # tinteggiatura muri e soffitti
     # dai muri tracciati sulla planimetria (lunghezza × altezza)
-    ("1.02", "muri_demolire", True),      # demolizione murature
-    ("2.01", "muri_costruire", True),     # ricostruzione muri in forati
-    ("2.08", "muri_cartongesso", True),   # pareti in cartongesso
+    ("2.2", "muri_demolire", True),       # demolizione murature
+    ("3.1", "muri_costruire", True),      # ricostruzione muri in forati
+    ("3.8", "muri_cartongesso", True),    # pareti in cartongesso
 ]
 
 # Business plan: colonne delle tabelle e impostazioni predefinite
@@ -1194,25 +1194,32 @@ def unita_della_voce(voce, um):
     elenco = unita_per_categoria(voce.get("categoria"))
     return elenco if um in elenco else [um] + elenco
 
-# Le voci aggiunte a mano prendono un codice nella stessa serie della loro
-# categoria, ma da .90 in su: così si riconoscono a colpo d'occhio e non
-# rischiano di scontrarsi con una voce nuova del listino.
-PRIMO_CODICE_EXTRA = 90
+def serie_della_categoria(categoria):
+    """Il numero di serie di una categoria: quello stampato sulla pastiglia.
+
+    Le categorie si contano da 1, e la serie è quel numero: Demolizioni è
+    la seconda, quindi le sue voci sono 2.1, 2.2, … Prima le serie
+    partivano da zero e il codice non tornava col numero della scheda —
+    «01 · Pratiche e oneri» con dentro voci 0.xx.
+    """
+    if categoria in listino.CATEGORIE:
+        return listino.CATEGORIE.index(categoria) + 1
+    return len(listino.CATEGORIE) + 1        # le categorie inventate, in coda
 
 
 def codice_nuovo(categoria):
-    """Il prossimo codice libero per una voce aggiunta a mano.
+    """Il prossimo codice libero della categoria: l'ultimo, più uno.
 
-    La serie è quella della categoria (Idraulico → 3.90, 3.91, …). Per una
-    categoria che nel listino non c'è — le superfici che arrivano dal
-    disegno — si riparte dal numero dopo l'ultima.
+    Le voci scritte a mano non hanno più una serie riservata: continuano
+    quella del listino. Un blocco a parte (le vecchie .90) serviva a non
+    scontrarsi con una voce nuova del listino, ma faceva anche saltare la
+    numerazione — 3.13 e poi 3.90 — e su un computo che si legge dall'alto
+    in basso è un buco che si nota.
     """
-    if categoria in listino.CATEGORIE:
-        serie = listino.CATEGORIE.index(categoria)
-    else:
-        serie = len(listino.CATEGORIE)
-    presi = set(st.session_state.voci_extra)
-    numero = PRIMO_CODICE_EXTRA
+    serie = serie_della_categoria(categoria)
+    presi = {v["codice"] for v in listino.voci_della_categoria(categoria)}
+    presi |= set(st.session_state.voci_extra)
+    numero = 1
     while f"{serie}.{numero}" in presi:
         numero += 1
     return f"{serie}.{numero}"
@@ -3319,6 +3326,11 @@ def pianta_da_json(dati):
 def _payload_progetto():
     """Il progetto come dizionario: la fonte sia del file sia della firma."""
     payload = {
+        # ⚠️ Con quale numerazione parlano i codici qui dentro. Serve a
+        # riaprirlo: i file di ieri vanno convertiti, quelli di oggi no, e
+        # dal solo codice non si distinguono — «3.10» è insieme un codice
+        # di ieri e uno di oggi.
+        "versione_codici": listino_personale.VERSIONE_CODICI,
         "progetto": {
             "nome": st.session_state.prg_nome,
             "committente": st.session_state.prg_committente,
@@ -3868,8 +3880,60 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
     st.session_state.prg_luogo = progetto.get("luogo", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
-    stato_listino = dati.get("listino_stato") or {}
-    testi_salvati = dati.get("testi_voci") or {}
+    # ⚠️ I CODICI DI IERI diventano quelli di oggi, PRIMA di toccare
+    # qualunque cosa. La numerazione è cambiata (la serie ora è il numero
+    # della categoria) e il codice è la chiave con cui il progetto ritrova
+    # quantità, prezzi, riscritture e scelte: senza questa conversione un
+    # computo salvato ieri si riaprirebbe vuoto, con i suoi numeri appesi a
+    # codici che nel listino non esistono più.
+    # Anche le voci scritte a mano si rinumerano: la loro serie era quella
+    # della categoria di ieri (una voce delle Demolizioni aveva 1.9x, e le
+    # Demolizioni oggi sono la serie 2), e la vecchia riserva .90 lasciava
+    # un buco in mezzo all'elenco — 3.13 e poi 3.90. Qui prendono il primo
+    # numero libero della loro categoria, nell'ordine in cui stanno nel
+    # file, e la tavola `_mappa_extra` porta con sé tutto il resto.
+    # I codici si convertono solo se il file è di ieri. Senza questo
+    # controllo un progetto salvato oggi verrebbe riconvertito domani, e le
+    # sue quantità finirebbero su voci diverse da quelle che le hanno.
+    _da_convertire = (int(dati.get("versione_codici") or 1)
+                      < listino_personale.VERSIONE_CODICI)
+    _righe_extra = [r for r in (dati.get("voci") or [])
+                    if (r.get("descrizione") or "").strip()]
+    _mappa_extra = {}
+    _nuovi_extra = []           # un codice per riga, nello stesso ordine
+    _presi = {v["codice"] for v in listino.VOCI}
+    for _riga in _righe_extra:
+        if not _da_convertire and _riga.get("codice"):
+            _nuovi_extra.append(_riga["codice"])
+            _presi.add(_riga["codice"])
+            continue
+        _cat = _riga.get("categoria") or calcoli.SENZA_CATEGORIA
+        _serie = serie_della_categoria(_cat)
+        _n = 1
+        while f"{_serie}.{_n}" in _presi:
+            _n += 1
+        _nuovo = f"{_serie}.{_n}"
+        _presi.add(_nuovo)
+        _nuovi_extra.append(_nuovo)
+        # I computi più vecchi (la tabella libera) non avevano un codice:
+        # lì non c'è niente da convertire, il codice nasce adesso.
+        if _riga.get("codice"):
+            _mappa_extra[_riga["codice"]] = _nuovo
+
+    def _agg(codice):
+        """Il codice di oggi: dalla tavola del listino o da quella delle
+        voci scritte a mano di questo progetto. Su un file già di oggi non
+        tocca niente."""
+        if not _da_convertire:
+            return codice
+        if codice in _mappa_extra:
+            return _mappa_extra[codice]
+        return listino.codice_aggiornato(codice)
+
+    stato_listino = {_agg(c): v
+                     for c, v in (dati.get("listino_stato") or {}).items()}
+    testi_salvati = {_agg(c): v
+                     for c, v in (dati.get("testi_voci") or {}).items()}
     for _voce in listino.VOCI:
         _cod = _voce["codice"]
         elemento = stato_listino.get(_cod) or {}
@@ -3888,12 +3952,8 @@ if "da_caricare" in st.session_state:
     # dove questa tabella era libera: quello che aveva una descrizione
     # diventa una voce come le altre, con il suo codice e la sua categoria.
     st.session_state.voci_extra = {}
-    for _riga in dati.get("voci") or []:
-        _cod = _riga.get("codice") or codice_nuovo(
-            _riga.get("categoria") or calcoli.SENZA_CATEGORIA)
-        _descr = (_riga.get("descrizione") or "").strip()
-        if not _descr:
-            continue
+    for _riga, _cod in zip(_righe_extra, _nuovi_extra):
+        _descr = _riga["descrizione"].strip()
         st.session_state.voci_extra[_cod] = {
             "codice": _cod,
             "categoria": _riga.get("categoria") or calcoli.SENZA_CATEGORIA,
@@ -3911,6 +3971,8 @@ if "da_caricare" in st.session_state:
     # l'elenco: si ricava da quelli che erano gli unici a comparire, cioè
     # le voci con una quantità — così un vecchio computo si riapre uguale.
     scelte_salvate = dati.get("voci_scelte")
+    if scelte_salvate is not None:
+        scelte_salvate = [_agg(c) for c in scelte_salvate]
     if scelte_salvate is None:
         scelte_salvate = [c for c, e in stato_listino.items()
                           if float((e or {}).get("q") or 0.0) > 0]
@@ -3919,9 +3981,10 @@ if "da_caricare" in st.session_state:
         c for c in scelte_salvate
         if listino.voce_per_codice(c) or c in st.session_state.voci_extra]
     st.session_state.voci_scartate = [
-        c for c in (dati.get("voci_scartate") or [])
-        if c not in st.session_state.voci_scelte]
-    st.session_state.voci_a_mano = list(dati.get("voci_a_mano") or [])
+        _agg(c) for c in (dati.get("voci_scartate") or [])
+        if _agg(c) not in st.session_state.voci_scelte]
+    st.session_state.voci_a_mano = [_agg(c)
+                                    for c in (dati.get("voci_a_mano") or [])]
     if dati.get("voci_scelte") is None:
         # Progetto vecchio: non c'era un elenco, e le voci scritte a mano
         # erano nel computo per definizione. Con l'elenco, invece, comanda

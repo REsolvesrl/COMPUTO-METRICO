@@ -289,46 +289,46 @@ def test_riepilogo_pareti_senza_pareti():
 
 # ---------------------- il computo che si aggancia da sé al disegno
 
-MAPPA = [("1.02", "muri_demolire"), ("2.01", "muri_costruire")]
+MAPPA = [("2.2", "muri_demolire"), ("3.1", "muri_costruire")]
 
 
 def test_voci_da_riscrivere_porta_le_misure_nuove():
     """Muri appena tracciati: il computo era vuoto, ora ha le due voci."""
     proposte = voci_da_riscrivere(
         MAPPA, {"muri_demolire": 21.6, "muri_costruire": 10.8}, {})
-    assert proposte == {"1.02": 21.6, "2.01": 10.8}
+    assert proposte == {"2.2": 21.6, "3.1": 10.8}
 
 
 def test_voci_da_riscrivere_tace_se_e_gia_a_posto():
     """Il dizionario vuoto è il segnale che NON serve rifare il giro."""
     assert voci_da_riscrivere(
         MAPPA, {"muri_demolire": 21.6, "muri_costruire": 10.8},
-        {"1.02": 21.6, "2.01": 10.8}) == {}
+        {"2.2": 21.6, "3.1": 10.8}) == {}
 
 
 def test_voci_da_riscrivere_ignora_i_centesimi():
     """Sotto la tolleranza non si riscrive: sarebbe una rincorsa infinita."""
     assert voci_da_riscrivere(MAPPA, {"muri_demolire": 21.6},
-                              {"1.02": 21.603}) == {}
+                              {"2.2": 21.603}) == {}
 
 
 def test_voci_da_riscrivere_sostituisce_non_somma():
     """Spostato un muro, la quantità vale quella nuova, non la somma."""
     proposte = voci_da_riscrivere(MAPPA, {"muri_demolire": 15.0},
-                                  {"1.02": 21.6})
-    assert proposte == {"1.02": 15.0}
+                                  {"2.2": 21.6})
+    assert proposte == {"2.2": 15.0}
 
 
 def test_voci_da_riscrivere_non_cancella_i_numeri_a_mano():
     """Nessun muro tracciato: la voce compilata a mano resta dov'è."""
     assert voci_da_riscrivere(MAPPA, {"muri_demolire": 0.0},
-                              {"1.02": 30.0}) == {}
-    assert voci_da_riscrivere(MAPPA, {}, {"1.02": 30.0}) == {}
+                              {"2.2": 30.0}) == {}
+    assert voci_da_riscrivere(MAPPA, {}, {"2.2": 30.0}) == {}
 
 
 def test_voci_da_riscrivere_arrotonda_ai_centesimi():
     assert voci_da_riscrivere(MAPPA, {"muri_demolire": 21.6666}, {}) \
-        == {"1.02": 21.67}
+        == {"2.2": 21.67}
 
 
 # ------------------------------- perimetro commerciale (fuori dai computi)
@@ -760,5 +760,5 @@ def test_voci_da_riscrivere_lascia_stare_quelle_scritte_a_mano():
     gliela riscrive sopra."""
     proposte = voci_da_riscrivere(
         MAPPA, {"muri_demolire": 21.6, "muri_costruire": 10.8}, {},
-        escluse=["1.02"])
-    assert proposte == {"2.01": 10.8}
+        escluse=["2.2"])
+    assert proposte == {"3.1": 10.8}

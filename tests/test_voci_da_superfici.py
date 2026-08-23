@@ -75,8 +75,8 @@ def test_i_muri_tracciati_hanno_la_loro_voce():
     """Demolire e costruire devono restare collegati, ciascuno alla sua voce."""
     per_grandezza = {grandezza: codice
                      for codice, grandezza, _ in _voci_da_superfici()}
-    assert per_grandezza.get("muri_demolire") == "1.02"
-    assert per_grandezza.get("muri_costruire") == "2.01"
+    assert per_grandezza.get("muri_demolire") == "2.2"
+    assert per_grandezza.get("muri_costruire") == "3.1"
 
 
 # --------------------------------------- quali arrivano senza chiederlo
@@ -85,7 +85,7 @@ def test_la_demolizione_pavimenti_e_accesa_di_default():
     """Se si rifà il pavimento, prima si butta giù quello che c'è: i metri
     sono gli stessi che si riposano, e non ha senso chiederli ogni volta."""
     accese = {codice for codice, _, acceso in _voci_da_superfici() if acceso}
-    assert "1.01" in accese
+    assert "2.1" in accese
 
 
 def test_la_1_01_prende_il_pavimento_interno():
@@ -94,5 +94,5 @@ def test_la_1_01_prende_il_pavimento_interno():
     pavimenti interni."""
     mappa = {codice: grandezza for codice, grandezza, _
              in _voci_da_superfici()}
-    assert mappa["1.01"] == "pavimento"
-    assert mappa["2.24"] == "pavimento_esterno"
+    assert mappa["2.1"] == "pavimento"
+    assert mappa["3.11"] == "pavimento_esterno"
