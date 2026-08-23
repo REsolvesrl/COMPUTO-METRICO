@@ -1051,7 +1051,12 @@ def dati_fattura_da_file(file):
 # Unità di misura proposte: quelle che compaiono davvero in un computo di
 # ristrutturazione. «a corpo» è a parte — non si misura, vale una volta —
 # ed è per questo che la sua quantità la mette l'app.
-UNITA_MISURA = ["m²", "ml", "m³", "cad", "punto", "utenza", "kg", "a corpo"]
+# Le unità che si scelgono da una tendina: quelle che si usano davvero in un
+# computo di ristrutturazione. «kg» e «utenza» sono usciti — il primo non
+# capita mai, il secondo solo su due voci del listino, che se lo tengono:
+# `unita_della_voce` mette in testa all'elenco l'unità che la voce ha già,
+# anche quando non è fra le proposte.
+UNITA_MISURA = ["m²", "ml", "m³", "cad", "punto", "a corpo"]
 UM_A_CORPO = "a corpo"
 
 # Un «punto» non vuol dire la stessa cosa dappertutto: dall'elettricista è

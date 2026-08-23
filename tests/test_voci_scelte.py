@@ -702,3 +702,25 @@ def test_l_ordine_si_salva_e_torna():
         **PROGETTO_VECCHIO, "voci_scelte": ordine}
     riaperta.run()
     assert riaperta.session_state["voci_scelte"] == ordine
+
+
+def test_la_tendina_delle_unita_non_offre_kg_ne_utenza():
+    """Non capitano in un computo di ristrutturazione: la tendina e' corta
+    apposta, si sceglie senza leggere."""
+    at = _avvia()
+    assert "kg" not in at.selectbox(key="nuova_um").options
+    assert "utenza" not in at.selectbox(key="nuova_um").options
+
+
+def test_una_voce_che_ha_gia_utenza_se_la_tiene():
+    """La 3.01 del listino si misura a utenza: toglierla dalle proposte non
+    deve cambiare l'unita' di chi ce l'ha gia' — ne' far saltare la
+    tendina, che il valore da mostrare deve contenerlo."""
+    at = _avvia()
+    at.button(key="prendi_3.01").click().run()
+    at.session_state["cat_aperte"] = {"Idraulico"}
+    at.run()
+    tendina = at.selectbox(key="u_3.01_w")
+    assert tendina.value == "utenza"
+    assert "utenza" in tendina.options
+    assert not at.exception, [e.value for e in at.exception]
