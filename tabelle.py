@@ -56,17 +56,14 @@ COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
                       "note"]
 COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
 
-# I materiali a cura del committente. La descrizione viene per PRIMA dopo il
-# capitolo, e quantità e prezzo dopo l'unità: si compila da sinistra a destra
-# nell'ordine in cui si sa la cosa — che roba è, poi quanta, poi quanto
-# costa. Prezzo e quantità restano facoltativi (vedi materiali.py): sul
-# foglio firmato non c'erano.
-COLONNE_MATERIALI = ["capitolo", "descrizione", "um", "quantita", "prezzo",
-                     "fornitore", "stato", "note"]
-COLONNE_MATERIALI_NUM = ["quantita", "prezzo"]
-# Come l'IVA in euro delle spese: si ricava da quantità e prezzo, vive solo
-# nella tabella a schermo e non entra mai nel progetto salvato.
-COLONNA_IMPORTO_MAT = "importo"
+# I materiali a cura del committente. Si legge da sinistra a destra
+# nell'ordine in cui si sanno le cose: che roba è, quanta, da chi la compri,
+# dove, a che punto è. **Nessuna colonna di soldi**, ed è una scelta
+# spiegata in materiali.py: i prezzi dei materiali vivono nel registro
+# spese, dove arrivano dalle fatture vere.
+COLONNE_MATERIALI = ["capitolo", "descrizione", "um", "quantita",
+                     "fornitore", "link", "stato", "note"]
+COLONNE_MATERIALI_NUM = ["quantita"]
 # ⚠️ Le voci della griglia di merito stanno IN MEZZO, fra i mq e il
 # coefficiente: e' l'ordine in cui si compila una riga (che immobile e',
 # poi quanto vale). Il coefficiente viene dopo perche' ormai e' l'ECCEZIONE
@@ -212,16 +209,6 @@ def spese_da_df(df):
 
 # ------------------------------------------------------------- materiali
 
-def senza_importo_derivato(df):
-    """Il DataFrame ripulito dalla colonna calcolata dell'importo.
-
-    Stessa ragione di `senza_iva_derivata`: il data_editor restituisce anche
-    le colonne che ha solo mostrato, e se una di quelle rientrasse nei dati
-    al giro dopo ci si ritroverebbe a inserire una colonna che c'è già.
-    """
-    return df.drop(columns=[COLONNA_IMPORTO_MAT], errors="ignore")
-
-
 def df_materiali_vuoto():
     """Tabella dei materiali vuota, con i tipi giusti."""
     dati = {}
@@ -258,14 +245,13 @@ def df_materiali_da_righe(righe):
 def materiali_da_df(df):
     """I materiali come lista di dizionari (solo le righe con una descrizione).
 
-    ⚠️ È la DESCRIZIONE a fare la riga, non l'importo. Nelle spese basta un
-    numero perché una spesa senza cifra non è una spesa; qui è il contrario:
-    l'allegato firmato è un elenco di nomi e di prezzi non ne ha nemmeno uno.
-    Chiedere un importo butterebbe via l'intero documento.
+    ⚠️ È la DESCRIZIONE a fare la riga. Nelle spese basta un importo, perché
+    una spesa senza cifra non è una spesa; qui è il contrario: l'allegato è
+    un elenco di NOMI, e di cifre non ne ha nemmeno una.
 
-    ⚠️⚠️ Quantità e prezzo mancanti restano **None**, non zero. Un prezzo a
-    zero direbbe «gratis» e finirebbe nel totale; None dice «ancora da
-    quotare», e `materiali.totale` lo tiene fuori dichiarandolo.
+    ⚠️⚠️ La quantità mancante resta **None**, non zero. Uno zero direbbe
+    «nessuno», e su un elenco di cose da comprare vuol dire il contrario di
+    «quante non l'ho ancora deciso».
     """
     righe = []
     for _, riga in df.iterrows():
@@ -289,8 +275,8 @@ def materiali_da_df(df):
             "descrizione": descrizione,
             "um": testo("um"),
             "quantita": numero("quantita"),
-            "prezzo": numero("prezzo"),
             "fornitore": testo("fornitore"),
+            "link": testo("link"),
             "stato": testo("stato", materiali.STATO_PREDEFINITO),
             "note": testo("note"),
         })

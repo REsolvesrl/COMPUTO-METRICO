@@ -20,7 +20,6 @@ SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 # Un progetto vecchio: nessun elenco di voci scelte, solo le quantità.
 # Erano quelle a decidere che cosa si vedeva, ed è da lì che si migra.
 PROGETTO_VECCHIO = {
-    "versione_codici": 2,
     "progetto": {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
                  "oggetto": "Ristrutturazione", "data": "2026-08-09",
                  "aliquota_iva": 10.0, "imprevisti": 10.0},
@@ -196,7 +195,6 @@ def test_i_testi_riscritti_si_salvano_e_tornano():
     """Riscritture e scelta viaggiano nel file, e tornano riaprendolo."""
     riaperta = _avvia()
     riaperta.session_state["da_caricare"] = {
-        "versione_codici": 2,
         "progetto": {"nome": "x", "committente": "", "oggetto": "",
                      "data": "2026-08-20", "aliquota_iva": 10.0,
                      "imprevisti": 10.0},

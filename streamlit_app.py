@@ -66,10 +66,8 @@ import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
     CATEGORIE_SPESE_EMOJI,
-    COLONNA_IMPORTO_MAT,
     COLONNA_IVA_EUR,
     COLONNE,
-    COLONNE_MATERIALI,
     COLONNE_MCA,
     COLONNE_NUMERI,
     COLONNE_SPESE,
@@ -80,14 +78,12 @@ from tabelle import (
     cat_display,
     cat_pulita,
     df_materiali_da_righe,
-    df_materiali_vuoto,
     df_mca_vuoto,
     df_spese_da_righe,
     df_spese_vuoto,
     df_vuoto,
     materiali_da_df,
     mca_da_df,
-    senza_importo_derivato,
     senza_iva_derivata,
     spese_da_df,
     voci_da_df,
@@ -523,6 +519,7 @@ def css_mondo():
  */
 .st-key-editor_sal [data-testid="stElementToolbar"],
 [class*="st-key-editor_spese"] [data-testid="stElementToolbar"],
+[class*="st-key-editor_materiali"] [data-testid="stElementToolbar"],
 [class*="st-key-editor_voci"] [data-testid="stElementToolbar"],
 [class*="st-key-editor_mca"] [data-testid="stElementToolbar"],
 [class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] {{
@@ -538,6 +535,7 @@ def css_mondo():
 }}
 .st-key-editor_sal [data-testid="stElementToolbar"] button,
 [class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button,
+[class*="st-key-editor_materiali"] [data-testid="stElementToolbar"] button,
 [class*="st-key-editor_voci"] [data-testid="stElementToolbar"] button,
 [class*="st-key-editor_mca"] [data-testid="stElementToolbar"] button,
 [class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"] button {{
@@ -553,6 +551,7 @@ def css_mondo():
    catena di selettori che si rompe al prossimo aggiornamento. */
 .st-key-editor_sal [data-testid="stElementToolbarButtonIcon"],
 [class*="st-key-editor_spese"] [data-testid="stElementToolbarButtonIcon"],
+[class*="st-key-editor_materiali"] [data-testid="stElementToolbarButtonIcon"],
 [class*="st-key-editor_voci"] [data-testid="stElementToolbarButtonIcon"],
 [class*="st-key-editor_mca"] [data-testid="stElementToolbarButtonIcon"],
 [class*="st-key-anteprima_fatt"] [data-testid="stElementToolbarButtonIcon"] {{
@@ -562,6 +561,8 @@ def css_mondo():
 }}
 .st-key-editor_sal [data-testid="stElementToolbar"] button:hover,
 [class*="st-key-editor_spese"] [data-testid="stElementToolbar"] button:hover,
+[class*="st-key-editor_materiali"] [data-testid="stElementToolbar"]
+ button:hover,
 [class*="st-key-editor_voci"] [data-testid="stElementToolbar"] button:hover,
 [class*="st-key-editor_mca"] [data-testid="stElementToolbar"] button:hover,
 [class*="st-key-anteprima_fatt"] [data-testid="stElementToolbar"]
@@ -577,9 +578,14 @@ def css_mondo():
    invisibile la cosa passava; adesso una barra da 188 px appesa al bordo
    destro di una tabella da 52 finisce fuori dallo schermo, a sinistra.
    Il `!important` serve perché la misura sbagliata Streamlit la scrive
-   nello stile in riga, e solo così si vince. */
+   nello stile in riga, e solo così si vince.
+   ⚠️⚠️ **Ogni tabella nuova che nasce dentro una linguetta non aperta va
+   aggiunta a questo elenco.** È ricapitato con i materiali, che stanno
+   nella seconda linguetta del computo: 52 px, esattamente come MCA e SAL,
+   e a occhio sembra che la tabella non ci sia. */
 .st-key-editor_sal [data-testid="stDataFrameResizable"],
 [class*="st-key-editor_spese"] [data-testid="stDataFrameResizable"],
+[class*="st-key-editor_materiali"] [data-testid="stDataFrameResizable"],
 [class*="st-key-editor_voci"] [data-testid="stDataFrameResizable"],
 [class*="st-key-editor_mca"] [data-testid="stDataFrameResizable"],
 [class*="st-key-anteprima_fatt"] [data-testid="stDataFrameResizable"] {{
@@ -1032,42 +1038,44 @@ def spese_con_iva(stabile, live=None):
 def config_colonne_materiali():
     """Le colonne dell'elenco materiali a cura del committente.
 
-    ⚠️ Nessuna colonna è obbligatoria tranne la descrizione, ed è la
-    descrizione a fare la riga: l'allegato firmato è un elenco di nomi, e
-    quantità, prezzo e fornitore arrivano dopo, quando si va a comprare.
-    Chiedere un prezzo per accettare una riga vorrebbe dire non poter più
-    scrivere l'elenco prima di averlo quotato — cioè togliere al foglio la
-    cosa per cui esiste.
+    ⚠️ Nessuna colonna è obbligatoria tranne la DESCRIZIONE, ed è lei a fare
+    la riga: l'allegato firmato è un elenco di nomi, e tutto il resto —
+    quanti, da chi, dove, a che punto — arriva dopo, mentre si compra.
+
+    ⚠️⚠️ Nessuna colonna di soldi, e non è una dimenticanza: il prezzo dei
+    materiali vive nel registro delle spese, dove arriva dalla fattura vera.
+    Se un giorno tornasse qui, tornerebbero anche due numeri diversi per la
+    stessa cosa.
     """
     return {
         "capitolo": st.column_config.SelectboxColumn(
-            "Capitolo", width=170, options=materiali.CAPITOLI,
+            "Capitolo", width=175, options=materiali.CAPITOLI,
             help="Il capitolo dell'allegato: raggruppa le voci sul foglio "
                  "che si firma con l'impresa."),
         "descrizione": st.column_config.TextColumn(
-            "Descrizione", width=270,
+            "Descrizione", width=300,
             help="Il nome della cosa, come lo scriveresti sull'allegato. "
                  "È l'unica colonna che serve perché la riga esista."),
         "um": st.column_config.TextColumn("U.M.", width=60),
         # «localized» e non «euro»: qui i decimali sono quelli del numero
         # (5 porte sono «5», 94,71 m² sono «94,71»), non due sempre.
         "quantita": st.column_config.NumberColumn(
-            "Quantità", width=85, min_value=0.0, format="localized",
-            help="Se manca vale 1: il box doccia è uno, e non c'è bisogno "
-                 "di scriverlo."),
-        "prezzo": st.column_config.NumberColumn(
-            "Prezzo unit.", width=110, min_value=0.0, format="euro",
-            help="IVA esclusa, come tutti i prezzi del computo. Lascialo "
-                 "vuoto finché non lo sai: la voce resta nell'elenco e il "
-                 "totale dichiara che è parziale."),
-        COLONNA_IMPORTO_MAT: st.column_config.NumberColumn(
-            "Importo", width=110, format="euro", disabled=True,
-            help="Calcolato: quantità × prezzo. Non si scrive a mano."),
+            "Q.tà", width=70, min_value=0.0, format="localized",
+            help="Quante ne servono. Si può lasciare vuota: sull'allegato "
+                 "una quantità non scritta resta non scritta."),
         "fornitore": st.column_config.TextColumn(
-            "Fornitore", width=150,
+            "Fornitore", width=165,
             help="Da chi lo compri. Non finisce sull'allegato: è roba tua."),
+        # LinkColumn e non TextColumn: la cella diventa cliccabile, ed è
+        # tutto il punto — sei mesi dopo si torna sulla scheda di QUEL
+        # modello, non su una ricerca da rifare. `display_text` tiene la
+        # colonna stretta: l'indirizzo per esteso mangerebbe mezza tabella.
+        "link": st.column_config.LinkColumn(
+            "Link", width=110, display_text="apri ↗",
+            help="La pagina del negozio dove l'hai comprato. Incolla "
+                 "l'indirizzo: la cella diventa un collegamento."),
         "stato": st.column_config.SelectboxColumn(
-            "Stato", width=120, options=materiali.STATI,
+            "Stato", width=125, options=materiali.STATI,
             help="A che punto è l'acquisto. Il pagamento no: quello ha già "
                  "il suo registro nelle spese a consuntivo."),
         "note": st.column_config.TextColumn(
@@ -1077,49 +1085,54 @@ def config_colonne_materiali():
     }
 
 
-def materiali_con_importo(stabile, live=None):
-    """I materiali con la colonna calcolata «Importo» accanto al prezzo.
-
-    Stesse regole di `spese_con_iva`: l'input del data_editor resta il
-    DataFrame STABILE, e questa colonna — che l'utente non tocca — guarda i
-    valori live, così l'importo segue il prezzo appena lo si scrive.
-
-    ⚠️ Senza prezzo l'importo resta **vuoto**, non zero. Uno zero in
-    colonna direbbe «gratis» e si sommerebbe agli altri; il vuoto dice
-    «ancora da quotare», che è la verità.
-    """
-    fuori = senza_importo_derivato(stabile.copy())
-    fonte = stabile if live is None else live
-    valori = []
-    for i in fuori.index:
-        riga = fonte.loc[i] if i in fonte.index else fuori.loc[i]
-        prezzo = riga.get("prezzo")
-        if prezzo is None or pd.isna(prezzo):
-            valori.append(None)
-            continue
-        quantita = riga.get("quantita")
-        pezzi = (1.0 if quantita is None or pd.isna(quantita)
-                 else float(quantita))
-        valori.append(round(pezzi * float(prezzo), 2))
-    # subito dopo il prezzo: è lì che si guarda se il conto torna
-    fuori.insert(min(5, len(fuori.columns)), COLONNA_IMPORTO_MAT, valori)
-    return fuori
-
-
 def materiali_correnti():
-    """Le righe dei materiali, con l'importo, dal ritorno vivo dell'editor.
+    """Le righe dei materiali dal ritorno vivo dell'editor.
 
-    Una funzione sola perché i materiali si leggono in tre posti — il
-    riepilogo costi, l'export e il business plan — e in tutt'e tre devono
-    essere gli stessi. La tabella vive nella scheda Computo, che Streamlit
-    disegna per prima: quando il business plan chiede questi numeri il
-    ritorno vivo c'è già.
+    Una funzione sola perché l'elenco si legge in due posti — la sua
+    linguetta e l'export Excel — e nei due dev'essere lo stesso.
+
+    ⚠️ La linguetta dei materiali è scritta PRIMA di quella del computo
+    apposta (ordine nel codice, non ordine a schermo): così l'export legge
+    il ritorno di QUESTO giro e non quello del precedente. Stessa ragione
+    per cui la quota cantiere sta nella scheda delle spese e non in quella
+    del business plan.
     """
     df = st.session_state.get("df_materiali_live",
                               st.session_state.get("df_materiali"))
     if df is None:
         return []
-    return materiali.calcola_elenco(materiali_da_df(df))
+    return materiali_da_df(df)
+
+
+def rimetti_elenco_standard():
+    """Rimette in tabella le voci standard che mancano. Non tocca le altre.
+
+    Aggiunge e basta: quello che hai scritto tu resta dov'è, e una voce
+    standard già presente non si duplica. Serve a due momenti diversi —
+    l'elenco svuotato per sbaglio e il progetto vecchio che non l'ha mai
+    avuto — e in tutt'e due cancellare sarebbe la risposta sbagliata.
+
+    Il confronto è sul nome in maiuscolo senza spazi ai lati: «Piatto
+    doccia» e «PIATTO DOCCIA» sono la stessa cosa da comprare.
+    """
+    correnti = materiali_correnti()
+    presenti = {(r["capitolo"], r["descrizione"].strip().upper())
+                for r in correnti}
+    mancanti = [r for r in materiali.elenco_standard()
+                if (r["capitolo"], r["descrizione"].upper()) not in presenti]
+    if not mancanti:
+        st.session_state._esito_materiali = (
+            "info", "L'elenco standard è già tutto in tabella.")
+        return
+    st.session_state.df_materiali = df_materiali_da_righe(correnti + mancanti)
+    st.session_state.pop("df_materiali_live", None)
+    # ⚠️ Senza il salto di versione il data_editor tiene la tabella di
+    # prima: la sua chiave non cambia, e per Streamlit è lo stesso widget
+    # con lo stesso stato. Le righe nuove non comparirebbero.
+    st.session_state.versione_mat += 1
+    voci = "voce" if len(mancanti) == 1 else "voci"
+    st.session_state._esito_materiali = (
+        "ok", f"Rimesse in elenco {len(mancanti)} {voci}.")
 
 
 def dati_fattura_da_file(file):
@@ -3326,11 +3339,6 @@ def pianta_da_json(dati):
 def _payload_progetto():
     """Il progetto come dizionario: la fonte sia del file sia della firma."""
     payload = {
-        # ⚠️ Con quale numerazione parlano i codici qui dentro. Serve a
-        # riaprirlo: i file di ieri vanno convertiti, quelli di oggi no, e
-        # dal solo codice non si distinguono — «3.10» è insieme un codice
-        # di ieri e uno di oggi.
-        "versione_codici": listino_personale.VERSIONE_CODICI,
         "progetto": {
             "nome": st.session_state.prg_nome,
             "committente": st.session_state.prg_committente,
@@ -3551,7 +3559,13 @@ def progetto_e_vuoto():
         return False
     if len(spese_da_df(st.session_state.df_spese)):
         return False
-    if len(materiali_da_df(st.session_state.df_materiali)):
+    # ⚠️ L'elenco materiali nasce PIENO (le voci standard), quindi «non
+    # vuoto» non basta a dire che c'è lavoro da perdere: senza questo
+    # confronto la sessione non risulterebbe mai pulita e l'app non
+    # offrirebbe più di riaprire l'ultimo lavoro. Conta solo se l'utente
+    # l'ha toccato — tolto qualcosa, aggiunto un fornitore, un link.
+    _materiali_ora = materiali_da_df(st.session_state.df_materiali)
+    if _materiali_ora and _materiali_ora != materiali.elenco_standard():
         return False
     return True
 
@@ -3777,7 +3791,13 @@ st.session_state.setdefault("voci_a_mano", [])
 # i materiali a cura del committente: elenco a parte, non voci del computo.
 # Il contatore serve a far ripartire il data_editor quando si apre un altro
 # progetto — senza, la tabella resterebbe quella di prima.
-st.session_state.setdefault("df_materiali", df_materiali_vuoto())
+# Nasce PIENO, con le voci che si comprano su ogni cantiere di questo tipo:
+# è un elenco che si sfoltisce, non uno da riscrivere trenta righe per
+# volta. Il pool del computo fa il contrario — lì un cantiere non è
+# l'altro e le lavorazioni si pescano una a una — ma i materiali a cura
+# del committente sono sempre quei sanitari, quelle porte, quei frutti.
+st.session_state.setdefault(
+    "df_materiali", df_materiali_da_righe(materiali.elenco_standard()))
 st.session_state.setdefault("versione_mat", 0)
 # porte e finestre dei locali rivestiti: interrompono la fascia piastrellata
 st.session_state.setdefault("apert_car_n", 0)
@@ -3880,60 +3900,27 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
     st.session_state.prg_luogo = progetto.get("luogo", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
-    # ⚠️ I CODICI DI IERI diventano quelli di oggi, PRIMA di toccare
-    # qualunque cosa. La numerazione è cambiata (la serie ora è il numero
-    # della categoria) e il codice è la chiave con cui il progetto ritrova
-    # quantità, prezzi, riscritture e scelte: senza questa conversione un
-    # computo salvato ieri si riaprirebbe vuoto, con i suoi numeri appesi a
-    # codici che nel listino non esistono più.
-    # Anche le voci scritte a mano si rinumerano: la loro serie era quella
-    # della categoria di ieri (una voce delle Demolizioni aveva 1.9x, e le
-    # Demolizioni oggi sono la serie 2), e la vecchia riserva .90 lasciava
-    # un buco in mezzo all'elenco — 3.13 e poi 3.90. Qui prendono il primo
-    # numero libero della loro categoria, nell'ordine in cui stanno nel
-    # file, e la tavola `_mappa_extra` porta con sé tutto il resto.
-    # I codici si convertono solo se il file è di ieri. Senza questo
-    # controllo un progetto salvato oggi verrebbe riconvertito domani, e le
-    # sue quantità finirebbero su voci diverse da quelle che le hanno.
-    _da_convertire = (int(dati.get("versione_codici") or 1)
-                      < listino_personale.VERSIONE_CODICI)
+    # Le voci scritte a mano: quelle dei computi più vecchi (la tabella
+    # libera) non avevano un codice, e lo prendono adesso — il primo libero
+    # della loro categoria.
     _righe_extra = [r for r in (dati.get("voci") or [])
                     if (r.get("descrizione") or "").strip()]
-    _mappa_extra = {}
     _nuovi_extra = []           # un codice per riga, nello stesso ordine
     _presi = {v["codice"] for v in listino.VOCI}
     for _riga in _righe_extra:
-        if not _da_convertire and _riga.get("codice"):
-            _nuovi_extra.append(_riga["codice"])
-            _presi.add(_riga["codice"])
-            continue
-        _cat = _riga.get("categoria") or calcoli.SENZA_CATEGORIA
-        _serie = serie_della_categoria(_cat)
-        _n = 1
-        while f"{_serie}.{_n}" in _presi:
-            _n += 1
-        _nuovo = f"{_serie}.{_n}"
-        _presi.add(_nuovo)
-        _nuovi_extra.append(_nuovo)
-        # I computi più vecchi (la tabella libera) non avevano un codice:
-        # lì non c'è niente da convertire, il codice nasce adesso.
-        if _riga.get("codice"):
-            _mappa_extra[_riga["codice"]] = _nuovo
+        _cod_riga = _riga.get("codice")
+        if not _cod_riga:
+            _serie = serie_della_categoria(
+                _riga.get("categoria") or calcoli.SENZA_CATEGORIA)
+            _n = 1
+            while f"{_serie}.{_n}" in _presi:
+                _n += 1
+            _cod_riga = f"{_serie}.{_n}"
+        _presi.add(_cod_riga)
+        _nuovi_extra.append(_cod_riga)
 
-    def _agg(codice):
-        """Il codice di oggi: dalla tavola del listino o da quella delle
-        voci scritte a mano di questo progetto. Su un file già di oggi non
-        tocca niente."""
-        if not _da_convertire:
-            return codice
-        if codice in _mappa_extra:
-            return _mappa_extra[codice]
-        return listino.codice_aggiornato(codice)
-
-    stato_listino = {_agg(c): v
-                     for c, v in (dati.get("listino_stato") or {}).items()}
-    testi_salvati = {_agg(c): v
-                     for c, v in (dati.get("testi_voci") or {}).items()}
+    stato_listino = dati.get("listino_stato") or {}
+    testi_salvati = dati.get("testi_voci") or {}
     for _voce in listino.VOCI:
         _cod = _voce["codice"]
         elemento = stato_listino.get(_cod) or {}
@@ -3971,20 +3958,18 @@ if "da_caricare" in st.session_state:
     # l'elenco: si ricava da quelli che erano gli unici a comparire, cioè
     # le voci con una quantità — così un vecchio computo si riapre uguale.
     scelte_salvate = dati.get("voci_scelte")
-    if scelte_salvate is not None:
-        scelte_salvate = [_agg(c) for c in scelte_salvate]
     if scelte_salvate is None:
         scelte_salvate = [c for c, e in stato_listino.items()
                           if float((e or {}).get("q") or 0.0) > 0]
         scelte_salvate.sort()
+    # Un codice senza voce non si può disegnare: si scarta.
     st.session_state.voci_scelte = [
         c for c in scelte_salvate
         if listino.voce_per_codice(c) or c in st.session_state.voci_extra]
     st.session_state.voci_scartate = [
-        _agg(c) for c in (dati.get("voci_scartate") or [])
-        if _agg(c) not in st.session_state.voci_scelte]
-    st.session_state.voci_a_mano = [_agg(c)
-                                    for c in (dati.get("voci_a_mano") or [])]
+        c for c in (dati.get("voci_scartate") or [])
+        if c not in st.session_state.voci_scelte]
+    st.session_state.voci_a_mano = list(dati.get("voci_a_mano") or [])
     if dati.get("voci_scelte") is None:
         # Progetto vecchio: non c'era un elenco, e le voci scritte a mano
         # erano nel computo per definizione. Con l'elenco, invece, comanda
@@ -3992,12 +3977,16 @@ if "da_caricare" in st.session_state:
         for _cod in st.session_state.voci_extra:
             if _cod not in st.session_state.voci_scelte:
                 st.session_state.voci_scelte.append(_cod)
-    # I materiali a cura del committente. I progetti salvati prima non ce
-    # l'hanno: la tabella nasce vuota, e il computo resta identico a com'era
-    # — questo elenco non ha mai fatto parte dei suoi totali.
-    _df_mat = df_materiali_da_righe(dati.get("materiali") or [])
-    st.session_state.df_materiali = (_df_mat if len(_df_mat)
-                                     else df_materiali_vuoto())
+    # I materiali a cura del committente.
+    # ⚠️ ASSENTE e VUOTO sono due cose diverse, e qui la differenza si paga.
+    # Un progetto salvato prima di questa sezione non ha proprio la chiave:
+    # gli si mette l'elenco standard, che è quello che serviva anche a lui.
+    # Un progetto che ha `[]` l'elenco ce l'aveva e l'utente l'ha svuotato:
+    # rimetterglielo dentro sarebbe disfargli il lavoro a ogni riapertura.
+    _materiali_salvati = dati.get("materiali")
+    if _materiali_salvati is None:
+        _materiali_salvati = materiali.elenco_standard()
+    st.session_state.df_materiali = df_materiali_da_righe(_materiali_salvati)
     st.session_state.pop("df_materiali_live", None)
     st.session_state.versione_mat = st.session_state.get(
         "versione_mat", 0) + 1
@@ -4365,7 +4354,110 @@ tab_computo, tab_plan, tab_bp = st.tabs(
 
 # ============================================================ SCHEDA COMPUTO
 
+# Due linguette, come il business plan ha le sue: il computo e il suo
+# allegato sono due documenti distinti — uno va all'impresa, l'altro dice
+# che cosa l'impresa NON fornisce — e mescolarli in una pagina sola
+# obbligava a scorrere il computo intero per arrivare all'elenco della
+# spesa.
+# ⚠️ Le linguette si creano qui e si «riaprono» più sotto con `with
+# sotto_computo:` / `with sotto_materiali:`. Fatto così, il corpo della
+# scheda non cambia di una riga né di un rientro: un `st.tabs` che
+# avvolgesse tutto avrebbe voluto dire spostare di quattro spazi
+# settecento righe, e ogni riga spostata è una riga da rileggere.
 with tab_computo:
+    sotto_computo, sotto_materiali = st.tabs(
+        ["📝 Il computo", "🛒 Materiali · a cura del Committente"])
+
+
+# ⚠️ I materiali sono scritti PRIMA del computo, che a schermo sta a
+# sinistra: l'ordine nel codice non è l'ordine delle linguette. Serve a
+# far leggere all'export Excel il ritorno di QUESTO giro invece che
+# quello del precedente — scritti dopo, un materiale appena aggiunto
+# sarebbe finito nel foglio solo al giro successivo.
+with sotto_materiali:
+    with st.container(key="card_materiali"):
+        st.markdown("🛒 Materiali · a cura del Committente")
+        st.caption(
+            "Quello che compri **tu**, e che l'impresa non fornisce. È "
+            "l'**Allegato 1** del computo: il foglio che si firma in due "
+            "per segnare il confine dell'appalto — quello che è scritto "
+            "qui non è compreso nel prezzo dei lavori. "
+            "L'elenco nasce già pieno delle cose che si comprano su ogni "
+            "cantiere: togli quelle che non servono, aggiungi le tue. "
+            "**Fornitore**, **link** e **stato** dell'ordine restano fra "
+            "noi: sul foglio da firmare non compaiono. I **prezzi non ci "
+            "sono di proposito** — quelli stanno nel registro delle spese, "
+            "dove arrivano dalle fatture.")
+
+        df_mat_ed = st.data_editor(
+            st.session_state.df_materiali,
+            num_rows="dynamic", hide_index=True, width="stretch",
+            key=f"editor_materiali_{st.session_state.versione_mat}",
+            column_config=config_colonne_materiali())
+        # come per le spese: l'input del data_editor resta il DataFrame
+        # stabile, il ritorno vive a parte per l'export e il salvataggio
+        st.session_state.df_materiali_live = df_mat_ed
+        righe_materiali = materiali_da_df(df_mat_ed)
+
+        if st.session_state.get("_esito_materiali"):
+            _tipo, _testo = st.session_state.pop("_esito_materiali")
+            (st.info if _tipo == "info" else st.success)(_testo)
+
+        if righe_materiali:
+            per_stato = materiali.conteggi_per_stato(righe_materiali)
+            per_capitolo = materiali.conteggi_per_capitolo(righe_materiali)
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Voci in elenco", len(righe_materiali),
+                      delta=(f"{len(per_capitolo)} capitoli"),
+                      delta_color="off")
+            # Il numero che conta davvero è il primo: quanto ti resta da
+            # comprare. Gli altri due dicono a che punto sei arrivato.
+            for colonna, stato in zip((m2, m3, m4), materiali.STATI):
+                colonna.metric(stato, per_stato.get(stato, 0))
+
+            st.caption(":gray[" + " · ".join(
+                f"**{cap.capitalize()}** {n}"
+                for cap, n in per_capitolo.items()) + "]")
+        else:
+            st.markdown(
+                campione_vuoto(
+                    "Nessun materiale in elenco",
+                    "Scrivi nella riga vuota qui sopra che cosa compri tu — "
+                    "il gres, i sanitari, le porte — oppure rimetti "
+                    "l'elenco standard col bottone qui sotto. Da qui esce "
+                    "l'Allegato 1 da firmare con l'impresa."),
+                unsafe_allow_html=True)
+
+        # ⚠️ La data all'italiana, non l'ISO: questo foglio si firma, e su
+        # un documento da firmare «2025-11-29» non ci va.
+        _prg_allegato = {
+            "nome": st.session_state.prg_nome,
+            "committente": st.session_state.prg_committente,
+            "oggetto": st.session_state.prg_oggetto,
+            "luogo": st.session_state.prg_luogo,
+            "data": st.session_state.prg_data.strftime("%d/%m/%Y"),
+        }
+        a1, a2, _a3 = st.columns([1.4, 1.4, 2])
+        a1.download_button(
+            "🖨️ Allegato 1 (da firmare)",
+            data=stampa.pdf_materiali(_prg_allegato, righe_materiali),
+            help="L'elenco per capitoli con la clausola e le due firme: è "
+                 "il foglio che si allega al computo e si sottoscrive con "
+                 "l'impresa. Fornitore, link e stato dell'ordine non ci "
+                 "sono — sono appunti tuoi.",
+            file_name=nome_file("pdf").replace(
+                ".pdf", "_allegato_materiali.pdf"),
+            mime="application/pdf", width="stretch",
+            disabled=not righe_materiali)
+        a2.button("↺ Rimetti l'elenco standard", width="stretch",
+                  key="ripristina_materiali",
+                  on_click=rimetti_elenco_standard,
+                  help="Riporta in tabella le voci che si comprano su ogni "
+                       "cantiere. Aggiunge soltanto: quello che hai scritto "
+                       "tu resta dov'è, e niente si duplica.")
+
+
+with sotto_computo:
     # Offerta di ripristino: solo a sessione pulita e solo finché non si è
     # risposto, così non si trasforma in un banner che chiede sempre la stessa
     # cosa mentre si lavora.
@@ -4873,108 +4965,6 @@ with tab_computo:
             st.plotly_chart(grafico_totali(totali),
                             config={"displayModeBar": False})
 
-    # ----------------------------- materiali a cura del committente
-    # Sta QUI, sotto il computo e a tutta larghezza, per due ragioni. La
-    # prima è che nove colonne dentro una colonna da tre quarti di pagina
-    # si leggono di sbieco. La seconda è che questo è un ALLEGATO, e un
-    # allegato viene dopo il documento a cui è allegato — come sul foglio
-    # vero, dove sta dietro al computo e si firma insieme a lui.
-    st.markdown("")
-    with st.container(key="card_materiali"):
-        st.markdown("🛒 Materiali · a cura del Committente")
-        st.caption(
-            "Quello che compri **tu**, e che l'impresa non fornisce: è "
-            "l'**Allegato 1** del computo, il foglio che si firma in due "
-            "per segnare il confine dell'appalto. Questi importi **non "
-            "entrano nel totale dei lavori** — sono soldi tuoi, non della "
-            "fattura dell'impresa — ma entrano nel costo dell'operazione, "
-            "e li ritrovi nel business plan. Il **prezzo puoi lasciarlo "
-            "vuoto**: la voce resta nell'elenco e il totale dichiara che "
-            "è parziale.")
-        df_mat_ed = st.data_editor(
-            materiali_con_importo(
-                st.session_state.df_materiali,
-                st.session_state.get("df_materiali_live")),
-            num_rows="dynamic", hide_index=True, width="stretch",
-            key=f"editor_materiali_{st.session_state.versione_mat}",
-            column_config=config_colonne_materiali())
-        # come per le spese: l'input del data_editor resta il DataFrame
-        # stabile, il ritorno vive a parte per calcoli e salvataggio
-        st.session_state.df_materiali_live = df_mat_ed
-        righe_materiali = materiali.calcola_elenco(materiali_da_df(df_mat_ed))
-        totale_materiali = materiali.totale(righe_materiali)
-        mancano_prezzi = materiali.da_quotare(righe_materiali)
-        per_stato = materiali.totali_per_stato(righe_materiali)
-
-        if righe_materiali:
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Totale materiali (IVA esclusa)",
-                      euro(totale_materiali))
-            for colonna, stato in zip((m2, m3, m4), materiali.STATI):
-                quota = per_stato.get(stato) or {"importo": 0.0, "voci": 0}
-                colonna.metric(
-                    stato, euro(quota["importo"]),
-                    delta=(f"{quota['voci']} "
-                           + ("voce" if quota["voci"] == 1 else "voci")),
-                    delta_color="off")
-            if mancano_prezzi:
-                st.caption(
-                    f":orange[⚠️ {mancano_prezzi} "
-                    + ("voce senza prezzo" if mancano_prezzi == 1
-                       else "voci senza prezzo")
-                    + ": il totale qui sopra è **parziale**.]")
-            # Il conto della serva, in una riga: quanto costa il cantiere
-            # per intero. Sta qui e non nel riepilogo costi perché è qui
-            # che i due numeri esistono tutt'e due nello stesso istante —
-            # e un totale che si aggiorna un giro dopo è un totale stantio.
-            st.markdown(
-                f"Lavori **{euro(totale)}** + materiali "
-                f"**{euro(totale_materiali)}** → **intervento completo "
-                f"{euro(round(totale + totale_materiali, 2))}**, IVA "
-                "esclusa.")
-
-            # I due PDF stanno QUI e non fra gli export in fondo: sono i
-            # documenti di questo elenco, e chi ha appena finito di
-            # scriverlo è già dove serve premerli.
-            # ⚠️ La data all'italiana, non l'ISO: questo foglio si firma, e
-            # su un documento da firmare «2025-11-29» non ci va.
-            _prg_allegato = {
-                "nome": st.session_state.prg_nome,
-                "committente": st.session_state.prg_committente,
-                "oggetto": st.session_state.prg_oggetto,
-                "luogo": st.session_state.prg_luogo,
-                "data": st.session_state.prg_data.strftime("%d/%m/%Y"),
-            }
-            a1, a2, _ = st.columns([1.3, 1.3, 2])
-            a1.download_button(
-                "🖨️ Allegato 1 (da firmare)",
-                data=stampa.pdf_materiali(_prg_allegato, righe_materiali),
-                help="L'elenco per capitoli, senza prezzi, con la clausola e "
-                     "le due firme: è il foglio che si allega al computo e "
-                     "si sottoscrive con l'impresa.",
-                file_name=nome_file("pdf").replace(
-                    ".pdf", "_allegato_materiali.pdf"),
-                mime="application/pdf", width="stretch")
-            a2.download_button(
-                "💶 Allegato con i prezzi",
-                data=stampa.pdf_materiali(_prg_allegato, righe_materiali,
-                                          con_prezzi=True),
-                help="La tua copia: stesso elenco con prezzi, importi, "
-                     "totali per capitolo e il conto delle voci ancora da "
-                     "quotare. Non si consegna all'impresa.",
-                file_name=nome_file("pdf").replace(
-                    ".pdf", "_allegato_materiali_prezzi.pdf"),
-                mime="application/pdf", width="stretch")
-        else:
-            st.markdown(
-                campione_vuoto(
-                    "Nessun materiale in elenco",
-                    "Scrivi nella riga vuota qui sopra che cosa compri tu — "
-                    "il gres, i sanitari, le porte. Basta la descrizione: "
-                    "il prezzo lo aggiungi quando lo sai. Da qui esce "
-                    "l'Allegato 1 da firmare con l'impresa."),
-                unsafe_allow_html=True)
-
     # ------------------------------------------------- tabella ed export
     if voci_calcolate:
         df_calcolato = pd.DataFrame(voci_calcolate).reindex(
@@ -5043,30 +5033,23 @@ with tab_computo:
                    progetto["aliquota_iva"]],
     })
 
-    # I materiali per Excel: il foglio dell'allegato, con l'importo già
-    # fatto. Le voci senza prezzo restano vuote — non zero — così una somma
-    # fatta nel foglio non le conta come regalate.
+    # Il foglio dei materiali: l'elenco dell'allegato con accanto quello che
+    # sull'allegato non ci va — fornitore, link e stato dell'ordine. È la
+    # lista della spesa da portarsi dietro, e in Excel il link resta
+    # cliccabile.
+    _righe_materiali = materiali_correnti()
     df_materiali_excel = None
-    if righe_materiali:
+    if _righe_materiali:
         df_materiali_excel = pd.DataFrame([{
             "Capitolo": r.get("capitolo") or "",
             "Descrizione": r.get("descrizione") or "",
             "U.M.": r.get("um") or "",
             "Quantità": r.get("quantita"),
-            "Prezzo unit.": r.get("prezzo"),
-            "Importo": r.get("importo"),
             "Fornitore": r.get("fornitore") or "",
+            "Link": r.get("link") or "",
             "Stato": r.get("stato") or "",
             "Note": r.get("note") or "",
-        } for r in righe_materiali])
-        df_materiali_excel = pd.concat([
-            df_materiali_excel,
-            pd.DataFrame([{
-                "Capitolo": "TOTALE MATERIALI",
-                "Descrizione": (f"{mancano_prezzi} voci senza prezzo"
-                                if mancano_prezzi else ""),
-                "Importo": totale_materiali}]),
-        ], ignore_index=True)
+        } for r in _righe_materiali])
 
     righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
         st.session_state.piante, mappa_percentuali(),
@@ -6273,17 +6256,16 @@ with tab_bp:
     # quanto pesa ed è modificabile. Tenerla anche nel computo voleva dire,
     # prima o poi, contarla due volte.
     #
-    # I materiali a cura del committente si sommano QUI, e solo qui. Nel
-    # computo non entrano — quel documento è dell'impresa, e questi soldi
-    # dalla sua fattura non passano — ma l'operazione li paga lo stesso, ed
-    # è l'operazione che questa scheda misura.
-    # ⚠️ Senza di loro il confronto col cantiere era ASIMMETRICO: il
-    # consuntivo conta le spese MATERIALE (stanno in CATEGORIE_CANTIERE), il
-    # preventivo non aveva nessun capitolo materiali da mettergli davanti.
-    # Ogni operazione in cui le finiture le compri tu risultava sforata del
-    # loro intero importo — uno sforamento che non c'era mai stato.
-    materiali_bp = materiali.totale(materiali_correnti())
-    ristr_da_computo = round(totale_computo_bp + materiali_bp, 2)
+    # ⚠️ I materiali a cura del committente NON entrano qui, perché il loro
+    # elenco di prezzi non ne porta: è una lista di forniture, non un
+    # preventivo. Il loro costo arriva da un'altra parte — le spese
+    # MATERIALE del consuntivo, o la riga corrispondente fra le «spese da
+    # sostenere» finché è ancora un budget — e quella parte questo
+    # confronto la legge già. Chi si accorgesse che il confronto col
+    # cantiere pende (il consuntivo conta i materiali, il computo no) metta
+    # il budget dei materiali fra le spese da sostenere: è lì che va, non
+    # in un secondo listino qui dentro.
+    ristr_da_computo = totale_computo_bp
 
 
     # ------------------------------------------------- spese a consuntivo
@@ -6534,10 +6516,8 @@ with tab_bp:
             scost_pct = (round(scostamento / ristr_da_computo * 100, 2)
                          if ristr_da_computo else None)
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Preventivo (computo + materiali)",
-                      euro(ristr_da_computo),
-                      delta=(f"di cui {euro(materiali_bp)} materiali"
-                             if materiali_bp else None), delta_color="off")
+            c1.metric("Preventivo (computo)",
+                      euro(ristr_da_computo))
             c2.metric("Speso davvero (fatture)", euro(cantiere_sostenuto))
             c3.metric("Ancora da sostenere (stime)", euro(cantiere_previsto))
             c4.metric("Scostamento sul preventivo",
@@ -6545,12 +6525,14 @@ with tab_bp:
                        if scost_pct is not None else "—"),
                       delta=euro(scostamento), delta_color="inverse")
             st.caption(
-                ":gray[Lavori, materiale e architetto da una parte; dall'altra "
-                "il computo **più l'allegato dei materiali**, così le due "
-                "metà parlano delle stesse cose. Il confronto usa "
+                ":gray[Lavori, materiale e architetto. Il confronto usa "
                 "**entrambe** le colonne — speso più da sostenere — perché è "
                 "il costo atteso del cantiere; finché la seconda non è "
-                "vuota, lo scostamento è in parte una previsione.]")
+                "vuota, lo scostamento è in parte una previsione. "
+                "⚠️ I materiali che compri tu il computo non li conosce: se "
+                "sono una fetta grossa, mettine il budget fra le **spese da "
+                "sostenere**, o questo confronto ti dirà che stai sforando "
+                "quando non è vero.]")
 
     # ------------------------------------------------ studio di fattibilità
     with sotto_fatt:
@@ -6907,10 +6889,9 @@ with tab_bp:
                             "help": "I lavori NUDI, senza riserva: gli "
                                     "imprevisti sono la riga qui sopra e "
                                     "si contano una volta sola. Lasciando "
-                                    "0 arrivano il totale del computo e "
-                                    "l'allegato dei materiali a cura tua, "
-                                    "sommati: l'operazione li paga "
-                                    "entrambi."},
+                                    "0 arriva il totale del computo — che "
+                                    "NON comprende i materiali a cura tua: "
+                                    "quelli si mettono fra le spese."},
                     iva="bp_iva_ristr", imponibile=ristr_eff))
                 # A cantiere avviato le fatture reali valgono più di ogni
                 # stima: l'opzione compare solo quando un consuntivo esiste

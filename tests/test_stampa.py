@@ -186,12 +186,15 @@ def test_il_posto_dell_impresa_resta_vuoto():
 
 MATERIALI = [
     {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA", "um": "cad",
-     "quantita": 1.0, "prezzo": 320.0, "note": ""},
+     "quantita": 1.0, "fornitore": "Ceramiche Rossi",
+     "link": "https://esempio.it/piatto-doccia", "stato": "Ordinato",
+     "note": ""},
     {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA", "um": "cad",
-     "quantita": None, "prezzo": None, "note": ""},
+     "quantita": None, "fornitore": "", "link": "", "stato": "Da ordinare",
+     "note": ""},
     {"capitolo": "IMPIANTO RISCALDAMENTO",
      "descrizione": "UNITA INTERNA + ESTERNA CLIMA CANALIZZATO", "um": "cad",
-     "quantita": 1.0, "prezzo": 2400.0,
+     "quantita": 1.0, "fornitore": "", "link": "", "stato": "Da ordinare",
      "note": "Si fornisce inoltre: plenum coibentato, collarini."},
 ]
 
@@ -216,38 +219,28 @@ def test_allegato_raggruppa_per_capitolo():
     assert "PIATTO DOCCIA" in testo
 
 
-def test_allegato_senza_prezzi_non_ne_stampa_nemmeno_uno():
-    """E' il foglio che si firma con l'impresa: quanto paghi tu non e'
-    affar suo, e un totale stampato sopra glielo racconterebbe."""
+def test_l_allegato_non_porta_nessuna_cifra():
+    """Elenca le forniture che restano fuori dall'appalto, non quanto
+    costano: e' cosi' che e' fatto il foglio vero."""
     testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
-    assert "320,00" not in testo
-    assert "2.400,00" not in testo
-    assert "TOTALE MATERIALI" not in testo
+    assert "€" not in testo
+    assert "TOTALE" not in testo.upper().replace("COMPUTO METRICO", "")
 
 
-def test_allegato_con_prezzi_porta_importi_e_totale():
-    calcolate = materiali.calcola_elenco(MATERIALI)
-    testo = _testo_del_pdf(
-        pdf_materiali(PROGETTO_FIRMA, calcolate, con_prezzi=True))
-    assert "320,00" in testo
-    assert "TOTALE MATERIALI" in testo
-    assert "2.720,00" in testo          # 320 + 2400, il box doccia non c'e'
-
-
-def test_allegato_con_prezzi_dichiara_le_voci_da_quotare():
-    """Un totale che tace i pezzi non ancora quotati mente verso il basso."""
-    calcolate = materiali.calcola_elenco(MATERIALI)
-    testo = _testo_del_pdf(
-        pdf_materiali(PROGETTO_FIRMA, calcolate, con_prezzi=True))
-    assert "da quotare" in testo
-    assert "1 voce senza prezzo" in testo
+def test_gli_appunti_di_chi_compra_restano_fuori():
+    """Fornitore, link e stato dell'ordine sono roba tua: questo foglio lo
+    firma l'impresa, e da chi compri non la riguarda."""
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "Ceramiche Rossi" not in testo
+    assert "esempio.it" not in testo
+    assert "Ordinato" not in testo
 
 
 def test_la_quantita_che_manca_non_diventa_uno_stampato():
-    """L'1 e' una convenzione di calcolo, non una misura presa."""
+    """Sul foglio una quantita' non scritta resta non scritta."""
     testo = _testo_del_pdf(pdf_materiali(
         PROGETTO_FIRMA, [{"capitolo": "BAGNO", "descrizione": "BOX DOCCIA",
-                          "um": "cad", "quantita": None, "prezzo": None}]))
+                          "um": "cad", "quantita": None}]))
     assert "1,00" not in testo
 
 
@@ -274,6 +267,15 @@ def test_senza_luogo_resta_la_data():
     stesso, e la data e' il minimo che deve portare."""
     testo = _testo_del_pdf(pdf_materiali(PROGETTO, MATERIALI))
     assert "lì 09/08/2026" in testo
+
+
+def test_l_elenco_standard_si_stampa_tutto():
+    """Il giro che fa un progetto nuovo: le voci di partenza, sul foglio."""
+    testo = _testo_del_pdf(
+        pdf_materiali(PROGETTO_FIRMA, materiali.elenco_standard()))
+    for attesa in ("PIATTO DOCCIA", "MANIGLIE", "LANA DI ROCCIA",
+                   "CLIMATIZZATORE MOD. UNICO TWIN"):
+        assert attesa in testo, attesa
 
 
 def test_allegato_vuoto_lo_dice():

@@ -31,8 +31,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-import materiali as mod_materiali
 from formato import colore_testo_su, euro, numero_it
+from materiali import note_numerate, raggruppa_per_capitolo
 
 ARDESIA = colors.HexColor("#1A2744")
 OTTONE = colors.HexColor("#9A7B3F")      # ottone scurito: su bianco, leggibile
@@ -364,10 +364,11 @@ NOTA_MATERIALI = (
     "Committente. Non rientrano nell'appalto e il loro costo non è "
     "compreso nell'importo del computo metrico.")
 
-# Senza prezzi la descrizione si prende tutto: è un elenco di cose, e le
-# due colonne di destra sono lì solo quando servono davvero.
-COLONNE_MAT_NUDE = [130 * mm, 20 * mm, 30 * mm]
-COLONNE_MAT_PREZZI = [88 * mm, 15 * mm, 22 * mm, 25 * mm, 30 * mm]
+# La descrizione si prende quasi tutto: è un elenco di cose, e le due
+# colonne di destra sono lì solo per le voci che una misura ce l'hanno.
+# Fornitore, link e stato dell'ordine NON ci sono: sono roba di chi compra,
+# e questo foglio lo legge l'impresa.
+COLONNE_MAT = [130 * mm, 20 * mm, 30 * mm]
 
 
 def _riga_luogo_data(progetto):
@@ -384,28 +385,25 @@ def _riga_luogo_data(progetto):
     return [Spacer(1, 6 * mm), Paragraph(testo, STILE_DATO)]
 
 
-def _tabella_capitolo(capitolo, righe, con_prezzi, marcatori):
-    """Un capitolo dell'allegato: il titolo, le sue cose, il suo totale.
+def _tabella_capitolo(capitolo, righe, marcatori):
+    """Un capitolo dell'allegato: il titolo e sotto le sue cose.
 
     `marcatori` è {id(riga): "*"} — l'asterisco che rimanda alla nota in
     fondo, attaccato alla descrizione com'è sul foglio vero.
 
-    Senza prezzi non c'è nessun totale: quel foglio è l'elenco che si firma,
-    e una somma stampata sopra racconterebbe all'impresa quanto spendi tu.
+    Nessun totale, in nessuna forma: questo elenco di soldi non ne porta.
     """
-    intestazioni = ["Descrizione", "U.M.", "Quantità"]
-    if con_prezzi:
-        intestazioni += ["Prezzo", "Importo"]
     intestazione_bianca = ParagraphStyle(
         "intestazione_cap", parent=STILE_INTESTAZIONE, textColor=colors.white)
-    tabella_righe = [[Paragraph(t, intestazione_bianca) for t in intestazioni]]
+    tabella_righe = [[Paragraph(t, intestazione_bianca)
+                      for t in ("Descrizione", "U.M.", "Quantità")]]
     for riga in righe:
         descrizione = str(riga.get("descrizione") or "")
         marcatore = marcatori.get(id(riga))
         if marcatore:
             descrizione = f"{descrizione} {marcatore}"
         quantita = riga.get("quantita")
-        cella = [
+        tabella_righe.append([
             Paragraph(descrizione, STILE_VOCE),
             Paragraph(str(riga.get("um") or ""), STILE_VOCE),
             # La quantità che manca resta VUOTA, non «1,00»: sul foglio è
@@ -413,69 +411,43 @@ def _tabella_capitolo(capitolo, righe, con_prezzi, marcatori):
             # un'omissione l'aria di una misura presa.
             Paragraph("" if quantita is None else numero_it(quantita, 2),
                       STILE_VOCE),
-        ]
-        if con_prezzi:
-            prezzo = riga.get("prezzo")
-            importo = riga.get("importo")
-            cella += [
-                Paragraph("" if prezzo is None else euro(prezzo), STILE_VOCE),
-                # «da quotare» e non una casella vuota: una riga senza
-                # prezzo e una riga che il prezzo non ce l'ha ancora si
-                # somigliano troppo, e solo la seconda è da andare a
-                # completare. Stessa scelta del «//» sulle fatture.
-                Paragraph(euro(importo) if importo is not None
-                          else "<i>da quotare</i>", STILE_VOCE),
-            ]
-        tabella_righe.append(cella)
+        ])
 
-    colonne = COLONNE_MAT_PREZZI if con_prezzi else COLONNE_MAT_NUDE
     stile = [
         ("BACKGROUND", (0, 0), (-1, 0), ARDESIA),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#D6D2C8")),
     ]
-    if con_prezzi:
-        calcolate = mod_materiali.calcola_elenco(righe)
-        tabella_righe.append([
-            Paragraph(f"Totale {capitolo.lower()}", STILE_CATEGORIA),
-            "", "", "",
-            Paragraph(f"<b>{euro(mod_materiali.totale(calcolate))}</b>",
-                      STILE_VOCE)])
-        stile += [("SPAN", (0, -1), (3, -1)),
-                  ("LINEABOVE", (0, -1), (-1, -1), 0.75, OTTONE),
-                  ("LINEBELOW", (0, -1), (-1, -1), 0, colors.white)]
-    for i in range(1, len(tabella_righe) - (1 if con_prezzi else 0)):
+    for i in range(1, len(tabella_righe)):
         if i % 2 == 0:
             stile.append(("BACKGROUND", (0, i), (-1, i), RIGA_ALTERNA))
-    tabella = Table(tabella_righe, colWidths=colonne, repeatRows=1)
+    tabella = Table(tabella_righe, colWidths=COLONNE_MAT, repeatRows=1)
     tabella.setStyle(TableStyle(stile))
     return [Paragraph(capitolo.upper(), STILE_ETICHETTA), Spacer(1, 1.5 * mm),
             tabella, Spacer(1, 5 * mm)]
 
 
-def pdf_materiali(progetto, righe, con_prezzi=False):
+def pdf_materiali(progetto, righe):
     """L'allegato dei materiali a cura del committente. Ritorna i byte.
 
     progetto: {"nome", "committente", "oggetto", "data", "luogo"}.
-    righe: [{"capitolo", "descrizione", "um", "quantita", "prezzo",
-        "note"}] — già calcolate (`materiali.calcola_elenco`) se si vogliono
-        i prezzi.
-    con_prezzi: **falso per difetto**, ed è il caso normale. Il foglio che
-        si firma con l'impresa elenca le forniture, non quanto le paghi: è
-        così che è fatto l'allegato vero. La copia coi prezzi serve a te,
-        per sapere quanto stai spendendo — e infatti porta anche il conto di
-        quante voci un prezzo non ce l'hanno ancora.
+    righe: [{"capitolo", "descrizione", "um", "quantita", "note"}].
+        Fornitore, link e stato dell'ordine ci sono nei dati ma **non nel
+        documento**: sono appunti di chi compra, e questo foglio lo firma
+        l'impresa.
+
+    Un documento solo, senza prezzi, perché così è il foglio vero: elenca le
+    forniture che restano fuori dall'appalto, non quanto costano.
     """
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
         buffer, pagesize=A4,
         leftMargin=MARGINE, rightMargin=MARGINE,
         topMargin=MARGINE, bottomMargin=20 * mm,
-        title=("Allegato materiali" + (" (con prezzi)" if con_prezzi else "")
-               + f" — {progetto.get('nome') or 'senza nome'}"),
+        title=f"Allegato materiali — {progetto.get('nome') or 'senza nome'}",
         author="CME — Computo Metrico Estimativo",
     )
     documento.titolo_corrente = str(progetto.get("nome")
@@ -485,44 +457,14 @@ def pdf_materiali(progetto, righe, con_prezzi=False):
         progetto, titolo="Elenco materiali acquistati cura Committente",
         occhiello="Allegato 1 al computo metrico")
 
-    note = mod_materiali.note_numerate(righe)
+    note = note_numerate(righe)
     marcatori = {id(n["riga"]): n["marcatore"] for n in note}
-    gruppi = mod_materiali.raggruppa_per_capitolo(righe)
+    gruppi = raggruppa_per_capitolo(righe)
     if not gruppi:
         elementi.append(Paragraph("Nessun materiale elencato.", STILE_NOTA))
     for capitolo, righe_capitolo in gruppi.items():
-        elementi.extend(_tabella_capitolo(
-            capitolo, righe_capitolo, con_prezzi, marcatori))
-
-    if con_prezzi:
-        calcolate = mod_materiali.calcola_elenco(righe)
-        mancanti = mod_materiali.da_quotare(calcolate)
-        righe_conto = [[
-            Paragraph("TOTALE MATERIALI (IVA esclusa)", STILE_CATEGORIA),
-            Paragraph(euro(mod_materiali.totale(calcolate)), STILE_TOTALE)]]
-        # 60 mm mandavano «(IVA esclusa)» a capo, sotto la parola che
-        # qualifica: la stessa trappola già presa dai totali del computo.
-        tabella = Table(righe_conto, colWidths=[66 * mm, 34 * mm],
-                        hAlign="RIGHT")
-        tabella.setStyle(TableStyle([
-            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LINEABOVE", (0, 0), (-1, 0), 1, OTTONE),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F0E9DA")),
-        ]))
-        elementi.append(tabella)
-        if mancanti:
-            # Il totale è parziale e deve dirlo accanto a sé, non in fondo
-            # alla pagina: chi legge la cifra deve leggere anche quanto le
-            # manca per essere vera.
-            elementi.append(Spacer(1, 2 * mm))
-            voci = "voce" if mancanti == 1 else "voci"
-            elementi.append(Paragraph(
-                f"Totale parziale: {mancanti} {voci} senza prezzo.",
-                ParagraphStyle("parziale", parent=STILE_NOTA,
-                               alignment=TA_RIGHT)))
+        elementi.extend(_tabella_capitolo(capitolo, righe_capitolo,
+                                          marcatori))
 
     if note:
         elementi.append(Spacer(1, 4 * mm))

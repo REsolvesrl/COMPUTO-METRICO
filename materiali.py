@@ -3,29 +3,26 @@
 In cantiere questo foglio esiste già, ed è un documento firmato: «ALLEGATO 1
 COMPUTO METRICO — Elenco materiali acquistati cura Committente», sottoscritto
 per accettazione dalle due parti. Serve a segnare il confine dell'appalto:
-quello che c'è scritto qui l'impresa non lo fornisce e non lo mette a
+quello che c'è scritto lì l'impresa non lo fornisce e non lo mette a
 preventivo. Da lì viene tutto quello che c'è in questo modulo.
 
-- **Il prezzo non è obbligatorio.** Sull'allegato firmato non c'era nessun
-  prezzo: è un elenco di cose, e il conto viene dopo, quando si va a
-  comprare. Una riga senza prezzo è una riga buona — e il totale che la
-  ignora deve DIRLO. Un totale che tace le voci ancora da quotare è un
-  totale che mente, e qui si mentirebbe verso il basso: la cifra sembra
-  buona proprio finché mancano i pezzi più cari.
-- **La quantità che manca vale 1.** Il box doccia è uno, e chi scrive «BOX
-  DOCCIA — 450 €» ha già detto tutto. È la stessa convenzione delle
-  dimensioni non compilate nel computo (`calcoli.quantita_voce`): quel che
-  non si scrive non conta, non azzera.
-- **I capitoli sono quelli del foglio**, nell'ordine in cui li scrive: bagno,
-  porte e infissi, impianto elettrico, muratura, pavimenti, riscaldamento.
-  **Non** sono i sette mestieri del computo, e non devono diventarlo: «BAGNO»
-  è una stanza, non un mestiere. Questo elenco lo legge chi va a comprare —
-  che ragiona per stanze e per fornitori — non chi posa.
+**Qui dentro non ci sono soldi, ed è una scelta.** L'allegato firmato di
+prezzi non ne porta nemmeno uno: è un elenco di cose da comprare, e il
+confine che traccia è di forniture, non di importi. I soldi dei materiali
+vivono già altrove e con più verità — nel registro delle spese a consuntivo,
+dove arrivano dalle fatture vere, e fra le «spese da sostenere» quando sono
+ancora un budget. Tenerne una seconda contabilità qui vorrebbe dire due
+numeri per la stessa cosa, e prima o poi due numeri diversi.
 
-Questi importi **non entrano nel totale dei lavori**: sono soldi che escono
-dalla tua tasca, non dalla fattura dell'impresa, e il computo che va in gara
-non deve vederli. Entrano invece nel costo dell'operazione, ed è nel business
-plan che si ritrovano.
+Quello che invece serve mentre si compra: **da chi** (il fornitore), **dove**
+(il link del negozio, per ritrovare quel modello esatto sei mesi dopo) e **a
+che punto è** l'ordine.
+
+I **capitoli** sono quelli del foglio, nel suo ordine: bagno, porte e infissi,
+impianto elettrico, muratura, pavimenti, riscaldamento. **Non** sono i sette
+mestieri del computo, e non devono diventarlo: «BAGNO» è una stanza, non un
+mestiere. Questo elenco lo legge chi va a comprare — che ragiona per stanze e
+per fornitori — non chi posa.
 
 Solo funzioni pure: niente Streamlit, niente pandas.
 """
@@ -49,92 +46,119 @@ CAPITOLI = [
 
 CAPITOLO_PREDEFINITO = CAPITOLI[-1]
 
-# Dove sta la spesa, non com'è fatta la cosa. Tre stati e basta: il quarto
+# Dove sta l'acquisto, non com'è fatta la cosa. Tre stati e basta: il quarto
 # («pagato») sarebbe la fattura, e la fattura ha già il suo registro nelle
 # spese a consuntivo — due posti dove segnare lo stesso pagamento sono un
 # posto di troppo.
 STATI = ["Da ordinare", "Ordinato", "Consegnato"]
 STATO_PREDEFINITO = STATI[0]
 
+# La nota dell'allegato vero, attaccata alla riga del clima canalizzato.
+NOTA_CLIMA = ("Si fornisce inoltre: plenum coibentato, collarini, bocchette "
+              "mandata, griglia di ripresa, fascette stringitubo, eventuale "
+              "termostato.")
 
-def calcola_riga(riga):
-    """Copia della riga con «importo» calcolato.
+# ---------------------------------------------------------------------------
+# L'elenco standard: le voci dell'allegato del cantiere di Migliarina, che si
+# comprano su ogni ristrutturazione di questo tipo. Un progetto nuovo nasce
+# con queste già in tabella — «tanto quelle vanno sicuramente acquistate» —
+# e si toglie quel che su questo cantiere non serve, invece di riscrivere
+# trenta righe ogni volta.
+#
+# ⚠️ Non è un listino di prezzi e non deve diventarlo: sono NOMI di cose. Il
+# modello preciso, il fornitore e il link li mette chi compra, cantiere per
+# cantiere, perché cambiano tutti e tre a ogni giro.
+# ---------------------------------------------------------------------------
+ELENCO_STANDARD = [
+    ("BAGNO", "PIATTO DOCCIA", ""),
+    ("BAGNO", "BOX DOCCIA", ""),
+    ("BAGNO", "MOBILE BAGNO + SPECCHIO + APPLIQUE", ""),
+    ("BAGNO", "LAVABO D'APPOGGIO", ""),
+    ("BAGNO", "PILETTA LAVABO E BIDET", ""),
+    ("BAGNO", "SIFONE LAVABO", ""),
+    ("BAGNO", "TERMOARREDO ELETTRICO", ""),
+    ("BAGNO", "MISCELATORE LAVABO E BIDET", ""),
+    ("BAGNO", "SET MISCELATORE DOCCIA", ""),
+    ("BAGNO", "BOILER ELETTRICO", ""),
+    ("BAGNO", "COPPIA DI SANITARI FILOMURO (CON SEDILE)", ""),
+    ("BAGNO", "PLACCA WC", ""),
+    ("BAGNO", "CASSETTA DI SCARICO", ""),
+    ("PORTE E INFISSI", "PORTE A BATTENTE / SCRIGNO", ""),
+    ("PORTE E INFISSI", "MANIGLIE", ""),
+    ("PORTE E INFISSI", "CONTROTELAI PORTE INTERNE", ""),
+    ("PORTE E INFISSI", "PORTE BLINDATE E CONTROTELAIO", ""),
+    ("PORTE E INFISSI", "FINESTRE", ""),
+    ("PORTE E INFISSI", "TAPPARELLE COMPRESO KIT DOVE NECESSARIO", ""),
+    ("IMPIANTO ELETTRICO", "CITOFONO", ""),
+    ("IMPIANTO ELETTRICO", "FRUTTI", ""),
+    ("IMPIANTO ELETTRICO", "PLACCHE", ""),
+    ("IMPIANTO ELETTRICO", "SUPPORTI", ""),
+    ("IMPIANTO ELETTRICO", "STRISCE LED / FARETTI CARTONGESSO", ""),
+    ("MURATURA", "LANA DI ROCCIA", ""),
+    ("MURATURA", "PANNELLI FONOASSORBENTI (ES. GOMMAPIOMBO)", ""),
+    ("PAVIMENTI", "PAVIMENTO/RIVESTIMENTO GRES", ""),
+    ("IMPIANTO RISCALDAMENTO", "UNITÀ INTERNA + ESTERNA CLIMA CANALIZZATO",
+     NOTA_CLIMA),
+    ("IMPIANTO RISCALDAMENTO", "CLIMATIZZATORE MOD. UNICO TWIN", ""),
+]
 
-    L'importo è `quantità × prezzo`, con la quantità mancante che vale 1.
-    Se il prezzo manca l'importo è **None**, non zero: quella riga un
-    importo non ce l'ha ancora, e uno zero la conterebbe come gratis.
+
+def riga_vuota(capitolo=CAPITOLO_PREDEFINITO, descrizione="", note=""):
+    """Una riga completa di tutti i suoi campi, con i valori di partenza."""
+    return {
+        "capitolo": capitolo,
+        "descrizione": descrizione,
+        "um": "",
+        "quantita": None,
+        "fornitore": "",
+        "link": "",
+        "stato": STATO_PREDEFINITO,
+        "note": note,
+    }
+
+
+def elenco_standard():
+    """L'elenco di partenza, come righe nuove e indipendenti.
+
+    Copie fresche a ogni chiamata: se restituisse i dizionari del modulo,
+    modificarne uno in un progetto lo cambierebbe per tutti i successivi.
     """
-    esito = dict(riga)
-    quantita = riga.get("quantita")
-    prezzo = riga.get("prezzo")
-    esito["quantita"] = (None if quantita is None
-                         else round(float(quantita), 3))
-    if prezzo is None:
-        esito["importo"] = None
-    else:
-        pezzi = 1.0 if quantita is None else float(quantita)
-        esito["importo"] = round(pezzi * float(prezzo), 2)
-    return esito
+    return [riga_vuota(capitolo, descrizione, note)
+            for capitolo, descrizione, note in ELENCO_STANDARD]
 
 
-def calcola_elenco(righe):
-    """Ogni riga con il suo importo."""
-    return [calcola_riga(riga) for riga in righe or []]
+def _conta_per(righe, chiave, ordine, predefinito):
+    """Quante voci per capitolo (o per stato), nell'ordine di riferimento.
 
-
-def totale(righe_calcolate):
-    """Quanto costa quello che un prezzo ce l'ha già.
-
-    Le righe ancora da quotare non entrano — vanno contate a parte con
-    `da_quotare`, e chi mostra questo numero deve mostrare anche quello.
+    Quello che non sta nell'elenco di riferimento — un capitolo scritto a
+    mano, o arrivato da un progetto vecchio — va in coda invece che sparire.
     """
-    return round(sum(float(r["importo"]) for r in righe_calcolate or []
-                     if r.get("importo") is not None), 2)
-
-
-def da_quotare(righe_calcolate):
-    """Quante righe non hanno ancora un prezzo."""
-    return sum(1 for r in righe_calcolate or [] if r.get("importo") is None)
-
-
-def _somma_per(righe_calcolate, chiave, ordine, predefinito):
-    """Aggrega gli importi per uno dei due campi di classificazione.
-
-    L'ordine è quello dell'elenco di riferimento; quello che non ci sta —
-    un capitolo scritto a mano in un progetto vecchio — va in coda, nel
-    suo ordine di comparsa. Le righe senza prezzo contano come voce ma
-    non come importo: un capitolo con tre cose e nessun prezzo esiste, e
-    deve comparire col suo zero e il suo «3 da quotare».
-    """
-    agg = {}
-    for riga in righe_calcolate or []:
+    conti = {}
+    for riga in righe or []:
         valore = (riga.get(chiave) or "").strip() or predefinito
-        voce = agg.setdefault(valore, {"importo": 0.0, "voci": 0,
-                                       "da_quotare": 0})
-        voce["voci"] += 1
-        if riga.get("importo") is None:
-            voce["da_quotare"] += 1
-        else:
-            voce["importo"] += float(riga["importo"])
+        conti[valore] = conti.get(valore, 0) + 1
     posizione = {v: i for i, v in enumerate(ordine)}
-    chiavi = sorted(agg, key=lambda v: posizione.get(v, len(posizione)))
-    return {v: {**agg[v], "importo": round(agg[v]["importo"], 2)}
-            for v in chiavi}
+    return {v: conti[v]
+            for v in sorted(conti, key=lambda v: posizione.get(v,
+                                                              len(posizione)))}
 
 
-def totali_per_capitolo(righe_calcolate):
-    """{capitolo: {'importo', 'voci', 'da_quotare'}}, nell'ordine dei capitoli."""
-    return _somma_per(righe_calcolate, "capitolo", CAPITOLI,
-                      CAPITOLO_PREDEFINITO)
+def conteggi_per_capitolo(righe):
+    """{capitolo: quante voci}, nell'ordine dei capitoli."""
+    return _conta_per(righe, "capitolo", CAPITOLI, CAPITOLO_PREDEFINITO)
 
 
-def totali_per_stato(righe_calcolate):
-    """{stato: {'importo', 'voci', 'da_quotare'}} — a che punto è la spesa.
+def conteggi_per_stato(righe):
+    """{stato: quante voci} — a che punto è la spesa.
 
-    È il numero per cui esiste la colonna: quanto hai già impegnato e
-    quanto ti resta da ordinare.
+    È il numero per cui esiste la colonna: quante cose devi ancora ordinare.
     """
-    return _somma_per(righe_calcolate, "stato", STATI, STATO_PREDEFINITO)
+    return _conta_per(righe, "stato", STATI, STATO_PREDEFINITO)
+
+
+def quante_da_ordinare(righe):
+    """Le voci ancora da ordinare: il numero che dice se sei in ritardo."""
+    return conteggi_per_stato(righe).get(STATO_PREDEFINITO, 0)
 
 
 def raggruppa_per_capitolo(righe):

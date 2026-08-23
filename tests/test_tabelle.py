@@ -156,29 +156,36 @@ def test_materiali_vuoto_ha_le_colonne_e_i_tipi_giusti():
     df = tabelle.df_materiali_vuoto()
     assert list(df.columns) == tabelle.COLONNE_MATERIALI
     assert df["descrizione"].dtype == object
-    assert df["prezzo"].dtype == "float64"
+    assert df["quantita"].dtype == "float64"
     assert len(df) == 0
 
 
+def test_materiali_non_ha_nessuna_colonna_di_soldi():
+    """I prezzi dei materiali stanno nel registro spese, dove arrivano
+    dalle fatture: una colonna di euro qui sarebbe un secondo numero per
+    la stessa cosa."""
+    assert "prezzo" not in tabelle.COLONNE_MATERIALI
+    assert "importo" not in tabelle.COLONNE_MATERIALI
+
+
 def test_materiali_e_la_descrizione_a_fare_la_riga():
-    """L'allegato firmato e' un elenco di NOMI: di prezzi non ne ha nemmeno
-    uno, e pretenderne uno butterebbe via l'intero documento."""
+    """L'allegato firmato e' un elenco di NOMI: e' il nome che fa la voce,
+    non un numero da qualche parte."""
     df = tabelle.df_materiali_da_righe([
         {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA"},
-        {"capitolo": "BAGNO", "descrizione": "", "prezzo": 100.0},
+        {"capitolo": "BAGNO", "descrizione": "", "fornitore": "Rossi"},
     ])
     righe = tabelle.materiali_da_df(df)
     assert len(righe) == 1
     assert righe[0]["descrizione"] == "BOX DOCCIA"
 
 
-def test_materiali_prezzo_e_quantita_vuoti_restano_None():
-    """Uno zero direbbe «gratis» e si sommerebbe agli altri."""
+def test_materiali_quantita_vuota_resta_None():
+    """Uno zero direbbe «nessuno», che su una lista della spesa e' il
+    contrario di «quante non l'ho ancora deciso»."""
     df = tabelle.df_materiali_da_righe(
-        [{"descrizione": "BOX DOCCIA", "quantita": None, "prezzo": None}])
-    riga = tabelle.materiali_da_df(df)[0]
-    assert riga["prezzo"] is None
-    assert riga["quantita"] is None
+        [{"descrizione": "BOX DOCCIA", "quantita": None}])
+    assert tabelle.materiali_da_df(df)[0]["quantita"] is None
 
 
 def test_materiali_capitolo_e_stato_vuoti_non_sono_stringa_vuota():
@@ -198,18 +205,18 @@ def test_materiali_i_predefiniti_arrivano_al_salvataggio():
 
 def test_materiali_giro_completo():
     partenza = [{"capitolo": "PAVIMENTI", "descrizione": "GRES", "um": "m²",
-                 "quantita": 94.71, "prezzo": 22.0, "fornitore": "Rossi",
+                 "quantita": 94.71, "fornitore": "Rossi",
+                 "link": "https://esempio.it/gres-60x60",
                  "stato": "Consegnato", "note": "posa a correre"}]
     assert tabelle.materiali_da_df(
         tabelle.df_materiali_da_righe(partenza)) == partenza
 
 
-def test_senza_importo_derivato_toglie_la_colonna_calcolata():
-    df = tabelle.df_materiali_da_righe([{"descrizione": "GRES",
-                                         "prezzo": 22.0}])
-    df[tabelle.COLONNA_IMPORTO_MAT] = [22.0]
-    assert tabelle.COLONNA_IMPORTO_MAT not in tabelle.senza_importo_derivato(
-        df).columns
+def test_l_elenco_standard_passa_dalla_tabella_senza_perdersi():
+    """E' il giro che fa un progetto nuovo: elenco → tabella → dati."""
+    standard = materiali.elenco_standard()
+    assert tabelle.materiali_da_df(
+        tabelle.df_materiali_da_righe(standard)) == standard
 
 
 # ------------------------------------------------------- comparabili (MCA)

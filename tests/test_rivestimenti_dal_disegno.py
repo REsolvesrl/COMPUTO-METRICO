@@ -39,7 +39,6 @@ def _progetto(rivestito, riv_porte=1, riv_finestre=0):
     quadrato = [[0.0, 0.0], [LATO_PX, 0.0], [LATO_PX, LATO_PX],
                 [0.0, LATO_PX]]
     return {
-        "versione_codici": 2,
         "progetto": {"nome": "Bagno", "committente": "", "oggetto": "",
                      "data": "2026-08-21", "aliquota_iva": 10.0},
         "voci": [], "business_plan": {},

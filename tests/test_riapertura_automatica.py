@@ -32,7 +32,6 @@ def _avvia():
 
 def _progetto(nome, quantita):
     return {
-        "versione_codici": 2,
         "progetto": {"nome": nome, "committente": "", "oggetto": "",
                      "data": "2026-08-11", "aliquota_iva": 10.0,
                      "imprevisti": 10.0},

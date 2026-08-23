@@ -1,15 +1,15 @@
-"""La sottosezione «Materiali» dentro la scheda Computo.
+"""La linguetta «Materiali» dentro la scheda Computo.
 
-Qui non si prova l'aritmetica — quella sta in test_materiali.py — ma il
-confine, che è la cosa per cui la sezione esiste: i materiali a cura del
-committente **non** devono entrare nel totale dei lavori né nel contratto
-d'appalto, e **devono** entrare nel costo dell'operazione. Sono due errori
-speculari, tutti e due silenziosi: nel primo caso si chiede a un'impresa il
-prezzo di roba che compri tu, nel secondo si crede di aver speso meno di
-quanto si è speso.
+Qui non si prova il modulo puro — quello sta in test_materiali.py — ma le
+tre cose che vivono solo nell'interfaccia e che, se si rompono, si rompono
+in silenzio:
 
-Girano sull'app vera con AppTest: il confine vive nell'interfaccia, e le
-funzioni pure da sole non lo dimostrerebbero.
+- l'elenco **nasce pieno** delle voci standard, e un progetto che l'ha
+  svuotato **deve restare svuotato** quando lo riapri;
+- il computo non deve accorgersi che questa sezione esiste: il totale dei
+  lavori e il contratto d'appalto restano quello che si firma con l'impresa;
+- fornitore e link si salvano, perché sono la ragione per cui uno riempie
+  la tabella invece di tenere l'elenco su un foglio.
 """
 import json
 from pathlib import Path
@@ -17,23 +17,29 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+import listino
 import materiali
 import tabelle
 
 SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 
+# Una voce di computo qualsiasi, presa dal listino invece che scritta a mano:
+# i codici sono già stati rinumerati una volta, e un test che ne inchioda uno
+# si rompe alla prossima — su un difetto che col computo non c'entra nulla.
+VOCE = next(v for v in listino.VOCI if v["categoria"] == "Demolizioni")
+
 ELENCO = [
     {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA", "um": "cad",
-     "quantita": 1.0, "prezzo": 320.0, "fornitore": "Ceramiche Rossi",
-     "stato": "Ordinato", "note": ""},
+     "quantita": 1.0, "fornitore": "Ceramiche Rossi",
+     "link": "https://esempio.it/piatto-doccia", "stato": "Ordinato",
+     "note": ""},
     {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA", "um": "cad",
-     "quantita": None, "prezzo": None, "fornitore": "", "stato": "Da ordinare",
+     "quantita": None, "fornitore": "", "link": "", "stato": "Da ordinare",
      "note": ""},
     {"capitolo": "PAVIMENTI", "descrizione": "GRES 60x60", "um": "m²",
-     "quantita": 100.0, "prezzo": 22.0, "fornitore": "", "stato": "Consegnato",
+     "quantita": 100.0, "fornitore": "", "link": "", "stato": "Consegnato",
      "note": "posa a correre"},
 ]
-TOTALE_ELENCO = 320.0 + 2200.0          # il box doccia non ha prezzo
 
 
 def _avvia(**stato):
@@ -56,76 +62,73 @@ def _testi(at):
     return "\n".join(pezzi)
 
 
-@pytest.fixture(scope="module")
-def con_materiali():
-    """Un computo con una voce e un elenco materiali accanto."""
-    at = AppTest.from_file(str(SORGENTE), default_timeout=300)
-    at.run()
-    at.session_state["pool_aperte"] = {"Demolizioni"}
-    at.run()
-    at.button(key="prendi_2.2").click().run()
-    at.session_state["q_2.2"] = 10.0
-    at.session_state["p_2.2"] = 100.0
-    at.session_state["df_materiali"] = tabelle.df_materiali_da_righe(ELENCO)
-    at.run()
+def _materiali(at):
+    return tabelle.materiali_da_df(at.session_state["df_materiali"])
+
+
+# ------------------------------------------------- l'elenco di partenza
+
+def test_una_sessione_nuova_nasce_con_l_elenco_standard():
+    """«Tanto quelle vanno sicuramente acquistate»: si sfoltisce un elenco,
+    non se ne riscrive uno da capo trenta righe per volta."""
+    at = _avvia()
+    assert _materiali(at) == materiali.elenco_standard()
+
+
+def test_le_voci_del_foglio_firmato_sono_a_video():
+    at = _avvia()
+    metriche = {m.label: m.value for m in at.metric}
+    assert metriche["Voci in elenco"] == str(len(materiali.ELENCO_STANDARD))
+    assert metriche["Da ordinare"] == str(len(materiali.ELENCO_STANDARD))
+
+
+def test_i_conteggi_per_stato_seguono_la_tabella():
+    at = _avvia(df_materiali=tabelle.df_materiali_da_righe(ELENCO))
+    metriche = {m.label: m.value for m in at.metric}
+    assert metriche["Voci in elenco"] == "3"
+    assert metriche["Da ordinare"] == "1"
+    assert metriche["Ordinato"] == "1"
+    assert metriche["Consegnato"] == "1"
+
+
+def test_a_elenco_svuotato_c_e_lo_stato_vuoto():
+    at = _avvia(df_materiali=tabelle.df_materiali_vuoto())
+    assert "Nessun materiale in elenco" in _testi(at)
+
+
+def test_il_bottone_rimette_le_voci_mancanti_senza_toccare_le_tue():
+    """Aggiunge e basta: l'elenco svuotato per sbaglio si recupera, e
+    quello che hai scritto tu non si perde per strada."""
+    at = _avvia(df_materiali=tabelle.df_materiali_da_righe([
+        {"capitolo": "CUCINA", "descrizione": "CUCINA SU MISURA",
+         "fornitore": "Falegnameria Bianchi"}]))
+    at.button(key="ripristina_materiali").click().run()
     assert not at.exception, [e.value for e in at.exception]
-    return at
+    righe = _materiali(at)
+    mia = [r for r in righe if r["descrizione"] == "CUCINA SU MISURA"]
+    assert mia and mia[0]["fornitore"] == "Falegnameria Bianchi"
+    assert len(righe) == len(materiali.ELENCO_STANDARD) + 1
+
+
+def test_il_bottone_non_duplica_quello_che_c_e_gia():
+    at = _avvia()
+    at.button(key="ripristina_materiali").click().run()
+    assert len(_materiali(at)) == len(materiali.ELENCO_STANDARD)
+    assert "è già tutto in tabella" in _testi(at)
 
 
 # --------------------------------------------------------------- il confine
 
-def test_i_materiali_non_entrano_nel_totale_dei_lavori(con_materiali):
-    """È tutta la ragione della sezione: il computo è il documento
-    dell'impresa, e questi soldi dalla sua fattura non passano."""
-    metriche = {m.label: m.value for m in con_materiali.metric}
-    assert metriche["Totale lavori (IVA esclusa)"] == "1.000,00 €"
-
-
-def test_il_totale_materiali_sta_per_conto_suo(con_materiali):
-    metriche = {m.label: m.value for m in con_materiali.metric}
-    assert metriche["Totale materiali (IVA esclusa)"] == "2.520,00 €"
-
-
-def test_la_sezione_dice_quante_voci_sono_ancora_da_quotare(con_materiali):
-    """Un totale che tace i pezzi non quotati mente verso il basso, e lo fa
-    proprio finché mancano quelli più cari."""
-    testo = _testi(con_materiali)
-    assert "1 voce senza prezzo" in testo
-    assert "parziale" in testo
-
-
-def test_la_sezione_tira_la_somma_dell_intervento(con_materiali):
-    testo = _testi(con_materiali)
-    assert "intervento completo 3.520,00 €" in testo
-
-
-def test_lo_stato_dell_acquisto_si_vede(con_materiali):
-    """È il numero per cui esiste la colonna: quanto hai già impegnato."""
-    metriche = {m.label: m.value for m in con_materiali.metric}
-    assert metriche["Ordinato"] == "320,00 €"
-    assert metriche["Consegnato"] == "2.200,00 €"
-    assert metriche["Da ordinare"] == "0,00 €"
-
-
-def test_a_elenco_vuoto_c_e_lo_stato_vuoto_e_non_i_totali():
-    at = _avvia()
-    testo = _testi(at)
-    assert "Nessun materiale in elenco" in testo
-    assert "Totale materiali" not in testo
-
-
-# ------------------------------------------- il costo dell'operazione
-
 @pytest.fixture(scope="module")
-def con_consuntivo():
-    """Come sopra, più una fattura di cantiere: apre il confronto."""
+def con_computo():
+    """Una voce di computo accanto all'elenco dei materiali."""
     at = AppTest.from_file(str(SORGENTE), default_timeout=300)
     at.run()
     at.session_state["pool_aperte"] = {"Demolizioni"}
     at.run()
-    at.button(key="prendi_2.2").click().run()
-    at.session_state["q_2.2"] = 10.0
-    at.session_state["p_2.2"] = 100.0
+    at.button(key=f"prendi_{VOCE['codice']}").click().run()
+    at.session_state[f"q_{VOCE['codice']}"] = 10.0
+    at.session_state[f"p_{VOCE['codice']}"] = 100.0
     at.session_state["df_materiali"] = tabelle.df_materiali_da_righe(ELENCO)
     at.session_state["df_spese"] = tabelle.df_spese_da_righe(
         [{"importo": 1000.0, "aliquota_iva": 10.0, "categoria": "LAVORI",
@@ -135,23 +138,30 @@ def con_consuntivo():
     return at
 
 
-def test_il_preventivo_del_confronto_comprende_i_materiali(con_consuntivo):
-    """L'operazione li paga, e il consuntivo li conta già: le spese
-    MATERIALE stanno in CATEGORIE_CANTIERE. Senza l'allegato dall'altra
-    parte, ogni cantiere in cui le finiture le compri tu risultava sforato
-    del loro intero importo — uno sforamento che non c'è mai stato."""
-    metriche = {m.label: m.value for m in con_consuntivo.metric}
-    assert metriche["Preventivo (computo + materiali)"] == "3.520,00 €"
+def test_il_totale_dei_lavori_resta_quello_del_computo(con_computo):
+    """È tutta la ragione della sezione: il computo è il documento
+    dell'impresa, e questa roba dalla sua fattura non passa."""
+    metriche = {m.label: m.value for m in con_computo.metric}
+    assert metriche["Totale lavori (IVA esclusa)"] == "1.000,00 €"
 
 
-def test_il_contratto_d_appalto_resta_il_computo_nudo(con_consuntivo):
-    """Il bottone che riempie l'importo di contratto propone quello che
-    firmi con l'IMPRESA: metterci i materiali a cura tua cancellerebbe con
-    un clic il confine che l'allegato traccia."""
-    bottoni = [b for b in con_consuntivo.button
-               if b.key == "cant_da_computo"]
+def test_il_preventivo_del_confronto_resta_il_computo(con_computo):
+    """L'elenco materiali non porta prezzi: nel business plan non ha
+    niente da aggiungere, e la scheda non deve fingere di sì."""
+    metriche = {m.label: m.value for m in con_computo.metric}
+    assert metriche["Preventivo (computo)"] == "1.000,00 €"
+
+
+def test_il_contratto_d_appalto_e_il_computo_nudo(con_computo):
+    bottoni = [b for b in con_computo.button if b.key == "cant_da_computo"]
     assert bottoni, "il bottone del contratto non c'è"
     assert bottoni[0].label == "Usa il computo: 1.000,00 €"
+
+
+def test_la_scheda_avverte_di_dove_mettere_il_budget_materiali(con_computo):
+    """Il confronto col cantiere conta le spese MATERIALE da una parte e
+    non dall'altra: se non lo dice, sembra uno sforamento."""
+    assert "spese da sostenere" in _testi(con_computo)
 
 
 # ------------------------------------------------- salvataggio e riapertura
@@ -196,6 +206,15 @@ def test_il_file_salvato_contiene_i_materiali(giro):
     assert salvato["materiali"] == ELENCO
 
 
+def test_fornitore_e_link_si_salvano(giro):
+    """Sono la ragione per cui uno riempie la tabella invece di tenere
+    l'elenco su un foglio: sei mesi dopo si torna su QUEL modello."""
+    salvato, _ = giro
+    piatto = salvato["materiali"][0]
+    assert piatto["fornitore"] == "Ceramiche Rossi"
+    assert piatto["link"] == "https://esempio.it/piatto-doccia"
+
+
 def test_i_materiali_non_finiscono_fra_le_voci_del_computo(giro):
     """Un elenco a parte deve restare a parte anche nel file: se finissero
     in «voci» rientrerebbero dalla finestra nei totali del computo."""
@@ -211,25 +230,29 @@ def test_il_luogo_della_firma_si_salva(giro):
 
 def test_riaprendo_i_materiali_tornano(giro):
     _, riaperta = giro
-    righe = tabelle.materiali_da_df(riaperta.session_state["df_materiali"])
-    assert righe == ELENCO
+    assert _materiali(riaperta) == ELENCO
     assert riaperta.session_state["prg_luogo"] == "La Spezia"
 
 
-def test_un_progetto_senza_materiali_si_riapre_lo_stesso():
-    """I salvataggi fatti prima non hanno la chiave: la tabella nasce
-    vuota e il computo resta identico a com'era."""
+def test_un_progetto_svuotato_resta_svuotato():
+    """ASSENTE e VUOTO sono due cose diverse: `[]` vuol dire che l'utente
+    l'elenco l'ha tolto, e rimetterglielo a ogni riapertura sarebbe
+    disfargli il lavoro."""
+    at = AppTest.from_file(str(SORGENTE), default_timeout=300)
+    at.run()
+    at.session_state["da_caricare"] = {"progetto": {"nome": "Spoglio"},
+                                       "materiali": []}
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert _materiali(at) == []
+
+
+def test_un_progetto_vecchio_riceve_l_elenco_standard():
+    """Salvato prima che questa sezione esistesse: la chiave non c'è
+    proprio, e quelle voci servivano anche a lui."""
     at = AppTest.from_file(str(SORGENTE), default_timeout=300)
     at.run()
     at.session_state["da_caricare"] = {"progetto": {"nome": "Vecchio"}}
     at.run()
     assert not at.exception, [e.value for e in at.exception]
-    assert tabelle.materiali_da_df(at.session_state["df_materiali"]) == []
-
-
-def test_materiali_e_totale_restano_allineati():
-    """La somma della sezione è la stessa che il modulo puro calcola: se
-    un giorno divergessero, la scheda direbbe un numero e l'allegato un
-    altro."""
-    calcolate = materiali.calcola_elenco(ELENCO)
-    assert materiali.totale(calcolate) == TOTALE_ELENCO
+    assert _materiali(at) == materiali.elenco_standard()
