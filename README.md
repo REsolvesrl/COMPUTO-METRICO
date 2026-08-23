@@ -104,6 +104,16 @@ Dalla cartella `CME`, nel terminale:
 python -m pytest
 ```
 
+Girano **in parallelo sui core della macchina** (`pytest-xdist`, già
+configurato in `pytest.ini`): sono poco più di cinquecento e un terzo avvia
+l'app intera, quindi in fila richiederebbero quattro minuti contro il minuto
+scarso che ci mettono così. Per lanciarne uno solo e leggerne l'output senza
+che si mescoli a quello degli altri, `-n 0` li rimette in fila:
+
+```
+python -m pytest -n 0 tests/test_calcoli.py
+```
+
 ## Salvataggio del lavoro
 
 Il bottone **Salva progetto (.json)** scarica un file con tutto il progetto:
