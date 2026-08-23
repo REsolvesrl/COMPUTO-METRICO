@@ -11,11 +11,13 @@ App web per il settore edile, live su
   scrivono a mano, scegliendo la categoria (il codice lo mette l'app).
   Totali per categoria con incidenze percentuali,
   **imprevisti %** e IVA, salvataggio del lavoro ed export in Excel/CSV.
-- **Materiali a cura del Committente**: la sottosezione del computo con
-  quello che compri tu e l'impresa non fornisce, per capitoli (bagno, porte
-  e infissi, impianto elettrico, muratura, pavimenti, riscaldamento…). Ne
-  esce l'**Allegato 1** in PDF da firmare con l'impresa — senza prezzi,
-  com'è il foglio vero — e una copia coi prezzi per te.
+- **Materiali a cura del Committente**: la seconda linguetta della scheda
+  Computo, con quello che compri tu e l'impresa non fornisce, per capitoli
+  (bagno, porte e infissi, impianto elettrico, muratura, pavimenti,
+  riscaldamento…). L'elenco nasce già pieno delle cose che si comprano su
+  ogni cantiere; accanto a ognuna ci sono **fornitore**, **link** del
+  negozio e **stato** dell'ordine. Ne esce l'**Allegato 1** in PDF da
+  firmare con l'impresa.
 - **Misura da planimetria** (stile AreaPlan): più planimetrie per progetto,
   zone colorate per categoria con percentuale commerciale, scala a vettore,
   misura pareti e riepilogo delle superfici commerciali del fabbricato.
@@ -226,36 +228,48 @@ sessioni per volta; per un uso contemporaneo di più persone serve il piano da
 
 ## Materiali a cura del Committente
 
-In fondo alla scheda **Computo metrico** c'è la sottosezione **🛒 Materiali**:
-quello che compri tu e l'impresa non fornisce. Non sono voci di computo e non
-entrano nel **totale dei lavori** — quel documento è dell'impresa, e questi
-soldi dalla sua fattura non passano — ma entrano nel **costo dell'operazione**,
-e il business plan li somma al computo da sé.
+La scheda **Computo metrico** ha due linguette: **📝 Il computo** e **🛒
+Materiali · a cura del Committente**. La seconda è l'elenco di quello che
+compri tu e l'impresa non fornisce. Non sono voci di computo e non entrano
+nel totale dei lavori: quel documento è dell'impresa, e questa roba dalla
+sua fattura non passa.
+
+**L'elenco nasce già pieno**, con le voci che si comprano su ogni cantiere
+di questo tipo — sanitari, rubinetteria, porte, maniglie, frutti, placche,
+gres, unità di clima. Si sfoltisce quello che non serve invece di
+riscriverlo ogni volta; il bottone **↺ Rimetti l'elenco standard** riporta
+in tabella le voci tolte per sbaglio, senza toccare né duplicare quelle che
+hai già.
 
 Ogni riga ha un **capitolo** (bagno, porte e infissi, impianto elettrico,
-muratura, pavimenti, riscaldamento, cucina, arredo, esterni), la descrizione,
-l'unità, la quantità, il prezzo, il fornitore e lo **stato** dell'acquisto —
-da ordinare, ordinato, consegnato.
+muratura, pavimenti, riscaldamento, cucina, arredo, esterni), la
+descrizione, l'unità, la quantità, e poi le tre colonne che servono mentre
+si compra:
 
-**Il prezzo si può lasciare vuoto**, ed è il caso normale all'inizio: l'elenco
-si scrive prima di sapere quanto costa. Una voce senza prezzo resta
-nell'elenco, non vale zero, e il totale dichiara di essere parziale dicendo
-quante voci mancano all'appello.
+| Colonna | A cosa serve |
+| --- | --- |
+| **Fornitore** | da chi lo compri |
+| **Link** | la pagina del negozio, cliccabile: sei mesi dopo si ritrova **quel** modello, non una ricerca da rifare |
+| **Stato** | da ordinare · ordinato · consegnato |
 
-Da qui escono due PDF:
+⚠️ **Prezzi non ce ne sono, ed è voluto.** L'allegato firmato è un elenco di
+forniture, non di importi, e i soldi dei materiali vivono già nel **registro
+delle spese**, dove arrivano dalle fatture vere (categoria `MATERIALE`).
+Tenerne una seconda contabilità qui vorrebbe dire due numeri per la stessa
+cosa, e prima o poi due numeri diversi. Finché sono ancora un budget, si
+mettono fra le **spese da sostenere** — che è anche il posto da cui il
+confronto «il computo alla prova del cantiere» li legge.
 
-| Documento | Cosa porta | A chi va |
-| --- | --- | --- |
-| **Allegato 1 (da firmare)** | l'elenco per capitoli, senza prezzi, con la clausola e le due firme | si allega al computo e si sottoscrive con l'impresa |
-| **Allegato con i prezzi** | lo stesso elenco con prezzi, importi, totali per capitolo e le voci ancora da quotare | la tua copia, non si consegna |
+Dal bottone **🖨️ Allegato 1 (da firmare)** esce il PDF: l'elenco per
+capitoli, la clausola che dice che quelle forniture restano fuori
+dall'appalto, «*Luogo*, lì *data*» e le due firme per accettazione. Il luogo
+si scrive nel pannello **📋 Dati del progetto**. Fornitore, link e stato
+dell'ordine **non** compaiono sul foglio: sono appunti tuoi, e quel foglio
+lo legge l'impresa. Le **note** di una riga diventano invece la nota a piè
+di pagina, richiamata da un asterisco accanto alla descrizione.
 
-Le **note** di una riga diventano la nota a piè di pagina dell'allegato,
-richiamata da un asterisco accanto alla descrizione. Sopra le firme compare
-«*Luogo*, lì *data*»: il luogo si scrive nel pannello **📋 Dati del progetto**.
-
-⚠️ Il bottone «Usa il computo» del contratto d'appalto propone il **computo
-nudo**, senza i materiali: quello che si firma con l'impresa è l'appalto, e
-l'allegato serve proprio a dire che i materiali ne stanno fuori.
+Nell'export Excel l'elenco è il foglio **Materiali**, con anche fornitore,
+link e stato.
 
 ## Misura da planimetria
 
