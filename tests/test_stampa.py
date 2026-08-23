@@ -6,7 +6,8 @@ controllano il contenuto del documento, non solo che il file esista.
 import fitz
 import pytest
 
-from stampa import pdf_computo
+import materiali
+from stampa import pdf_computo, pdf_materiali
 
 PROGETTO = {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
             "oggetto": "Ristrutturazione appartamento", "data": "09/08/2026"}
@@ -179,3 +180,110 @@ def test_il_posto_dell_impresa_resta_vuoto():
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
     # l'unico nome stampato e' quello del committente
     assert testo.count("Resolve S.r.l.") == 2   # cartiglio + firma
+
+
+# ------------------------------------------- allegato 1: i materiali
+
+MATERIALI = [
+    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA", "um": "cad",
+     "quantita": 1.0, "prezzo": 320.0, "note": ""},
+    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA", "um": "cad",
+     "quantita": None, "prezzo": None, "note": ""},
+    {"capitolo": "IMPIANTO RISCALDAMENTO",
+     "descrizione": "UNITA INTERNA + ESTERNA CLIMA CANALIZZATO", "um": "cad",
+     "quantita": 1.0, "prezzo": 2400.0,
+     "note": "Si fornisce inoltre: plenum coibentato, collarini."},
+]
+
+PROGETTO_FIRMA = {**PROGETTO, "luogo": "La Spezia"}
+
+
+def test_allegato_materiali_e_un_pdf_vero():
+    byte = pdf_materiali(PROGETTO_FIRMA, MATERIALI)
+    assert byte[:5] == b"%PDF-"
+
+
+def test_allegato_dice_che_documento_e():
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "ALLEGATO 1 AL COMPUTO METRICO" in testo
+    assert "Elenco materiali acquistati cura Committente" in testo
+
+
+def test_allegato_raggruppa_per_capitolo():
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "BAGNO" in testo
+    assert "IMPIANTO RISCALDAMENTO" in testo
+    assert "PIATTO DOCCIA" in testo
+
+
+def test_allegato_senza_prezzi_non_ne_stampa_nemmeno_uno():
+    """E' il foglio che si firma con l'impresa: quanto paghi tu non e'
+    affar suo, e un totale stampato sopra glielo racconterebbe."""
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "320,00" not in testo
+    assert "2.400,00" not in testo
+    assert "TOTALE MATERIALI" not in testo
+
+
+def test_allegato_con_prezzi_porta_importi_e_totale():
+    calcolate = materiali.calcola_elenco(MATERIALI)
+    testo = _testo_del_pdf(
+        pdf_materiali(PROGETTO_FIRMA, calcolate, con_prezzi=True))
+    assert "320,00" in testo
+    assert "TOTALE MATERIALI" in testo
+    assert "2.720,00" in testo          # 320 + 2400, il box doccia non c'e'
+
+
+def test_allegato_con_prezzi_dichiara_le_voci_da_quotare():
+    """Un totale che tace i pezzi non ancora quotati mente verso il basso."""
+    calcolate = materiali.calcola_elenco(MATERIALI)
+    testo = _testo_del_pdf(
+        pdf_materiali(PROGETTO_FIRMA, calcolate, con_prezzi=True))
+    assert "da quotare" in testo
+    assert "1 voce senza prezzo" in testo
+
+
+def test_la_quantita_che_manca_non_diventa_uno_stampato():
+    """L'1 e' una convenzione di calcolo, non una misura presa."""
+    testo = _testo_del_pdf(pdf_materiali(
+        PROGETTO_FIRMA, [{"capitolo": "BAGNO", "descrizione": "BOX DOCCIA",
+                          "um": "cad", "quantita": None, "prezzo": None}]))
+    assert "1,00" not in testo
+
+
+def test_la_nota_diventa_un_asterisco_e_una_riga_in_fondo():
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "UNITA INTERNA + ESTERNA CLIMA CANALIZZATO *" in testo
+    assert "* Si fornisce inoltre: plenum coibentato" in testo
+
+
+def test_allegato_porta_la_clausola_e_le_firme():
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "a cura e spese del Committente" in testo
+    assert "PER ACCETTAZIONE:" in testo
+    assert "Resolve S.r.l." in testo
+
+
+def test_allegato_porta_luogo_e_data():
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "La Spezia, lì 09/08/2026" in testo
+
+
+def test_senza_luogo_resta_la_data():
+    """I progetti salvati prima non hanno il luogo: il foglio si firma lo
+    stesso, e la data e' il minimo che deve portare."""
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO, MATERIALI))
+    assert "lì 09/08/2026" in testo
+
+
+def test_allegato_vuoto_lo_dice():
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, []))
+    assert "Nessun materiale elencato" in testo
+
+
+def test_il_computo_normale_non_e_cambiato():
+    """L'occhiello e' nuovo, ma il computo non ne ha nessuno: la sua
+    testata deve restare quella di prima."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    assert "Computo metrico estimativo" in testo
+    assert "ALLEGATO" not in testo

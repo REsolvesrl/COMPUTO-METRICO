@@ -59,14 +59,17 @@ import fattibilita
 import fattura
 import listino
 import listino_personale
+import materiali
 import merito
 import stampa
 import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
     CATEGORIE_SPESE_EMOJI,
+    COLONNA_IMPORTO_MAT,
     COLONNA_IVA_EUR,
     COLONNE,
+    COLONNE_MATERIALI,
     COLONNE_MCA,
     COLONNE_NUMERI,
     COLONNE_SPESE,
@@ -76,11 +79,15 @@ from tabelle import (
     EMOJI_CATEGORIA,
     cat_display,
     cat_pulita,
+    df_materiali_da_righe,
+    df_materiali_vuoto,
     df_mca_vuoto,
     df_spese_da_righe,
     df_spese_vuoto,
     df_vuoto,
+    materiali_da_df,
     mca_da_df,
+    senza_importo_derivato,
     senza_iva_derivata,
     spese_da_df,
     voci_da_df,
@@ -1022,6 +1029,99 @@ def spese_con_iva(stabile, live=None):
     return fuori
 
 
+def config_colonne_materiali():
+    """Le colonne dell'elenco materiali a cura del committente.
+
+    ⚠️ Nessuna colonna è obbligatoria tranne la descrizione, ed è la
+    descrizione a fare la riga: l'allegato firmato è un elenco di nomi, e
+    quantità, prezzo e fornitore arrivano dopo, quando si va a comprare.
+    Chiedere un prezzo per accettare una riga vorrebbe dire non poter più
+    scrivere l'elenco prima di averlo quotato — cioè togliere al foglio la
+    cosa per cui esiste.
+    """
+    return {
+        "capitolo": st.column_config.SelectboxColumn(
+            "Capitolo", width=170, options=materiali.CAPITOLI,
+            help="Il capitolo dell'allegato: raggruppa le voci sul foglio "
+                 "che si firma con l'impresa."),
+        "descrizione": st.column_config.TextColumn(
+            "Descrizione", width=270,
+            help="Il nome della cosa, come lo scriveresti sull'allegato. "
+                 "È l'unica colonna che serve perché la riga esista."),
+        "um": st.column_config.TextColumn("U.M.", width=60),
+        # «localized» e non «euro»: qui i decimali sono quelli del numero
+        # (5 porte sono «5», 94,71 m² sono «94,71»), non due sempre.
+        "quantita": st.column_config.NumberColumn(
+            "Quantità", width=85, min_value=0.0, format="localized",
+            help="Se manca vale 1: il box doccia è uno, e non c'è bisogno "
+                 "di scriverlo."),
+        "prezzo": st.column_config.NumberColumn(
+            "Prezzo unit.", width=110, min_value=0.0, format="euro",
+            help="IVA esclusa, come tutti i prezzi del computo. Lascialo "
+                 "vuoto finché non lo sai: la voce resta nell'elenco e il "
+                 "totale dichiara che è parziale."),
+        COLONNA_IMPORTO_MAT: st.column_config.NumberColumn(
+            "Importo", width=110, format="euro", disabled=True,
+            help="Calcolato: quantità × prezzo. Non si scrive a mano."),
+        "fornitore": st.column_config.TextColumn(
+            "Fornitore", width=150,
+            help="Da chi lo compri. Non finisce sull'allegato: è roba tua."),
+        "stato": st.column_config.SelectboxColumn(
+            "Stato", width=120, options=materiali.STATI,
+            help="A che punto è l'acquisto. Il pagamento no: quello ha già "
+                 "il suo registro nelle spese a consuntivo."),
+        "note": st.column_config.TextColumn(
+            "Note", width=200,
+            help="Sull'allegato diventa la nota in fondo, richiamata da un "
+                 "asterisco accanto alla descrizione."),
+    }
+
+
+def materiali_con_importo(stabile, live=None):
+    """I materiali con la colonna calcolata «Importo» accanto al prezzo.
+
+    Stesse regole di `spese_con_iva`: l'input del data_editor resta il
+    DataFrame STABILE, e questa colonna — che l'utente non tocca — guarda i
+    valori live, così l'importo segue il prezzo appena lo si scrive.
+
+    ⚠️ Senza prezzo l'importo resta **vuoto**, non zero. Uno zero in
+    colonna direbbe «gratis» e si sommerebbe agli altri; il vuoto dice
+    «ancora da quotare», che è la verità.
+    """
+    fuori = senza_importo_derivato(stabile.copy())
+    fonte = stabile if live is None else live
+    valori = []
+    for i in fuori.index:
+        riga = fonte.loc[i] if i in fonte.index else fuori.loc[i]
+        prezzo = riga.get("prezzo")
+        if prezzo is None or pd.isna(prezzo):
+            valori.append(None)
+            continue
+        quantita = riga.get("quantita")
+        pezzi = (1.0 if quantita is None or pd.isna(quantita)
+                 else float(quantita))
+        valori.append(round(pezzi * float(prezzo), 2))
+    # subito dopo il prezzo: è lì che si guarda se il conto torna
+    fuori.insert(min(5, len(fuori.columns)), COLONNA_IMPORTO_MAT, valori)
+    return fuori
+
+
+def materiali_correnti():
+    """Le righe dei materiali, con l'importo, dal ritorno vivo dell'editor.
+
+    Una funzione sola perché i materiali si leggono in tre posti — il
+    riepilogo costi, l'export e il business plan — e in tutt'e tre devono
+    essere gli stessi. La tabella vive nella scheda Computo, che Streamlit
+    disegna per prima: quando il business plan chiede questi numeri il
+    ritorno vivo c'è già.
+    """
+    df = st.session_state.get("df_materiali_live",
+                              st.session_state.get("df_materiali"))
+    if df is None:
+        return []
+    return materiali.calcola_elenco(materiali_da_df(df))
+
+
 def dati_fattura_da_file(file):
     """Estrae i dati di una spesa da un file fattura (PDF o XML).
 
@@ -1640,6 +1740,33 @@ def css_schede_computo():
 .st-key-card_pool hr {{
     margin: 0.2rem 0;
 }}
+""")
+    # L'allegato dei materiali: contorno d'ottone, non una delle sette tinte
+    # dei mestieri. È il capitolo del committente — quello che compra lui —
+    # e l'ottone in questo mondo è il metallo di casa, quello del marchio.
+    # Un colore da mestiere direbbe che è un mestiere in più; l'ottone dice
+    # che è roba di chi paga, e sta accanto al computo senza entrarci.
+    regole.append("""
+.st-key-card_materiali {
+    background: color-mix(in srgb, var(--ottone) 9%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ottone) 55%, transparent);
+    border-radius: 0;
+    padding: 0.7rem 0.9rem 0.5rem;
+    margin-top: 0.9rem;
+}
+/* stessa correzione del pool: il guscio di Streamlit è più basso del testo
+   che contiene, e senza questo margine la didascalia sale addosso al
+   titolo */
+.st-key-card_materiali > [data-testid="stElementContainer"]:first-child {
+    margin-bottom: 0.6rem;
+}
+.st-key-card_materiali > [data-testid="stElementContainer"]:first-child p {
+    font-size: 1.05rem;
+    font-weight: 650;
+    line-height: 1.4;
+    margin: 0;
+    color: var(--ottone);
+}
 """)
     # --------------------------------------------- le righe del computo
     # Il computo è una tabella, non un modulo: le celle stanno vicine, i
@@ -2866,18 +2993,25 @@ def bp_pct_da_euro_ag_out():
 
 
 @st.cache_data(show_spinner=False, max_entries=4)
-def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None):
+def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None,
+                df_materiali=None):
     """Il file Excel da scaricare.
 
     Il bottone di scaricamento vuole i byte già pronti, quindi il file veniva
     ricostruito a OGNI interazione con l'app — 70 millisecondi buttati per un
     bottone che magari non premi mai. Con la cache si ricostruisce solo quando
     cambiano davvero le tabelle.
+
+    I materiali stanno in un foglio LORO, non in coda al computo: non sono
+    voci di computo, e sommarli lì sotto rifarebbe con Excel proprio la
+    confusione che l'allegato esiste per evitare.
     """
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_computo.to_excel(writer, sheet_name="Computo", index=False)
         df_riepilogo.to_excel(writer, sheet_name="Riepilogo", index=False)
+        if df_materiali is not None and len(df_materiali):
+            df_materiali.to_excel(writer, sheet_name="Materiali", index=False)
         if df_superfici is not None and len(df_superfici):
             df_superfici.to_excel(writer, sheet_name="Superfici", index=False)
         df_progetto.to_excel(writer, sheet_name="Dati progetto", index=False)
@@ -3189,6 +3323,7 @@ def _payload_progetto():
             "nome": st.session_state.prg_nome,
             "committente": st.session_state.prg_committente,
             "oggetto": st.session_state.prg_oggetto,
+            "luogo": st.session_state.prg_luogo,
             "data": st.session_state.prg_data.isoformat(),
             "aliquota_iva": st.session_state.iva,
         },
@@ -3221,6 +3356,10 @@ def _payload_progetto():
         # le quantità scritte a mano restano a mano anche riaprendo: sono
         # una decisione, non un caso
         "voci_a_mano": list(st.session_state.voci_a_mano),
+        # l'allegato dei materiali: elenco suo, fuori dal computo, e infatti
+        # fuori anche da "voci"
+        "materiali": materiali_da_df(st.session_state.get(
+            "df_materiali_live", st.session_state.df_materiali)),
         # e come sono state riscritte: solo quelle che si discostano dal
         # listino, così il file non porta 69 copie di quello che c'è già
         "testi_voci": {
@@ -3399,6 +3538,8 @@ def progetto_e_vuoto():
     if st.session_state.get("bp_acquisto") or st.session_state.get("bp_vendita"):
         return False
     if len(spese_da_df(st.session_state.df_spese)):
+        return False
+    if len(materiali_da_df(st.session_state.df_materiali)):
         return False
     return True
 
@@ -3593,6 +3734,10 @@ st.session_state.setdefault("voci_extra", {})
 st.session_state.setdefault("prg_nome", "")
 st.session_state.setdefault("prg_committente", "")
 st.session_state.setdefault("prg_oggetto", "")
+# Il luogo della firma: «La Spezia, lì 29/11/2025». Serve all'allegato dei
+# materiali, che è un foglio che si sottoscrive in due, e in Italia un
+# documento firmato porta sempre luogo e data.
+st.session_state.setdefault("prg_luogo", "")
 st.session_state.setdefault("prg_data", date.today())
 st.session_state.setdefault("iva", 10.0)   # 10%: aliquota tipica in edilizia
 # 10%: è la quota prevista dal contratto d'appalto, non una convenzione.
@@ -3617,6 +3762,11 @@ st.session_state.setdefault("pool_aperte", set())
 st.session_state.setdefault("voci_scartate", [])
 # le voci la cui quantità è stata scritta a mano: il disegno le lascia stare
 st.session_state.setdefault("voci_a_mano", [])
+# i materiali a cura del committente: elenco a parte, non voci del computo.
+# Il contatore serve a far ripartire il data_editor quando si apre un altro
+# progetto — senza, la tabella resterebbe quella di prima.
+st.session_state.setdefault("df_materiali", df_materiali_vuoto())
+st.session_state.setdefault("versione_mat", 0)
 # porte e finestre dei locali rivestiti: interrompono la fascia piastrellata
 st.session_state.setdefault("apert_car_n", 0)
 st.session_state.setdefault("riv_porte_n", 1)
@@ -3716,6 +3866,7 @@ if "da_caricare" in st.session_state:
     st.session_state.prg_nome = progetto.get("nome", "")
     st.session_state.prg_committente = progetto.get("committente", "")
     st.session_state.prg_oggetto = progetto.get("oggetto", "")
+    st.session_state.prg_luogo = progetto.get("luogo", "")
     st.session_state.iva = float(progetto.get("aliquota_iva", 10.0))
     stato_listino = dati.get("listino_stato") or {}
     testi_salvati = dati.get("testi_voci") or {}
@@ -3778,6 +3929,15 @@ if "da_caricare" in st.session_state:
         for _cod in st.session_state.voci_extra:
             if _cod not in st.session_state.voci_scelte:
                 st.session_state.voci_scelte.append(_cod)
+    # I materiali a cura del committente. I progetti salvati prima non ce
+    # l'hanno: la tabella nasce vuota, e il computo resta identico a com'era
+    # — questo elenco non ha mai fatto parte dei suoi totali.
+    _df_mat = df_materiali_da_righe(dati.get("materiali") or [])
+    st.session_state.df_materiali = (_df_mat if len(_df_mat)
+                                     else df_materiali_vuoto())
+    st.session_state.pop("df_materiali_live", None)
+    st.session_state.versione_mat = st.session_state.get(
+        "versione_mat", 0) + 1
     try:
         st.session_state.prg_data = date.fromisoformat(progetto.get("data", ""))
     except (TypeError, ValueError):
@@ -4190,9 +4350,15 @@ with tab_computo:
         # Stava fra il committente e la data come se fosse un dato del
         # committente, e per vederne l'effetto bisognava chiudere il
         # pannello. Gli imprevisti non ci sono più: sono del business plan.
-        d3, d4 = st.columns([3, 1])
+        # Il luogo sta accanto alla data perché con la data fa una cosa
+        # sola: la riga «La Spezia, lì 29/11/2025» che precede le firme
+        # sull'allegato dei materiali.
+        d3, d4, d5 = st.columns([3, 1.2, 1])
         d3.text_input("Oggetto dei lavori", key="prg_oggetto")
-        d4.date_input("Data", key="prg_data", format="DD/MM/YYYY")
+        d4.text_input("Luogo", key="prg_luogo", placeholder="Es. La Spezia",
+                      help="Compare come «Luogo, lì data» sopra le firme "
+                           "dell'allegato materiali.")
+        d5.date_input("Data", key="prg_data", format="DD/MM/YYYY")
 
         st.divider()
         if not progetto_e_vuoto():
@@ -4644,6 +4810,108 @@ with tab_computo:
             st.plotly_chart(grafico_totali(totali),
                             config={"displayModeBar": False})
 
+    # ----------------------------- materiali a cura del committente
+    # Sta QUI, sotto il computo e a tutta larghezza, per due ragioni. La
+    # prima è che nove colonne dentro una colonna da tre quarti di pagina
+    # si leggono di sbieco. La seconda è che questo è un ALLEGATO, e un
+    # allegato viene dopo il documento a cui è allegato — come sul foglio
+    # vero, dove sta dietro al computo e si firma insieme a lui.
+    st.markdown("")
+    with st.container(key="card_materiali"):
+        st.markdown("🛒 Materiali · a cura del Committente")
+        st.caption(
+            "Quello che compri **tu**, e che l'impresa non fornisce: è "
+            "l'**Allegato 1** del computo, il foglio che si firma in due "
+            "per segnare il confine dell'appalto. Questi importi **non "
+            "entrano nel totale dei lavori** — sono soldi tuoi, non della "
+            "fattura dell'impresa — ma entrano nel costo dell'operazione, "
+            "e li ritrovi nel business plan. Il **prezzo puoi lasciarlo "
+            "vuoto**: la voce resta nell'elenco e il totale dichiara che "
+            "è parziale.")
+        df_mat_ed = st.data_editor(
+            materiali_con_importo(
+                st.session_state.df_materiali,
+                st.session_state.get("df_materiali_live")),
+            num_rows="dynamic", hide_index=True, width="stretch",
+            key=f"editor_materiali_{st.session_state.versione_mat}",
+            column_config=config_colonne_materiali())
+        # come per le spese: l'input del data_editor resta il DataFrame
+        # stabile, il ritorno vive a parte per calcoli e salvataggio
+        st.session_state.df_materiali_live = df_mat_ed
+        righe_materiali = materiali.calcola_elenco(materiali_da_df(df_mat_ed))
+        totale_materiali = materiali.totale(righe_materiali)
+        mancano_prezzi = materiali.da_quotare(righe_materiali)
+        per_stato = materiali.totali_per_stato(righe_materiali)
+
+        if righe_materiali:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Totale materiali (IVA esclusa)",
+                      euro(totale_materiali))
+            for colonna, stato in zip((m2, m3, m4), materiali.STATI):
+                quota = per_stato.get(stato) or {"importo": 0.0, "voci": 0}
+                colonna.metric(
+                    stato, euro(quota["importo"]),
+                    delta=(f"{quota['voci']} "
+                           + ("voce" if quota["voci"] == 1 else "voci")),
+                    delta_color="off")
+            if mancano_prezzi:
+                st.caption(
+                    f":orange[⚠️ {mancano_prezzi} "
+                    + ("voce senza prezzo" if mancano_prezzi == 1
+                       else "voci senza prezzo")
+                    + ": il totale qui sopra è **parziale**.]")
+            # Il conto della serva, in una riga: quanto costa il cantiere
+            # per intero. Sta qui e non nel riepilogo costi perché è qui
+            # che i due numeri esistono tutt'e due nello stesso istante —
+            # e un totale che si aggiorna un giro dopo è un totale stantio.
+            st.markdown(
+                f"Lavori **{euro(totale)}** + materiali "
+                f"**{euro(totale_materiali)}** → **intervento completo "
+                f"{euro(round(totale + totale_materiali, 2))}**, IVA "
+                "esclusa.")
+
+            # I due PDF stanno QUI e non fra gli export in fondo: sono i
+            # documenti di questo elenco, e chi ha appena finito di
+            # scriverlo è già dove serve premerli.
+            # ⚠️ La data all'italiana, non l'ISO: questo foglio si firma, e
+            # su un documento da firmare «2025-11-29» non ci va.
+            _prg_allegato = {
+                "nome": st.session_state.prg_nome,
+                "committente": st.session_state.prg_committente,
+                "oggetto": st.session_state.prg_oggetto,
+                "luogo": st.session_state.prg_luogo,
+                "data": st.session_state.prg_data.strftime("%d/%m/%Y"),
+            }
+            a1, a2, _ = st.columns([1.3, 1.3, 2])
+            a1.download_button(
+                "🖨️ Allegato 1 (da firmare)",
+                data=stampa.pdf_materiali(_prg_allegato, righe_materiali),
+                help="L'elenco per capitoli, senza prezzi, con la clausola e "
+                     "le due firme: è il foglio che si allega al computo e "
+                     "si sottoscrive con l'impresa.",
+                file_name=nome_file("pdf").replace(
+                    ".pdf", "_allegato_materiali.pdf"),
+                mime="application/pdf", width="stretch")
+            a2.download_button(
+                "💶 Allegato con i prezzi",
+                data=stampa.pdf_materiali(_prg_allegato, righe_materiali,
+                                          con_prezzi=True),
+                help="La tua copia: stesso elenco con prezzi, importi, "
+                     "totali per capitolo e il conto delle voci ancora da "
+                     "quotare. Non si consegna all'impresa.",
+                file_name=nome_file("pdf").replace(
+                    ".pdf", "_allegato_materiali_prezzi.pdf"),
+                mime="application/pdf", width="stretch")
+        else:
+            st.markdown(
+                campione_vuoto(
+                    "Nessun materiale in elenco",
+                    "Scrivi nella riga vuota qui sopra che cosa compri tu — "
+                    "il gres, i sanitari, le porte. Basta la descrizione: "
+                    "il prezzo lo aggiungi quando lo sai. Da qui esce "
+                    "l'Allegato 1 da firmare con l'impresa."),
+                unsafe_allow_html=True)
+
     # ------------------------------------------------- tabella ed export
     if voci_calcolate:
         df_calcolato = pd.DataFrame(voci_calcolate).reindex(
@@ -4675,12 +4943,15 @@ with tab_computo:
                "firme; il **PDF senza prezzi** è lo stesso elenco di "
                "lavorazioni e quantità da mandare alle imprese perché ci "
                "facciano il preventivo. Excel e CSV servono a rielaborare "
-               "i numeri.")
+               "i numeri. L'**Allegato 1 dei materiali** si scarica dalla "
+               "sua sezione qui sopra: è un documento suo, e si firma a "
+               "parte.")
 
     progetto = {
         "nome": st.session_state.prg_nome,
         "committente": st.session_state.prg_committente,
         "oggetto": st.session_state.prg_oggetto,
+        "luogo": st.session_state.prg_luogo,
         "data": st.session_state.prg_data.isoformat(),
         "aliquota_iva": st.session_state.iva,
     }
@@ -4702,12 +4973,37 @@ with tab_computo:
         }),
     ], ignore_index=True)
     df_progetto_excel = pd.DataFrame({
-        "Campo": ["Nome", "Committente", "Oggetto", "Data",
+        "Campo": ["Nome", "Committente", "Oggetto", "Luogo", "Data",
                   "Aliquota IVA %"],
         "Valore": [progetto["nome"], progetto["committente"],
-                   progetto["oggetto"], progetto["data"],
+                   progetto["oggetto"], progetto["luogo"], progetto["data"],
                    progetto["aliquota_iva"]],
     })
+
+    # I materiali per Excel: il foglio dell'allegato, con l'importo già
+    # fatto. Le voci senza prezzo restano vuote — non zero — così una somma
+    # fatta nel foglio non le conta come regalate.
+    df_materiali_excel = None
+    if righe_materiali:
+        df_materiali_excel = pd.DataFrame([{
+            "Capitolo": r.get("capitolo") or "",
+            "Descrizione": r.get("descrizione") or "",
+            "U.M.": r.get("um") or "",
+            "Quantità": r.get("quantita"),
+            "Prezzo unit.": r.get("prezzo"),
+            "Importo": r.get("importo"),
+            "Fornitore": r.get("fornitore") or "",
+            "Stato": r.get("stato") or "",
+            "Note": r.get("note") or "",
+        } for r in righe_materiali])
+        df_materiali_excel = pd.concat([
+            df_materiali_excel,
+            pd.DataFrame([{
+                "Capitolo": "TOTALE MATERIALI",
+                "Descrizione": (f"{mancano_prezzi} voci senza prezzo"
+                                if mancano_prezzi else ""),
+                "Importo": totale_materiali}]),
+        ], ignore_index=True)
 
     righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
         st.session_state.piante, mappa_percentuali(),
@@ -4766,8 +5062,10 @@ with tab_computo:
     col_xlsx.download_button(
         "📊 Esporta Excel (.xlsx)",
         data=excel_bytes(df_calcolato, df_riepilogo_excel,
-                         df_progetto_excel, df_superfici_excel),
-        help="Fogli: Computo, Riepilogo, Superfici e Dati progetto.",
+                         df_progetto_excel, df_superfici_excel,
+                         df_materiali_excel),
+        help="Fogli: Computo, Riepilogo, Materiali, Superfici e Dati "
+             "progetto.",
         file_name=nome_file("xlsx"),
         mime="application/vnd.openxmlformats-officedocument."
              "spreadsheetml.sheet",
@@ -5911,7 +6209,18 @@ with tab_bp:
     # è UNA sola, la riga «Imprevisti e condominio» qui sotto, dove si vede
     # quanto pesa ed è modificabile. Tenerla anche nel computo voleva dire,
     # prima o poi, contarla due volte.
-    ristr_da_computo = totale_computo_bp
+    #
+    # I materiali a cura del committente si sommano QUI, e solo qui. Nel
+    # computo non entrano — quel documento è dell'impresa, e questi soldi
+    # dalla sua fattura non passano — ma l'operazione li paga lo stesso, ed
+    # è l'operazione che questa scheda misura.
+    # ⚠️ Senza di loro il confronto col cantiere era ASIMMETRICO: il
+    # consuntivo conta le spese MATERIALE (stanno in CATEGORIE_CANTIERE), il
+    # preventivo non aveva nessun capitolo materiali da mettergli davanti.
+    # Ogni operazione in cui le finiture le compri tu risultava sforata del
+    # loro intero importo — uno sforamento che non c'era mai stato.
+    materiali_bp = materiali.totale(materiali_correnti())
+    ristr_da_computo = round(totale_computo_bp + materiali_bp, 2)
 
 
     # ------------------------------------------------- spese a consuntivo
@@ -6162,8 +6471,10 @@ with tab_bp:
             scost_pct = (round(scostamento / ristr_da_computo * 100, 2)
                          if ristr_da_computo else None)
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Preventivo (computo)",
-                      euro(ristr_da_computo))
+            c1.metric("Preventivo (computo + materiali)",
+                      euro(ristr_da_computo),
+                      delta=(f"di cui {euro(materiali_bp)} materiali"
+                             if materiali_bp else None), delta_color="off")
             c2.metric("Speso davvero (fatture)", euro(cantiere_sostenuto))
             c3.metric("Ancora da sostenere (stime)", euro(cantiere_previsto))
             c4.metric("Scostamento sul preventivo",
@@ -6171,7 +6482,9 @@ with tab_bp:
                        if scost_pct is not None else "—"),
                       delta=euro(scostamento), delta_color="inverse")
             st.caption(
-                ":gray[Lavori, materiale e architetto. Il confronto usa "
+                ":gray[Lavori, materiale e architetto da una parte; dall'altra "
+                "il computo **più l'allegato dei materiali**, così le due "
+                "metà parlano delle stesse cose. Il confronto usa "
                 "**entrambe** le colonne — speso più da sostenere — perché è "
                 "il costo atteso del cantiere; finché la seconda non è "
                 "vuota, lo scostamento è in parte una previsione.]")
@@ -6531,7 +6844,10 @@ with tab_bp:
                             "help": "I lavori NUDI, senza riserva: gli "
                                     "imprevisti sono la riga qui sopra e "
                                     "si contano una volta sola. Lasciando "
-                                    "0 arriva il totale del computo."},
+                                    "0 arrivano il totale del computo e "
+                                    "l'allegato dei materiali a cura tua, "
+                                    "sommati: l'operazione li paga "
+                                    "entrambi."},
                     iva="bp_iva_ristr", imponibile=ristr_eff))
                 # A cantiere avviato le fatture reali valgono più di ogni
                 # stima: l'opzione compare solo quando un consuntivo esiste
@@ -6636,10 +6952,18 @@ with tab_bp:
                             decimali=2, label_visibility="visible",
                             aiuto="Quanto hai firmato con l'impresa. Se lo "
                                   "lasci a zero non c'è niente da ripartire.")
-            if not st.session_state.cant_contratto and ristr_da_computo:
-                if st.button(f"Usa il computo: {euro(ristr_da_computo)}",
-                             key="cant_da_computo"):
-                    st.session_state.cant_contratto = ristr_da_computo
+            # ⚠️ Il COMPUTO NUDO, non il computo più i materiali. Qui si
+            # scrive quanto hai firmato con l'impresa, e i materiali a cura
+            # del committente sono per definizione quello che l'impresa non
+            # ti fattura: metterli nel contratto d'appalto vorrebbe dire
+            # cancellare con un bottone il confine che l'allegato traccia.
+            if not st.session_state.cant_contratto and totale_computo_bp:
+                if st.button(f"Usa il computo: {euro(totale_computo_bp)}",
+                             key="cant_da_computo",
+                             help="Solo le lavorazioni del computo: i "
+                                  "materiali a cura tua non fanno parte "
+                                  "dell'appalto."):
+                    st.session_state.cant_contratto = totale_computo_bp
                     st.session_state.pop("cant_contratto_txt", None)
                     st.rerun()
         with c_ext:

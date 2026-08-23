@@ -15,7 +15,7 @@ Un solo utente: il titolare di Resolve S.r.l. (società immobiliare italiana), c
 CME (Computo Metrico Estimativo) è un'app web Streamlit, live su <https://computometrico.streamlit.app/>, che copre due lavori ugualmente centrali (confermato dall'utente):
 
 1. **Valutare operazioni immobiliari** — decidere se un acquisto + ristrutturazione conviene: studio di fattibilità / business plan (costi di acquisto e vendita, EBIT, money multiple, ROE, rendimento annualizzato, matrici di sensitività), MCA (market comparison approach), registro spese a consuntivo con confronto preventivo/consuntivo.
-2. **Preventivare ristrutturazioni** — produrre il computo metrico: voci di lavorazione con quantità calcolate dalle dimensioni, listino guida (~50 voci a prezzi indicativi modificabili), totali per categoria con incidenze, imprevisti % e IVA, export Excel/CSV.
+2. **Preventivare ristrutturazioni** — produrre il computo metrico: voci di lavorazione con quantità calcolate dalle dimensioni, listino guida (~50 voci a prezzi indicativi modificabili), totali per categoria con incidenze, imprevisti % e IVA, export Excel/CSV. Accanto al computo, l'elenco dei **materiali a cura del committente** (extra-appalto), da cui esce l'ALLEGATO 1 firmato con l'impresa.
 
 Successo = decisioni d'investimento rapide e numeri affidabili, senza tornare ai fogli Excel che l'app sostituisce.
 
@@ -32,9 +32,10 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 
 ## Capabilities and Constraints
 
-- Stack: Python + Streamlit; logica di calcolo separata dall'interfaccia in moduli puri e testati (calcoli.py, planimetria.py, fattibilita.py, fattura.py); componente browser custom per il visualizzatore planimetrie (cme_viewer/, canvas + barra strumenti).
+- Stack: Python + Streamlit; logica di calcolo separata dall'interfaccia in moduli puri e testati (calcoli.py, planimetria.py, fattibilita.py, fattura.py, materiali.py); componente browser custom per il visualizzatore planimetrie (cme_viewer/, canvas + barra strumenti).
 - Vincolo architetturale: la logica resta in funzioni pure coperte da pytest; l'interfaccia vive in streamlit_app.py.
-- Terminologia di dominio (italiano, settore edile/immobiliare): computo metrico, voci di lavorazione, listino, incidenze, imprevisti, IVA scorporata, superficie commerciale, studio di fattibilità, MCA, coefficiente di merito, FatturaPA/SdI. Categorie spese fisse: ACQUISTO, LAVORI, MATERIALE, ARCHITETTO, COSTI INDIRETTI, AGENZIA, ALTRO.
+- Terminologia di dominio (italiano, settore edile/immobiliare): computo metrico, voci di lavorazione, listino, incidenze, imprevisti, IVA scorporata, superficie commerciale, studio di fattibilità, MCA, coefficiente di merito, FatturaPA/SdI, materiali a cura committente. Categorie spese fisse: ACQUISTO, LAVORI, MATERIALE, ARCHITETTO, COSTI INDIRETTI, AGENZIA, ALTRO.
+- **Documenti reali replicati, non inventati.** L'ALLEGATO 1 dei materiali riproduce il foglio che l'utente firma davvero con l'impresa: capitoli per stanza e per impianto (BAGNO, PORTE E INFISSI, IMPIANTO ELETTRICO, MURATURA, PAVIMENTI, IMPIANTO RISCALDAMENTO), nessun prezzo, nota a piè di pagina con l'asterisco, «luogo, lì data» e due firme «per accettazione». Quando c'è un documento vero, si parte da quello.
 - L'interfaccia è in italiano, con una eccezione deliberata: lo studio di
   fattibilità conserva le etichette inglesi del foglio Excel di partenza
   (ESTIMATED, Buy cost, Sell cost, Net Return (ROI), Return on Equity, Total

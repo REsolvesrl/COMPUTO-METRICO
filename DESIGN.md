@@ -93,6 +93,16 @@ pagina che si ridisegna sotto gli occhi.
   riga di testo, e dev'essere un unico nodo — la freccia va dentro la
   marcatura di colore, altrimenti diventa un secondo elemento della griglia
   e finisce a capo.
+- **La scheda dei materiali è d'ottone, non di un mestiere.** L'elenco dei
+  materiali a cura del committente (`card_materiali`) sta accanto al computo
+  ma non ne fa parte, e il suo contorno lo dice: ottone al 55%, fondo al 9%,
+  squadrato come le altre. Una delle sette tinte dei mestieri direbbe che è
+  un mestiere in più; il grigio del pool direbbe che è un attrezzo. L'ottone
+  è il metallo di casa — viene dal marchio — e qui significa **roba di chi
+  paga**. È l'unico posto in cui l'ottone contorna una scheda invece di
+  riempire un numero, e resti l'unico: se un giorno servisse un secondo
+  capitolo del committente, condivide questa scheda, non se ne prende
+  un'altra.
 - **Metrica**: ogni `st.metric` è un campione — etichetta in maiuscoletto
   sopra, numero grande sotto, fondo rialzato e squadrato. Vale in tutta
   l'app: planimetria, riepilogo del computo, business plan.

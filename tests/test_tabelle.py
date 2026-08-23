@@ -7,6 +7,7 @@ colonna di testo nata numerica fa rifiutare la tabella dall'editor.
 import pandas as pd
 import pytest
 
+import materiali
 import merito
 import tabelle
 
@@ -149,6 +150,68 @@ def test_registro_previsioni_ha_le_sue_colonne():
     assert "nr_fattura" not in df.columns
 
 
+# -------------------------------------------------------------- materiali
+
+def test_materiali_vuoto_ha_le_colonne_e_i_tipi_giusti():
+    df = tabelle.df_materiali_vuoto()
+    assert list(df.columns) == tabelle.COLONNE_MATERIALI
+    assert df["descrizione"].dtype == object
+    assert df["prezzo"].dtype == "float64"
+    assert len(df) == 0
+
+
+def test_materiali_e_la_descrizione_a_fare_la_riga():
+    """L'allegato firmato e' un elenco di NOMI: di prezzi non ne ha nemmeno
+    uno, e pretenderne uno butterebbe via l'intero documento."""
+    df = tabelle.df_materiali_da_righe([
+        {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA"},
+        {"capitolo": "BAGNO", "descrizione": "", "prezzo": 100.0},
+    ])
+    righe = tabelle.materiali_da_df(df)
+    assert len(righe) == 1
+    assert righe[0]["descrizione"] == "BOX DOCCIA"
+
+
+def test_materiali_prezzo_e_quantita_vuoti_restano_None():
+    """Uno zero direbbe «gratis» e si sommerebbe agli altri."""
+    df = tabelle.df_materiali_da_righe(
+        [{"descrizione": "BOX DOCCIA", "quantita": None, "prezzo": None}])
+    riga = tabelle.materiali_da_df(df)[0]
+    assert riga["prezzo"] is None
+    assert riga["quantita"] is None
+
+
+def test_materiali_capitolo_e_stato_vuoti_non_sono_stringa_vuota():
+    """Sono tendine, e "" non e' fra le opzioni: il data_editor va in
+    errore nel browser. Stesso inciampo gia' preso con le spese."""
+    df = tabelle.df_materiali_da_righe([{"descrizione": "PORTE"}])
+    assert df["capitolo"].iloc[0] is None
+    assert df["stato"].iloc[0] is None
+
+
+def test_materiali_i_predefiniti_arrivano_al_salvataggio():
+    df = tabelle.df_materiali_da_righe([{"descrizione": "PORTE"}])
+    riga = tabelle.materiali_da_df(df)[0]
+    assert riga["capitolo"] == materiali.CAPITOLO_PREDEFINITO
+    assert riga["stato"] == materiali.STATO_PREDEFINITO
+
+
+def test_materiali_giro_completo():
+    partenza = [{"capitolo": "PAVIMENTI", "descrizione": "GRES", "um": "m²",
+                 "quantita": 94.71, "prezzo": 22.0, "fornitore": "Rossi",
+                 "stato": "Consegnato", "note": "posa a correre"}]
+    assert tabelle.materiali_da_df(
+        tabelle.df_materiali_da_righe(partenza)) == partenza
+
+
+def test_senza_importo_derivato_toglie_la_colonna_calcolata():
+    df = tabelle.df_materiali_da_righe([{"descrizione": "GRES",
+                                         "prezzo": 22.0}])
+    df[tabelle.COLONNA_IMPORTO_MAT] = [22.0]
+    assert tabelle.COLONNA_IMPORTO_MAT not in tabelle.senza_importo_derivato(
+        df).columns
+
+
 # ------------------------------------------------------- comparabili (MCA)
 
 def test_mca_giro_completo():
@@ -203,6 +266,7 @@ def test_mca_vuoto_ha_i_tipi_giusti():
 
 @pytest.mark.parametrize("funzione", [tabelle.voci_da_df,
                                       tabelle.spese_da_df,
+                                      tabelle.materiali_da_df,
                                       tabelle.mca_da_df])
 def test_una_tabella_vuota_non_da_righe(funzione):
     assert funzione(pd.DataFrame()) == []

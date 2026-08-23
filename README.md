@@ -11,6 +11,11 @@ App web per il settore edile, live su
   scrivono a mano, scegliendo la categoria (il codice lo mette l'app).
   Totali per categoria con incidenze percentuali,
   **imprevisti %** e IVA, salvataggio del lavoro ed export in Excel/CSV.
+- **Materiali a cura del Committente**: la sottosezione del computo con
+  quello che compri tu e l'impresa non fornisce, per capitoli (bagno, porte
+  e infissi, impianto elettrico, muratura, pavimenti, riscaldamento…). Ne
+  esce l'**Allegato 1** in PDF da firmare con l'impresa — senza prezzi,
+  com'è il foglio vero — e una copia coi prezzi per te.
 - **Misura da planimetria** (stile AreaPlan): più planimetrie per progetto,
   zone colorate per categoria con percentuale commerciale, scala a vettore,
   misura pareti e riepilogo delle superfici commerciali del fabbricato.
@@ -28,6 +33,7 @@ CME/
 ├── rilevamento.py             # rilevamento automatico delle stanze (OpenCV)
 ├── listino.py                 # listino guida delle voci di lavorazione
 ├── listino_personale.py       # i tuoi prezzi, fuori dal singolo progetto
+├── materiali.py               # i materiali a cura del committente (puro)
 ├── stampa.py                  # il computo come PDF da consegnare
 ├── formato.py                 # numeri e importi all'italiana (puro)
 ├── tabelle.py                 # colonne e conversioni tabella↔dati (puro)
@@ -218,6 +224,39 @@ picchi di ~270 MB durante il rilevamento stanze su una planimetria da
 sessioni per volta; per un uso contemporaneo di più persone serve il piano da
 2 GB.
 
+## Materiali a cura del Committente
+
+In fondo alla scheda **Computo metrico** c'è la sottosezione **🛒 Materiali**:
+quello che compri tu e l'impresa non fornisce. Non sono voci di computo e non
+entrano nel **totale dei lavori** — quel documento è dell'impresa, e questi
+soldi dalla sua fattura non passano — ma entrano nel **costo dell'operazione**,
+e il business plan li somma al computo da sé.
+
+Ogni riga ha un **capitolo** (bagno, porte e infissi, impianto elettrico,
+muratura, pavimenti, riscaldamento, cucina, arredo, esterni), la descrizione,
+l'unità, la quantità, il prezzo, il fornitore e lo **stato** dell'acquisto —
+da ordinare, ordinato, consegnato.
+
+**Il prezzo si può lasciare vuoto**, ed è il caso normale all'inizio: l'elenco
+si scrive prima di sapere quanto costa. Una voce senza prezzo resta
+nell'elenco, non vale zero, e il totale dichiara di essere parziale dicendo
+quante voci mancano all'appello.
+
+Da qui escono due PDF:
+
+| Documento | Cosa porta | A chi va |
+| --- | --- | --- |
+| **Allegato 1 (da firmare)** | l'elenco per capitoli, senza prezzi, con la clausola e le due firme | si allega al computo e si sottoscrive con l'impresa |
+| **Allegato con i prezzi** | lo stesso elenco con prezzi, importi, totali per capitolo e le voci ancora da quotare | la tua copia, non si consegna |
+
+Le **note** di una riga diventano la nota a piè di pagina dell'allegato,
+richiamata da un asterisco accanto alla descrizione. Sopra le firme compare
+«*Luogo*, lì *data*»: il luogo si scrive nel pannello **📋 Dati del progetto**.
+
+⚠️ Il bottone «Usa il computo» del contratto d'appalto propone il **computo
+nudo**, senza i materiali: quello che si firma con l'impresa è l'appalto, e
+l'allegato serve proprio a dire che i materiali ne stanno fuori.
+
 ## Misura da planimetria
 
 Nella scheda **Misura da planimetria** ogni pagina del progetto (piano
@@ -283,6 +322,7 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [x] Listino personale riutilizzabile delle voci più usate.
 - [x] Stampa del computo in PDF.
 - [x] Contratto e SAL, con lo sforamento finale che tara gli imprevisti.
+- [x] Materiali a cura del committente, con l'Allegato 1 da firmare.
 - [ ] Import da prezzari regionali (Excel/CSV).
 - [ ] Spessore dei muri: distinguere tramezzi e murature portanti.
 - [x] Pubblicazione su Streamlit Community Cloud.

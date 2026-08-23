@@ -17,6 +17,7 @@ l'interfaccia.
 import pandas as pd
 
 import fattibilita
+import materiali
 import merito
 
 # ------------------------------------------------------------- il computo
@@ -54,6 +55,18 @@ def senza_iva_derivata(df):
 COLONNE_SPESE_PREV = ["oggetto", "importo", "aliquota_iva", "categoria",
                       "note"]
 COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
+
+# I materiali a cura del committente. La descrizione viene per PRIMA dopo il
+# capitolo, e quantità e prezzo dopo l'unità: si compila da sinistra a destra
+# nell'ordine in cui si sa la cosa — che roba è, poi quanta, poi quanto
+# costa. Prezzo e quantità restano facoltativi (vedi materiali.py): sul
+# foglio firmato non c'erano.
+COLONNE_MATERIALI = ["capitolo", "descrizione", "um", "quantita", "prezzo",
+                     "fornitore", "stato", "note"]
+COLONNE_MATERIALI_NUM = ["quantita", "prezzo"]
+# Come l'IVA in euro delle spese: si ricava da quantità e prezzo, vive solo
+# nella tabella a schermo e non entra mai nel progetto salvato.
+COLONNA_IMPORTO_MAT = "importo"
 # ⚠️ Le voci della griglia di merito stanno IN MEZZO, fra i mq e il
 # coefficiente: e' l'ordine in cui si compila una riga (che immobile e',
 # poi quanto vale). Il coefficiente viene dopo perche' ormai e' l'ECCEZIONE
@@ -192,6 +205,93 @@ def spese_da_df(df):
             "fornitore": testo("fornitore"),
             "oggetto": testo("oggetto"),
             "categoria": cat_pulita(testo("categoria")) or "ALTRO",
+            "note": testo("note"),
+        })
+    return righe
+
+
+# ------------------------------------------------------------- materiali
+
+def senza_importo_derivato(df):
+    """Il DataFrame ripulito dalla colonna calcolata dell'importo.
+
+    Stessa ragione di `senza_iva_derivata`: il data_editor restituisce anche
+    le colonne che ha solo mostrato, e se una di quelle rientrasse nei dati
+    al giro dopo ci si ritroverebbe a inserire una colonna che c'è già.
+    """
+    return df.drop(columns=[COLONNA_IMPORTO_MAT], errors="ignore")
+
+
+def df_materiali_vuoto():
+    """Tabella dei materiali vuota, con i tipi giusti."""
+    dati = {}
+    for col in COLONNE_MATERIALI:
+        tipo = "float64" if col in COLONNE_MATERIALI_NUM else "object"
+        dati[col] = pd.Series(dtype=tipo)
+    return pd.DataFrame(dati)
+
+
+def df_materiali_da_righe(righe):
+    """Tabella dei materiali da una lista di dizionari.
+
+    ⚠️ Capitolo e stato vuoti diventano **None**, mai stringa vuota: sono
+    tendine, e `""` non è fra le opzioni — il data_editor va in errore nel
+    browser. È lo stesso inciampo già preso con la categoria delle spese.
+    """
+    dati = {}
+    for col in COLONNE_MATERIALI:
+        valori = [r.get(col) for r in righe]
+        if col in COLONNE_MATERIALI_NUM:
+            dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
+                                      errors="coerce")
+        elif col in ("capitolo", "stato"):
+            dati[col] = pd.Series(
+                [None if _mancante(v) else (str(v).strip() or None)
+                 for v in valori], dtype="object")
+        else:
+            dati[col] = pd.Series(
+                ["" if _mancante(v) else str(v) for v in valori],
+                dtype="object")
+    return pd.DataFrame(dati)
+
+
+def materiali_da_df(df):
+    """I materiali come lista di dizionari (solo le righe con una descrizione).
+
+    ⚠️ È la DESCRIZIONE a fare la riga, non l'importo. Nelle spese basta un
+    numero perché una spesa senza cifra non è una spesa; qui è il contrario:
+    l'allegato firmato è un elenco di nomi e di prezzi non ne ha nemmeno uno.
+    Chiedere un importo butterebbe via l'intero documento.
+
+    ⚠️⚠️ Quantità e prezzo mancanti restano **None**, non zero. Un prezzo a
+    zero direbbe «gratis» e finirebbe nel totale; None dice «ancora da
+    quotare», e `materiali.totale` lo tiene fuori dichiarandolo.
+    """
+    righe = []
+    for _, riga in df.iterrows():
+        descrizione = riga.get("descrizione")
+        descrizione = "" if _mancante(descrizione) else str(descrizione).strip()
+        if not descrizione:
+            continue
+
+        def numero(campo):
+            valore = riga.get(campo)
+            return None if _mancante(valore) else float(valore)
+
+        def testo(campo, predefinito=""):
+            valore = riga.get(campo)
+            if _mancante(valore):
+                return predefinito
+            return str(valore).strip() or predefinito
+
+        righe.append({
+            "capitolo": testo("capitolo", materiali.CAPITOLO_PREDEFINITO),
+            "descrizione": descrizione,
+            "um": testo("um"),
+            "quantita": numero("quantita"),
+            "prezzo": numero("prezzo"),
+            "fornitore": testo("fornitore"),
+            "stato": testo("stato", materiali.STATO_PREDEFINITO),
             "note": testo("note"),
         })
     return righe
