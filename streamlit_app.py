@@ -4654,7 +4654,11 @@ with tab_computo:
                 "Codice": df_calcolato["codice"].fillna(""),
                 "Descrizione": df_calcolato["descrizione"].fillna(""),
                 "U.M.": df_calcolato["um"].fillna(""),
-                "Quantità": df_calcolato["quantita"].map(numero_it),
+                # due decimali come nelle righe qui sopra e nel PDF:
+                # la stessa quantità non deve avere due forme nella stessa
+                # pagina (94,710 sotto e 94,71 sopra)
+                "Quantità": df_calcolato["quantita"].map(
+                    lambda q: numero_it(q, 2)),
                 "Prezzo unit.": df_calcolato["prezzo"].map(euro),
                 "Importo": df_calcolato["importo"].map(euro),
             })
