@@ -185,15 +185,15 @@ def test_il_posto_dell_impresa_resta_vuoto():
 # ------------------------------------------- allegato 1: i materiali
 
 MATERIALI = [
-    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA", "um": "cad",
+    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA",
      "quantita": 1.0, "fornitore": "Ceramiche Rossi",
      "link": "https://esempio.it/piatto-doccia", "stato": "Ordinato",
      "note": ""},
-    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA", "um": "cad",
+    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA",
      "quantita": None, "fornitore": "", "link": "", "stato": "Da ordinare",
      "note": ""},
     {"capitolo": "IMPIANTO RISCALDAMENTO",
-     "descrizione": "UNITA INTERNA + ESTERNA CLIMA CANALIZZATO", "um": "cad",
+     "descrizione": "UNITA INTERNA + ESTERNA CLIMA CANALIZZATO",
      "quantita": 1.0, "fornitore": "", "link": "", "stato": "Da ordinare",
      "note": "Si fornisce inoltre: plenum coibentato, collarini."},
 ]
@@ -227,6 +227,12 @@ def test_l_allegato_non_porta_nessuna_cifra():
     assert "TOTALE" not in testo.upper().replace("COMPUTO METRICO", "")
 
 
+def test_l_allegato_non_ha_la_colonna_um():
+    """Sul foglio firmato non compilava mai: e' spazio chiesto a vuoto."""
+    testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
+    assert "U.M." not in testo
+
+
 def test_gli_appunti_di_chi_compra_restano_fuori():
     """Fornitore, link e stato dell'ordine sono roba tua: questo foglio lo
     firma l'impresa, e da chi compri non la riguarda."""
@@ -240,7 +246,7 @@ def test_la_quantita_che_manca_non_diventa_uno_stampato():
     """Sul foglio una quantita' non scritta resta non scritta."""
     testo = _testo_del_pdf(pdf_materiali(
         PROGETTO_FIRMA, [{"capitolo": "BAGNO", "descrizione": "BOX DOCCIA",
-                          "um": "cad", "quantita": None}]))
+                          "quantita": None}]))
     assert "1,00" not in testo
 
 

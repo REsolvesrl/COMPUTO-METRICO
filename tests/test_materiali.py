@@ -11,14 +11,14 @@ import materiali
 
 
 ELENCO = [
-    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA", "um": "cad",
+    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA",
      "quantita": 1.0, "stato": "Ordinato", "note": ""},
-    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA", "um": "cad",
+    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA",
      "quantita": None, "stato": "Da ordinare", "note": ""},
     {"capitolo": "PAVIMENTI", "descrizione": "PAVIMENTO/RIVESTIMENTO GRES",
-     "um": "m²", "quantita": 94.71, "stato": "Consegnato", "note": ""},
+     "quantita": 94.71, "stato": "Consegnato", "note": ""},
     {"capitolo": "IMPIANTO RISCALDAMENTO",
-     "descrizione": "UNITÀ INTERNA + ESTERNA CLIMA CANALIZZATO", "um": "cad",
+     "descrizione": "UNITÀ INTERNA + ESTERNA CLIMA CANALIZZATO",
      "quantita": 1.0, "stato": "Da ordinare",
      "note": "Si fornisce inoltre: plenum coibentato, collarini."},
 ]
@@ -35,7 +35,7 @@ def test_una_riga_non_ha_nessun_campo_di_soldi():
 
 def test_la_riga_vuota_ha_tutti_i_campi_che_servono():
     riga = materiali.riga_vuota()
-    assert set(riga) == {"capitolo", "descrizione", "um", "quantita",
+    assert set(riga) == {"capitolo", "descrizione", "quantita",
                          "fornitore", "link", "stato", "note"}
     assert riga["stato"] == materiali.STATO_PREDEFINITO
     assert riga["quantita"] is None

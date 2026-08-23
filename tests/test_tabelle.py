@@ -204,7 +204,7 @@ def test_materiali_i_predefiniti_arrivano_al_salvataggio():
 
 
 def test_materiali_giro_completo():
-    partenza = [{"capitolo": "PAVIMENTI", "descrizione": "GRES", "um": "m²",
+    partenza = [{"capitolo": "PAVIMENTI", "descrizione": "GRES",
                  "quantita": 94.71, "fornitore": "Rossi",
                  "link": "https://esempio.it/gres-60x60",
                  "stato": "Consegnato", "note": "posa a correre"}]
@@ -217,6 +217,49 @@ def test_l_elenco_standard_passa_dalla_tabella_senza_perdersi():
     standard = materiali.elenco_standard()
     assert tabelle.materiali_da_df(
         tabelle.df_materiali_da_righe(standard)) == standard
+
+
+# --------------------------------------------- pallini di capitolo e stato
+
+def test_capitolo_porta_il_pallino_nella_tabella():
+    """Il data_editor e' su tela grafica e ignora il CSS: il colore arriva
+    incollato al testo, non nello sfondo della cella."""
+    df = tabelle.df_materiali_da_righe(
+        [{"capitolo": "BAGNO", "descrizione": "BOX DOCCIA"}])
+    assert df["capitolo"].iloc[0] == "🔵 BAGNO"
+
+
+def test_stato_porta_il_pallino_nella_tabella():
+    df = tabelle.df_materiali_da_righe(
+        [{"descrizione": "PORTE", "stato": "Consegnato"}])
+    assert df["stato"].iloc[0] == "🟢 Consegnato"
+
+
+def test_capitolo_pulito_toglie_il_pallino():
+    assert tabelle.capitolo_pulito("🔵 BAGNO") == "BAGNO"
+    assert tabelle.capitolo_pulito("BAGNO") == "BAGNO"          # idempotente
+    assert tabelle.capitolo_pulito(None) == ""
+
+
+def test_stato_pulito_toglie_il_pallino():
+    assert tabelle.stato_pulito("🟢 Consegnato") == "Consegnato"
+
+
+def test_capitolo_altro_resta_senza_pallino():
+    """ALTRO e' il ripiego di chi non trova la sua stanza, non una stanza
+    vera: come le categorie senza tinta piena nel computo, resta senza."""
+    assert tabelle.capitolo_display("ALTRO") == "ALTRO"
+
+
+def test_ogni_capitolo_reale_ha_un_colore_diverso():
+    assert len(set(tabelle.EMOJI_CAPITOLO.values())) == len(
+        tabelle.EMOJI_CAPITOLO)
+
+
+def test_lo_stato_e_un_semaforo_a_tre_colori():
+    """Rosso quello che manca, giallo quello mosso, verde quello arrivato."""
+    assert set(tabelle.EMOJI_STATO) == set(materiali.STATI)
+    assert len(set(tabelle.EMOJI_STATO.values())) == 3
 
 
 # ------------------------------------------------------- comparabili (MCA)

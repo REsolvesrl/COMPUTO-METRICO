@@ -237,20 +237,18 @@ sua fattura non passa.
 **L'elenco nasce già pieno**, con le voci che si comprano su ogni cantiere
 di questo tipo — sanitari, rubinetteria, porte, maniglie, frutti, placche,
 gres, unità di clima. Si sfoltisce quello che non serve invece di
-riscriverlo ogni volta; il bottone **↺ Rimetti l'elenco standard** riporta
-in tabella le voci tolte per sbaglio, senza toccare né duplicare quelle che
-hai già.
+riscriverlo ogni volta.
 
 Ogni riga ha un **capitolo** (bagno, porte e infissi, impianto elettrico,
-muratura, pavimenti, riscaldamento, cucina, arredo, esterni), la
-descrizione, l'unità, la quantità, e poi le tre colonne che servono mentre
-si compra:
+muratura, pavimenti, riscaldamento, cucina, arredo, esterni) — con un
+pallino colorato davanti, come le categorie di spesa — la descrizione, la
+quantità, e poi le colonne che servono mentre si compra:
 
 | Colonna | A cosa serve |
 | --- | --- |
 | **Fornitore** | da chi lo compri |
 | **Link** | la pagina del negozio, cliccabile: sei mesi dopo si ritrova **quel** modello, non una ricerca da rifare |
-| **Stato** | da ordinare · ordinato · consegnato |
+| **Stato** | da ordinare · ordinato · consegnato — un semaforo: rosso, giallo, verde |
 
 ⚠️ **Prezzi non ce ne sono, ed è voluto.** L'allegato firmato è un elenco di
 forniture, non di importi, e i soldi dei materiali vivono già nel **registro

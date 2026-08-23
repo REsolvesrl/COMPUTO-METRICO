@@ -364,11 +364,11 @@ NOTA_MATERIALI = (
     "Committente. Non rientrano nell'appalto e il loro costo non è "
     "compreso nell'importo del computo metrico.")
 
-# La descrizione si prende quasi tutto: è un elenco di cose, e le due
-# colonne di destra sono lì solo per le voci che una misura ce l'hanno.
-# Fornitore, link e stato dell'ordine NON ci sono: sono roba di chi compra,
-# e questo foglio lo legge l'impresa.
-COLONNE_MAT = [130 * mm, 20 * mm, 30 * mm]
+# La descrizione si prende quasi tutto: è un elenco di cose, e la colonna
+# di destra è lì solo per le voci che una misura ce l'hanno. Niente U.M. —
+# sul foglio firmato non compilava mai — e niente fornitore, link o stato
+# dell'ordine: sono roba di chi compra, e questo foglio lo legge l'impresa.
+COLONNE_MAT = [150 * mm, 30 * mm]
 
 
 def _riga_luogo_data(progetto):
@@ -396,7 +396,7 @@ def _tabella_capitolo(capitolo, righe, marcatori):
     intestazione_bianca = ParagraphStyle(
         "intestazione_cap", parent=STILE_INTESTAZIONE, textColor=colors.white)
     tabella_righe = [[Paragraph(t, intestazione_bianca)
-                      for t in ("Descrizione", "U.M.", "Quantità")]]
+                      for t in ("Descrizione", "Quantità")]]
     for riga in righe:
         descrizione = str(riga.get("descrizione") or "")
         marcatore = marcatori.get(id(riga))
@@ -405,7 +405,6 @@ def _tabella_capitolo(capitolo, righe, marcatori):
         quantita = riga.get("quantita")
         tabella_righe.append([
             Paragraph(descrizione, STILE_VOCE),
-            Paragraph(str(riga.get("um") or ""), STILE_VOCE),
             # La quantità che manca resta VUOTA, non «1,00»: sul foglio è
             # sottinteso che il box doccia sia uno, e stamparlo darebbe a
             # un'omissione l'aria di una misura presa.

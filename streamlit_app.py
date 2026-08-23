@@ -65,6 +65,7 @@ import stampa
 import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
+    CAPITOLI_EMOJI,
     CATEGORIE_SPESE_EMOJI,
     COLONNA_IVA_EUR,
     COLONNE,
@@ -75,6 +76,7 @@ from tabelle import (
     COLONNE_SPESE_PREV,
     COLONNE_TESTO,
     EMOJI_CATEGORIA,
+    STATI_EMOJI,
     cat_display,
     cat_pulita,
     df_materiali_da_righe,
@@ -1048,15 +1050,17 @@ def config_colonne_materiali():
     stessa cosa.
     """
     return {
+        # Il pallino colorato è lo stesso ripiego della categoria di spesa:
+        # il data_editor è disegnato su tela grafica e ignora il CSS, quindi
+        # il colore arriva incollato al testo, non nello sfondo della cella.
         "capitolo": st.column_config.SelectboxColumn(
-            "Capitolo", width=175, options=materiali.CAPITOLI,
+            "Capitolo", width=210, options=CAPITOLI_EMOJI,
             help="Il capitolo dell'allegato: raggruppa le voci sul foglio "
                  "che si firma con l'impresa."),
         "descrizione": st.column_config.TextColumn(
             "Descrizione", width=300,
             help="Il nome della cosa, come lo scriveresti sull'allegato. "
                  "È l'unica colonna che serve perché la riga esista."),
-        "um": st.column_config.TextColumn("U.M.", width=60),
         # «localized» e non «euro»: qui i decimali sono quelli del numero
         # (5 porte sono «5», 94,71 m² sono «94,71»), non due sempre.
         "quantita": st.column_config.NumberColumn(
@@ -1074,8 +1078,11 @@ def config_colonne_materiali():
             "Link", width=110, display_text="apri ↗",
             help="La pagina del negozio dove l'hai comprato. Incolla "
                  "l'indirizzo: la cella diventa un collegamento."),
+        # Il semaforo: rosso quello che manca, giallo quello mosso, verde
+        # quello arrivato — la stessa lettura a colpo d'occhio con cui si
+        # guarda un cantiere.
         "stato": st.column_config.SelectboxColumn(
-            "Stato", width=125, options=materiali.STATI,
+            "Stato", width=155, options=STATI_EMOJI,
             help="A che punto è l'acquisto. Il pagamento no: quello ha già "
                  "il suo registro nelle spese a consuntivo."),
         "note": st.column_config.TextColumn(
@@ -1102,37 +1109,6 @@ def materiali_correnti():
     if df is None:
         return []
     return materiali_da_df(df)
-
-
-def rimetti_elenco_standard():
-    """Rimette in tabella le voci standard che mancano. Non tocca le altre.
-
-    Aggiunge e basta: quello che hai scritto tu resta dov'è, e una voce
-    standard già presente non si duplica. Serve a due momenti diversi —
-    l'elenco svuotato per sbaglio e il progetto vecchio che non l'ha mai
-    avuto — e in tutt'e due cancellare sarebbe la risposta sbagliata.
-
-    Il confronto è sul nome in maiuscolo senza spazi ai lati: «Piatto
-    doccia» e «PIATTO DOCCIA» sono la stessa cosa da comprare.
-    """
-    correnti = materiali_correnti()
-    presenti = {(r["capitolo"], r["descrizione"].strip().upper())
-                for r in correnti}
-    mancanti = [r for r in materiali.elenco_standard()
-                if (r["capitolo"], r["descrizione"].upper()) not in presenti]
-    if not mancanti:
-        st.session_state._esito_materiali = (
-            "info", "L'elenco standard è già tutto in tabella.")
-        return
-    st.session_state.df_materiali = df_materiali_da_righe(correnti + mancanti)
-    st.session_state.pop("df_materiali_live", None)
-    # ⚠️ Senza il salto di versione il data_editor tiene la tabella di
-    # prima: la sua chiave non cambia, e per Streamlit è lo stesso widget
-    # con lo stesso stato. Le righe nuove non comparirebbero.
-    st.session_state.versione_mat += 1
-    voci = "voce" if len(mancanti) == 1 else "voci"
-    st.session_state._esito_materiali = (
-        "ok", f"Rimesse in elenco {len(mancanti)} {voci}.")
 
 
 def dati_fattura_da_file(file):
@@ -1787,6 +1763,13 @@ def css_schede_computo():
     margin: 0;
     color: var(--ottone);
 }
+/* Colonne colorate e col link vogliono più spazio delle sole quattro di
+   prima: se un giorno non ci stanno tutte, si scorre invece di stringersi
+   — la tela del data_editor lo sa già fare da sé, qui si toglie solo
+   qualunque taglio del contenitore che glielo impedisse. */
+.st-key-card_materiali [data-testid="stDataFrameResizable"] {
+    overflow-x: auto;
+}
 """)
     # --------------------------------------------- le righe del computo
     # Il computo è una tabella, non un modulo: le celle stanno vicine, i
@@ -1964,6 +1947,13 @@ div[data-baseweb="select"] > div > div:first-child {{
 [class*="st-key-tparz_"],
 [class*="st-key-tparz_"] p {{
     text-align: right;
+}}
+/* «Cod.» al centro come il codice sotto: il bottone della riga centra il
+   suo testo da sé (comportamento di Streamlit), la didascalia no — di suo
+   sta a sinistra e in una colonna da 0,5 va a capo su due righe. */
+[class*="st-key-tcod_"],
+[class*="st-key-tcod_"] p {{
+    text-align: center;
 }}
 /* ⚠️ IL FILO FRA DUE VOCI È IL BORDO DELLA RIGA, non un elemento a sé.
    Come <hr> era una cosa in mezzo a due righe, con l'aria del blocco sopra
@@ -4377,17 +4367,6 @@ with tab_computo:
 with sotto_materiali:
     with st.container(key="card_materiali"):
         st.markdown("🛒 Materiali · a cura del Committente")
-        st.caption(
-            "Quello che compri **tu**, e che l'impresa non fornisce. È "
-            "l'**Allegato 1** del computo: il foglio che si firma in due "
-            "per segnare il confine dell'appalto — quello che è scritto "
-            "qui non è compreso nel prezzo dei lavori. "
-            "L'elenco nasce già pieno delle cose che si comprano su ogni "
-            "cantiere: togli quelle che non servono, aggiungi le tue. "
-            "**Fornitore**, **link** e **stato** dell'ordine restano fra "
-            "noi: sul foglio da firmare non compaiono. I **prezzi non ci "
-            "sono di proposito** — quelli stanno nel registro delle spese, "
-            "dove arrivano dalle fatture.")
 
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
@@ -4398,10 +4377,6 @@ with sotto_materiali:
         # stabile, il ritorno vive a parte per l'export e il salvataggio
         st.session_state.df_materiali_live = df_mat_ed
         righe_materiali = materiali_da_df(df_mat_ed)
-
-        if st.session_state.get("_esito_materiali"):
-            _tipo, _testo = st.session_state.pop("_esito_materiali")
-            (st.info if _tipo == "info" else st.success)(_testo)
 
         if righe_materiali:
             per_stato = materiali.conteggi_per_stato(righe_materiali)
@@ -4423,9 +4398,8 @@ with sotto_materiali:
                 campione_vuoto(
                     "Nessun materiale in elenco",
                     "Scrivi nella riga vuota qui sopra che cosa compri tu — "
-                    "il gres, i sanitari, le porte — oppure rimetti "
-                    "l'elenco standard col bottone qui sotto. Da qui esce "
-                    "l'Allegato 1 da firmare con l'impresa."),
+                    "il gres, i sanitari, le porte. Da qui esce l'Allegato "
+                    "1 da firmare con l'impresa."),
                 unsafe_allow_html=True)
 
         # ⚠️ La data all'italiana, non l'ISO: questo foglio si firma, e su
@@ -4437,8 +4411,7 @@ with sotto_materiali:
             "luogo": st.session_state.prg_luogo,
             "data": st.session_state.prg_data.strftime("%d/%m/%Y"),
         }
-        a1, a2, _a3 = st.columns([1.4, 1.4, 2])
-        a1.download_button(
+        st.download_button(
             "🖨️ Allegato 1 (da firmare)",
             data=stampa.pdf_materiali(_prg_allegato, righe_materiali),
             help="L'elenco per capitoli con la clausola e le due firme: è "
@@ -4447,14 +4420,7 @@ with sotto_materiali:
                  "sono — sono appunti tuoi.",
             file_name=nome_file("pdf").replace(
                 ".pdf", "_allegato_materiali.pdf"),
-            mime="application/pdf", width="stretch",
-            disabled=not righe_materiali)
-        a2.button("↺ Rimetti l'elenco standard", width="stretch",
-                  key="ripristina_materiali",
-                  on_click=rimetti_elenco_standard,
-                  help="Riporta in tabella le voci che si comprano su ogni "
-                       "cantiere. Aggiunge soltanto: quello che hai scritto "
-                       "tu resta dov'è, e niente si duplica.")
+            mime="application/pdf", disabled=not righe_materiali)
 
 
 with sotto_computo:
@@ -4724,7 +4690,12 @@ with sotto_computo:
                     (h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz,
                      h_x) = st.columns(
                         [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45])
-                    h_cod.caption("Cod.")
+                    # Centrata come il bottone della riga sotto: di suo la
+                    # didascalia sta a sinistra, e in una colonna larga
+                    # 0,5 la scritta finisce a capo su due righe — «Cod» e
+                    # «.» — sfasata dal codice che intesta.
+                    with h_cod.container(key=f"tcod_{indice}"):
+                        st.caption("Cod.")
                     h_voce.caption("Voce")
                     h_um.caption("U.M.")
                     h_qta.caption("Quantità")
@@ -5043,7 +5014,6 @@ with sotto_computo:
         df_materiali_excel = pd.DataFrame([{
             "Capitolo": r.get("capitolo") or "",
             "Descrizione": r.get("descrizione") or "",
-            "U.M.": r.get("um") or "",
             "Quantità": r.get("quantita"),
             "Fornitore": r.get("fornitore") or "",
             "Link": r.get("link") or "",

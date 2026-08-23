@@ -29,14 +29,14 @@ SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 VOCE = next(v for v in listino.VOCI if v["categoria"] == "Demolizioni")
 
 ELENCO = [
-    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA", "um": "cad",
+    {"capitolo": "BAGNO", "descrizione": "PIATTO DOCCIA",
      "quantita": 1.0, "fornitore": "Ceramiche Rossi",
      "link": "https://esempio.it/piatto-doccia", "stato": "Ordinato",
      "note": ""},
-    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA", "um": "cad",
+    {"capitolo": "BAGNO", "descrizione": "BOX DOCCIA",
      "quantita": None, "fornitore": "", "link": "", "stato": "Da ordinare",
      "note": ""},
-    {"capitolo": "PAVIMENTI", "descrizione": "GRES 60x60", "um": "m²",
+    {"capitolo": "PAVIMENTI", "descrizione": "GRES 60x60",
      "quantita": 100.0, "fornitore": "", "link": "", "stato": "Consegnato",
      "note": "posa a correre"},
 ]
@@ -96,25 +96,12 @@ def test_a_elenco_svuotato_c_e_lo_stato_vuoto():
     assert "Nessun materiale in elenco" in _testi(at)
 
 
-def test_il_bottone_rimette_le_voci_mancanti_senza_toccare_le_tue():
-    """Aggiunge e basta: l'elenco svuotato per sbaglio si recupera, e
-    quello che hai scritto tu non si perde per strada."""
-    at = _avvia(df_materiali=tabelle.df_materiali_da_righe([
-        {"capitolo": "CUCINA", "descrizione": "CUCINA SU MISURA",
-         "fornitore": "Falegnameria Bianchi"}]))
-    at.button(key="ripristina_materiali").click().run()
-    assert not at.exception, [e.value for e in at.exception]
-    righe = _materiali(at)
-    mia = [r for r in righe if r["descrizione"] == "CUCINA SU MISURA"]
-    assert mia and mia[0]["fornitore"] == "Falegnameria Bianchi"
-    assert len(righe) == len(materiali.ELENCO_STANDARD) + 1
-
-
-def test_il_bottone_non_duplica_quello_che_c_e_gia():
+def test_le_voci_portano_il_pallino_del_loro_capitolo():
+    """Il data_editor e' su tela grafica e ignora il CSS: il colore arriva
+    incollato al testo che finisce in tabella, non come sfondo di cella."""
     at = _avvia()
-    at.button(key="ripristina_materiali").click().run()
-    assert len(_materiali(at)) == len(materiali.ELENCO_STANDARD)
-    assert "è già tutto in tabella" in _testi(at)
+    df = at.session_state["df_materiali"]
+    assert df["capitolo"].iloc[0] == "🔵 BAGNO"
 
 
 # --------------------------------------------------------------- il confine

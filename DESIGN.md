@@ -109,6 +109,15 @@ pagina che si ridisegna sotto gli occhi.
   che si consegnano a due lettori diversi — uno all'impresa, l'altro dice
   che cosa l'impresa non fornisce — e impilarli in una pagina sola
   obbligava a scorrere il primo per intero per arrivare al secondo.
+- **I capitoli dei materiali portano un pallino, come le categorie di
+  spesa.** Nove tinte per nove capitoli (`EMOJI_CAPITOLO` in tabelle.py),
+  «ALTRO» escluso — è il ripiego di chi non trova la sua stanza, non una
+  stanza vera, come «Pratiche e oneri» resta senza tinta piena nel computo.
+  Lo **stato** dell'ordine è un semaforo a tre: rosso quello che manca,
+  giallo quello mosso, verde quello arrivato. Vale la stessa regola del
+  pallino sulla categoria di spesa: il data_editor è tela grafica e ignora
+  il CSS, quindi il colore arriva incollato al testo, non nello sfondo
+  della cella.
 - **Metrica**: ogni `st.metric` è un campione — etichetta in maiuscoletto
   sopra, numero grande sotto, fondo rialzato e squadrato. Vale in tutta
   l'app: planimetria, riepilogo del computo, business plan.

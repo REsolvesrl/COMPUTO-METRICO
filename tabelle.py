@@ -60,10 +60,33 @@ COLONNE_SPESE_NUM = ["importo", "aliquota_iva"]
 # nell'ordine in cui si sanno le cose: che roba è, quanta, da chi la compri,
 # dove, a che punto è. **Nessuna colonna di soldi**, ed è una scelta
 # spiegata in materiali.py: i prezzi dei materiali vivono nel registro
-# spese, dove arrivano dalle fatture vere.
-COLONNE_MATERIALI = ["capitolo", "descrizione", "um", "quantita",
+# spese, dove arrivano dalle fatture vere. Niente unità di misura: sul
+# foglio firmato non compilava mai, ed è una colonna che chiedeva spazio a
+# vuoto.
+COLONNE_MATERIALI = ["capitolo", "descrizione", "quantita",
                      "fornitore", "link", "stato", "note"]
 COLONNE_MATERIALI_NUM = ["quantita"]
+
+# Pallini colorati per i capitoli dell'allegato: nove tinte per nove
+# capitoli, sul modello dei sette mestieri del computo. «ALTRO» resta senza
+# — è il ripiego di chi non trova la sua stanza in elenco, non una stanza
+# vera — così come «Pratiche e oneri» resta senza tinta piena nel computo.
+EMOJI_CAPITOLO = {
+    "BAGNO": "🔵", "PORTE E INFISSI": "🟤", "IMPIANTO ELETTRICO": "🟡",
+    "MURATURA": "🟠", "PAVIMENTI": "🟢", "IMPIANTO RISCALDAMENTO": "🔴",
+    "CUCINA": "🟣", "ARREDO ED ELETTRODOMESTICI": "⚫", "ESTERNI": "⚪",
+}
+CAPITOLI_EMOJI = [f"{EMOJI_CAPITOLO.get(c, '')} {c}".strip()
+                 for c in materiali.CAPITOLI]
+
+# Un semaforo, non una tavolozza: rosso quello che manca ancora, giallo
+# quello mosso, verde quello arrivato — è la stessa lettura a colpo
+# d'occhio con cui si guarda un cantiere.
+EMOJI_STATO = {
+    "Da ordinare": "🔴", "Ordinato": "🟡", "Consegnato": "🟢",
+}
+STATI_EMOJI = [f"{EMOJI_STATO.get(s, '')} {s}".strip()
+              for s in materiali.STATI]
 # ⚠️ Le voci della griglia di merito stanno IN MEZZO, fra i mq e il
 # coefficiente: e' l'ordine in cui si compila una riga (che immobile e',
 # poi quanto vale). Il coefficiente viene dopo perche' ormai e' l'ECCEZIONE
@@ -123,20 +146,50 @@ def voci_da_df(df):
 
 # ------------------------------------------------------------------ spese
 
-def cat_pulita(valore):
-    """Categoria senza l'eventuale pallino emoji iniziale (per calcoli/JSON)."""
+def _pallino_pulito(valore, mappa_emoji):
+    """Il valore senza l'eventuale pallino emoji iniziale, qualunque mappa."""
     testo = (str(valore) if valore is not None else "").strip()
-    for emoji in EMOJI_CATEGORIA.values():
+    for emoji in mappa_emoji.values():
         if testo.startswith(emoji):
             return testo[len(emoji):].strip()
     return testo
 
 
+def _pallino_display(valore, mappa_emoji):
+    """Il valore col pallino emoji davanti, se la mappa gliene assegna uno."""
+    base = _pallino_pulito(valore, mappa_emoji)
+    emoji = mappa_emoji.get(base)
+    return f"{emoji} {base}" if emoji else base
+
+
+def cat_pulita(valore):
+    """Categoria senza l'eventuale pallino emoji iniziale (per calcoli/JSON)."""
+    return _pallino_pulito(valore, EMOJI_CATEGORIA)
+
+
 def cat_display(valore):
     """Categoria col pallino emoji davanti (per la tabella modificabile)."""
-    base = cat_pulita(valore)
-    emoji = EMOJI_CATEGORIA.get(base)
-    return f"{emoji} {base}" if emoji else base
+    return _pallino_display(valore, EMOJI_CATEGORIA)
+
+
+def capitolo_pulito(valore):
+    """Capitolo senza l'eventuale pallino emoji iniziale."""
+    return _pallino_pulito(valore, EMOJI_CAPITOLO)
+
+
+def capitolo_display(valore):
+    """Capitolo col pallino emoji davanti (per la tabella modificabile)."""
+    return _pallino_display(valore, EMOJI_CAPITOLO)
+
+
+def stato_pulito(valore):
+    """Stato dell'ordine senza l'eventuale pallino emoji iniziale."""
+    return _pallino_pulito(valore, EMOJI_STATO)
+
+
+def stato_display(valore):
+    """Stato dell'ordine col pallino emoji davanti (semaforo)."""
+    return _pallino_display(valore, EMOJI_STATO)
 
 
 def df_spese_vuoto(colonne=None):
@@ -223,7 +276,8 @@ def df_materiali_da_righe(righe):
 
     ⚠️ Capitolo e stato vuoti diventano **None**, mai stringa vuota: sono
     tendine, e `""` non è fra le opzioni — il data_editor va in errore nel
-    browser. È lo stesso inciampo già preso con la categoria delle spese.
+    browser. È lo stesso inciampo già preso con la categoria delle spese, e
+    porta lo stesso pallino colorato davanti al testo.
     """
     dati = {}
     for col in COLONNE_MATERIALI:
@@ -231,9 +285,13 @@ def df_materiali_da_righe(righe):
         if col in COLONNE_MATERIALI_NUM:
             dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
                                       errors="coerce")
-        elif col in ("capitolo", "stato"):
+        elif col == "capitolo":
             dati[col] = pd.Series(
-                [None if _mancante(v) else (str(v).strip() or None)
+                [None if _mancante(v) else (capitolo_display(v) or None)
+                 for v in valori], dtype="object")
+        elif col == "stato":
+            dati[col] = pd.Series(
+                [None if _mancante(v) else (stato_display(v) or None)
                  for v in valori], dtype="object")
         else:
             dati[col] = pd.Series(
@@ -271,13 +329,13 @@ def materiali_da_df(df):
             return str(valore).strip() or predefinito
 
         righe.append({
-            "capitolo": testo("capitolo", materiali.CAPITOLO_PREDEFINITO),
+            "capitolo": (capitolo_pulito(testo("capitolo"))
+                        or materiali.CAPITOLO_PREDEFINITO),
             "descrizione": descrizione,
-            "um": testo("um"),
             "quantita": numero("quantita"),
             "fornitore": testo("fornitore"),
             "link": testo("link"),
-            "stato": testo("stato", materiali.STATO_PREDEFINITO),
+            "stato": stato_pulito(testo("stato")) or materiali.STATO_PREDEFINITO,
             "note": testo("note"),
         })
     return righe

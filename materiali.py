@@ -108,7 +108,6 @@ def riga_vuota(capitolo=CAPITOLO_PREDEFINITO, descrizione="", note=""):
     return {
         "capitolo": capitolo,
         "descrizione": descrizione,
-        "um": "",
         "quantita": None,
         "fornitore": "",
         "link": "",
