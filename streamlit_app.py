@@ -1750,11 +1750,14 @@ def css_schede_computo():
     padding: 0.7rem 0.9rem 0.5rem;
     margin-top: 0.9rem;
 }
-/* stessa correzione del pool: il guscio di Streamlit è più basso del testo
-   che contiene, e senza questo margine la didascalia sale addosso al
-   titolo */
+/* Stessa correzione del pool (1rem, non un valore a caso): il guscio di
+   Streamlit attorno a un testo è più basso del testo stesso, e senza
+   questo margine quel che segue sale addosso al titolo. Da quando la
+   didascalia sotto il titolo è sparita, quel che segue è direttamente la
+   tabella: senza uno scarto più largo del semplice recupero del guscio,
+   la sua intestazione toccava il titolo. */
 .st-key-card_materiali > [data-testid="stElementContainer"]:first-child {
-    margin-bottom: 0.6rem;
+    margin-bottom: 1.1rem;
 }
 .st-key-card_materiali > [data-testid="stElementContainer"]:first-child p {
     font-size: 1.05rem;
@@ -1948,12 +1951,14 @@ div[data-baseweb="select"] > div > div:first-child {{
 [class*="st-key-tparz_"] p {{
     text-align: right;
 }}
-/* «Cod.» al centro come il codice sotto: il bottone della riga centra il
-   suo testo da sé (comportamento di Streamlit), la didascalia no — di suo
-   sta a sinistra e in una colonna da 0,5 va a capo su due righe. */
+/* «Cod.» al centro. ⚠️ `!important`: senza, restava a sinistra — un
+   vincolo del tema di Streamlit sui paragrafi delle didascalie vince a
+   parità di specificità con un selettore-attributo come il nostro, e qui
+   è l'unico modo verificato per avere davvero l'ultima parola (lo stesso
+   motivo per cui la larghezza delle tabelle qui sopra lo usa). */
 [class*="st-key-tcod_"],
 [class*="st-key-tcod_"] p {{
-    text-align: center;
+    text-align: center !important;
 }}
 /* ⚠️ IL FILO FRA DUE VOCI È IL BORDO DELLA RIGA, non un elemento a sé.
    Come <hr> era una cosa in mezzo a due righe, con l'aria del blocco sopra

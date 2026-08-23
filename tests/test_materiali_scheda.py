@@ -101,7 +101,7 @@ def test_le_voci_portano_il_pallino_del_loro_capitolo():
     incollato al testo che finisce in tabella, non come sfondo di cella."""
     at = _avvia()
     df = at.session_state["df_materiali"]
-    assert df["capitolo"].iloc[0] == "🔵 BAGNO"
+    assert df["capitolo"].iloc[0] == "🟦 BAGNO"
 
 
 # --------------------------------------------------------------- il confine

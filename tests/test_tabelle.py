@@ -156,7 +156,9 @@ def test_materiali_vuoto_ha_le_colonne_e_i_tipi_giusti():
     df = tabelle.df_materiali_vuoto()
     assert list(df.columns) == tabelle.COLONNE_MATERIALI
     assert df["descrizione"].dtype == object
-    assert df["quantita"].dtype == "float64"
+    # Float64 nullable, non il numpy float64: qui la quantità mancante è
+    # la norma, non l'eccezione, e vuole un tipo che la sappia dire.
+    assert df["quantita"].dtype == "Float64"
     assert len(df) == 0
 
 
@@ -226,23 +228,23 @@ def test_capitolo_porta_il_pallino_nella_tabella():
     incollato al testo, non nello sfondo della cella."""
     df = tabelle.df_materiali_da_righe(
         [{"capitolo": "BAGNO", "descrizione": "BOX DOCCIA"}])
-    assert df["capitolo"].iloc[0] == "🔵 BAGNO"
+    assert df["capitolo"].iloc[0] == "🟦 BAGNO"
 
 
 def test_stato_porta_il_pallino_nella_tabella():
     df = tabelle.df_materiali_da_righe(
         [{"descrizione": "PORTE", "stato": "Consegnato"}])
-    assert df["stato"].iloc[0] == "🟢 Consegnato"
+    assert df["stato"].iloc[0] == "🟩 Consegnato"
 
 
 def test_capitolo_pulito_toglie_il_pallino():
-    assert tabelle.capitolo_pulito("🔵 BAGNO") == "BAGNO"
+    assert tabelle.capitolo_pulito("🟦 BAGNO") == "BAGNO"
     assert tabelle.capitolo_pulito("BAGNO") == "BAGNO"          # idempotente
     assert tabelle.capitolo_pulito(None) == ""
 
 
 def test_stato_pulito_toglie_il_pallino():
-    assert tabelle.stato_pulito("🟢 Consegnato") == "Consegnato"
+    assert tabelle.stato_pulito("🟩 Consegnato") == "Consegnato"
 
 
 def test_capitolo_altro_resta_senza_pallino():

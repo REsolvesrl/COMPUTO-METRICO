@@ -67,14 +67,19 @@ COLONNE_MATERIALI = ["capitolo", "descrizione", "quantita",
                      "fornitore", "link", "stato", "note"]
 COLONNE_MATERIALI_NUM = ["quantita"]
 
-# Pallini colorati per i capitoli dell'allegato: nove tinte per nove
-# capitoli, sul modello dei sette mestieri del computo. «ALTRO» resta senza
-# — è il ripiego di chi non trova la sua stanza in elenco, non una stanza
-# vera — così come «Pratiche e oneri» resta senza tinta piena nel computo.
+# Tessere colorate per i capitoli dell'allegato: nove tinte per nove
+# capitoli, sul modello dei sette mestieri del computo. Quadrate e non
+# pallini: il data_editor non permette uno sfondo di cella vero (è tela
+# grafica, vedi il vincolo in DESIGN.md), e fra i glifi disponibili il
+# quadrato pieno è quello che più si avvicina a un riempimento — un
+# pallino, di fianco a un testo, legge come un'etichetta di stato, non
+# come una tinta. «ALTRO» resta senza — è il ripiego di chi non trova la
+# sua stanza in elenco, non una stanza vera — così come «Pratiche e
+# oneri» resta senza tinta piena nel computo.
 EMOJI_CAPITOLO = {
-    "BAGNO": "🔵", "PORTE E INFISSI": "🟤", "IMPIANTO ELETTRICO": "🟡",
-    "MURATURA": "🟠", "PAVIMENTI": "🟢", "IMPIANTO RISCALDAMENTO": "🔴",
-    "CUCINA": "🟣", "ARREDO ED ELETTRODOMESTICI": "⚫", "ESTERNI": "⚪",
+    "BAGNO": "🟦", "PORTE E INFISSI": "🟫", "IMPIANTO ELETTRICO": "🟨",
+    "MURATURA": "🟧", "PAVIMENTI": "🟩", "IMPIANTO RISCALDAMENTO": "🟥",
+    "CUCINA": "🟪", "ARREDO ED ELETTRODOMESTICI": "⬛", "ESTERNI": "⬜",
 }
 CAPITOLI_EMOJI = [f"{EMOJI_CAPITOLO.get(c, '')} {c}".strip()
                  for c in materiali.CAPITOLI]
@@ -83,7 +88,7 @@ CAPITOLI_EMOJI = [f"{EMOJI_CAPITOLO.get(c, '')} {c}".strip()
 # quello mosso, verde quello arrivato — è la stessa lettura a colpo
 # d'occhio con cui si guarda un cantiere.
 EMOJI_STATO = {
-    "Da ordinare": "🔴", "Ordinato": "🟡", "Consegnato": "🟢",
+    "Da ordinare": "🟥", "Ordinato": "🟨", "Consegnato": "🟩",
 }
 STATI_EMOJI = [f"{EMOJI_STATO.get(s, '')} {s}".strip()
               for s in materiali.STATI]
@@ -173,22 +178,22 @@ def cat_display(valore):
 
 
 def capitolo_pulito(valore):
-    """Capitolo senza l'eventuale pallino emoji iniziale."""
+    """Capitolo senza l'eventuale tessera colorata iniziale."""
     return _pallino_pulito(valore, EMOJI_CAPITOLO)
 
 
 def capitolo_display(valore):
-    """Capitolo col pallino emoji davanti (per la tabella modificabile)."""
+    """Capitolo con la tessera colorata davanti (per la tabella modificabile)."""
     return _pallino_display(valore, EMOJI_CAPITOLO)
 
 
 def stato_pulito(valore):
-    """Stato dell'ordine senza l'eventuale pallino emoji iniziale."""
+    """Stato dell'ordine senza l'eventuale tessera colorata iniziale."""
     return _pallino_pulito(valore, EMOJI_STATO)
 
 
 def stato_display(valore):
-    """Stato dell'ordine col pallino emoji davanti (semaforo)."""
+    """Stato dell'ordine con la tessera colorata davanti (semaforo)."""
     return _pallino_display(valore, EMOJI_STATO)
 
 
@@ -266,7 +271,11 @@ def df_materiali_vuoto():
     """Tabella dei materiali vuota, con i tipi giusti."""
     dati = {}
     for col in COLONNE_MATERIALI:
-        tipo = "float64" if col in COLONNE_MATERIALI_NUM else "object"
+        # «Float64» (nullable, non il numpy «float64»): è il tipo che
+        # pandas riserva apposta per un numero che può mancare, con un
+        # NA suo — dove il numpy semplice ha solo NaN, buono per i conti
+        # ma nato per dire «non un numero», non «non c'è ancora».
+        tipo = "Float64" if col in COLONNE_MATERIALI_NUM else "object"
         dati[col] = pd.Series(dtype=tipo)
     return pd.DataFrame(dati)
 
@@ -277,14 +286,20 @@ def df_materiali_da_righe(righe):
     ⚠️ Capitolo e stato vuoti diventano **None**, mai stringa vuota: sono
     tendine, e `""` non è fra le opzioni — il data_editor va in errore nel
     browser. È lo stesso inciampo già preso con la categoria delle spese, e
-    porta lo stesso pallino colorato davanti al testo.
+    porta la stessa tessera colorata davanti al testo.
     """
     dati = {}
     for col in COLONNE_MATERIALI:
         valori = [r.get(col) for r in righe]
         if col in COLONNE_MATERIALI_NUM:
-            dati[col] = pd.to_numeric(pd.Series(valori, dtype="object"),
-                                      errors="coerce")
+            # Il tipo nullable qui non è un capriccio: la quantità mancante
+            # è la NORMA su questo elenco (l'allegato firmato non la porta
+            # quasi mai), e un tipo numerico pensato per il caso raro
+            # rischia di trattarla come un'eccezione invece che come lo
+            # stato più comune della colonna.
+            dati[col] = pd.to_numeric(
+                pd.Series(valori, dtype="object"),
+                errors="coerce").astype("Float64")
         elif col == "capitolo":
             dati[col] = pd.Series(
                 [None if _mancante(v) else (capitolo_display(v) or None)
