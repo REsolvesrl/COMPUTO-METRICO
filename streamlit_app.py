@@ -1063,8 +1063,14 @@ def config_colonne_materiali():
                  "È l'unica colonna che serve perché la riga esista."),
         # «localized» e non «euro»: qui i decimali sono quelli del numero
         # (5 porte sono «5», 94,71 m² sono «94,71»), non due sempre.
+        # ⚠️ Senza `format`: come l'IVA % delle spese, l'unica altra colonna
+        # di questa app dove il vuoto è la norma e non l'eccezione. Un
+        # formato esplicito ("localized") è sospettato di essere la causa
+        # di un «None» stampato per le celle vuote invece che lasciarle
+        # bianche — non confermato con certezza, ma è l'unica differenza
+        # con la colonna gemella che quel difetto non lo mostra.
         "quantita": st.column_config.NumberColumn(
-            "Q.tà", width=70, min_value=0.0, format="localized",
+            "Q.tà", width=70, min_value=0.0,
             help="Quante ne servono. Si può lasciare vuota: sull'allegato "
                  "una quantità non scritta resta non scritta."),
         "fornitore": st.column_config.TextColumn(
@@ -1951,15 +1957,6 @@ div[data-baseweb="select"] > div > div:first-child {{
 [class*="st-key-tparz_"] p {{
     text-align: right;
 }}
-/* «Cod.» al centro. ⚠️ `!important`: senza, restava a sinistra — un
-   vincolo del tema di Streamlit sui paragrafi delle didascalie vince a
-   parità di specificità con un selettore-attributo come il nostro, e qui
-   è l'unico modo verificato per avere davvero l'ultima parola (lo stesso
-   motivo per cui la larghezza delle tabelle qui sopra lo usa). */
-[class*="st-key-tcod_"],
-[class*="st-key-tcod_"] p {{
-    text-align: center !important;
-}}
 /* ⚠️ IL FILO FRA DUE VOCI È IL BORDO DELLA RIGA, non un elemento a sé.
    Come <hr> era una cosa in mezzo a due righe, con l'aria del blocco sopra
    e la sua sotto: cadeva storto nel vuoto — otto pixel da una parte e tre
@@ -2219,11 +2216,8 @@ def riga_voce_computo(voce):
     aggiornare e con cui il pool sa che questa voce è già presa.
     """
     codice = voce["codice"]
-    # ⚠️ Questi PESI devono restare identici a quelli dell'intestazione
-    # qui sotto (h_cod, h_voce, …), o le colonne non tornano incolonnate:
-    # cambiando l'uno va cambiato anche l'altro.
     c_cod, c_desc, c_um, c_qta, c_prezzo, c_parz, c_x = st.columns(
-        [0.65, 3.02, 1.2, 0.85, 0.8, 1.0, 0.45],
+        [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45],
         vertical_alignment="center")
     aiuto = voce.get("nota")
     if voce.get("analisi"):
@@ -4695,20 +4689,10 @@ with sotto_computo:
                     st.session_state.cat_aperte ^= {cat}   # apre o chiude
                     st.rerun()
                 if aperta and voci_cat:
-                    # ⚠️ Pesi uguali a quelli di riga_voce_computo(), o le
-                    # colonne non tornano incolonnate con quelle sotto.
                     (h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz,
                      h_x) = st.columns(
-                        [0.65, 3.02, 1.2, 0.85, 0.8, 1.0, 0.45])
-                    # ⚠️ IL «CENTRATO» NON BASTAVA: la colonna del codice
-                    # era larga ESATTAMENTE quanto «Cod.» (45 px misurati),
-                    # e centrare un testo dentro una scatola grande quanto
-                    # lui stesso non sposta un pixel — non c'era spazio in
-                    # cui centrarlo. La correzione vera è nel peso della
-                    # colonna qui sopra (0,50 → 0,65): un po' di margine
-                    # perché il centrato abbia un effetto da vedere.
-                    with h_cod.container(key=f"tcod_{indice}"):
-                        st.caption("Cod.")
+                        [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45])
+                    h_cod.caption("Cod.")
                     h_voce.caption("Voce")
                     h_um.caption("U.M.")
                     h_qta.caption("Quantità")
