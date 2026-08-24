@@ -396,15 +396,22 @@ def css_mondo():
    per parte è la misura di Streamlit, tarata su una pagina di testo — qui
    il pezzo che comanda è un DISEGNO, e ogni pixel tolto al margine è un
    pixel in più di planimetria (160 px recuperati in larghezza).
-   ⚠️ Sopra il minimo NON è zero: la barra header di Streamlit (hamburger,
-   «Deploy») è alta 60 px ed è ASSOLUTA sopra il contenuto — misurata dal
-   vivo. Sotto quella soglia il primo titolo ci finisce sotto. 96 px erano
-   60 di barra più 36 di aria; qui restano 60 più il minimo che si vede
-   ancora come uno stacco, non un buco. */
+
+   La barra header di Streamlit (hamburger «Main menu», «Deploy») non
+   serve a chi usa quest'app: non c'è un `menu_items` personalizzato — il
+   menu è quello di fabbrica di Streamlit, «Rerun», «Settings», «Print»,
+   «About» — e «Deploy» è un pulsante di sviluppo, non un comando
+   dell'utente. Via del tutto: era ASSOLUTA sopra il contenuto (60 px
+   presi al disegno per un menu mai aperto), e restava dello stesso colore
+   dell'ardesia di fondo — misurato: rgb(26,39,68), identico — quindi non
+   nascondeva nemmeno una tinta diversa, solo spazio vuoto. */
+[data-testid="stHeader"] {{
+    display: none;
+}}
 [data-testid="stMainBlockContainer"] {{
     padding-left: 40px;
     padding-right: 40px;
-    padding-top: 68px;
+    padding-top: 16px;
 }}
 [data-testid="stMetricDelta"] {{ font-size: .78rem; }}
 /* Le tre schede «→ superficie» dei muri: altezza fissata a quella con la
