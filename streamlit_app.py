@@ -4370,11 +4370,19 @@ with sotto_materiali:
     with st.container(key="card_materiali"):
         st.markdown("🛒 Materiali · a cura del Committente")
 
+        # ⚠️⚠️ `placeholder=""` NON è un dettaglio: senza, ogni cella vuota
+        # si stampa da sola la parola **«None»**. È il comportamento
+        # documentato di Streamlit — «If this is None (default), missing
+        # values are displayed as "None"» — e qui colpiva in pieno, perché
+        # la quantità su questo elenco è vuota quasi sempre (29 celle su
+        # 29 all'apertura): la tabella si riempiva di «None» in inglese.
+        # Vale per OGNI data_editor di quest'app: non c'è un solo posto in
+        # cui quella parola abbia senso per chi legge.
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
             num_rows="dynamic", hide_index=True, width="stretch",
             key=f"editor_materiali_{st.session_state.versione_mat}",
-            column_config=config_colonne_materiali())
+            column_config=config_colonne_materiali(), placeholder="")
         # come per le spese: l'input del data_editor resta il DataFrame
         # stabile, il ritorno vive a parte per l'export e il salvataggio
         st.session_state.df_materiali_live = df_mat_ed
@@ -5753,7 +5761,7 @@ with tab_plan:
                         help="Locale piastrellato (bagno, fascia cucina): "
                              "niente battiscopa e la fascia rivestita non "
                              "si rasa né si tinteggia"),
-                })
+                }, placeholder="")
 
             locali_calcolo = []
             for (uid, zid), (_, riga) in zip(riferimenti, df_loc.iterrows()):
@@ -6288,7 +6296,8 @@ with tab_bp:
                     df_ant_ed = st.data_editor(
                         df_ant, hide_index=True, num_rows="fixed",
                         key=f"anteprima_fatt_{st.session_state.fatt_count}",
-                        column_config=config_colonne_spese())
+                        column_config=config_colonne_spese(),
+                        placeholder="")
                     if st.button("➕ Aggiungi alle spese sostenute",
                                  type="primary", key="aggiungi_fatture"):
                         # parto dalle spese correnti (col ritorno live, che
@@ -6333,7 +6342,7 @@ with tab_bp:
                                   st.session_state.get("df_spese_live")),
                     num_rows="dynamic", hide_index=True, width="stretch",
                     key=f"editor_spese_{st.session_state.versione_bp}",
-                    column_config=config_colonne_spese())
+                    column_config=config_colonne_spese(), placeholder="")
                 # il ritorno NON viene rimesso in df_spese: ripassare al
                 # data_editor un DataFrame che cambia a ogni run gli faceva
                 # "perdere" la prima selezione di categoria (da rifare due
@@ -6383,7 +6392,7 @@ with tab_bp:
                             "Categoria", width=150,
                             options=CATEGORIE_SPESE_EMOJI),
                         "note": st.column_config.TextColumn("Note", width=110),
-                    })
+                    }, placeholder="")
                 st.session_state.df_spese_prev_live = df_prev_ed
                 righe_prev = spese_da_df(df_prev_ed)
                 tot_prev = fattibilita.totale_spese(righe_prev)
@@ -6999,7 +7008,7 @@ with tab_bp:
                     "% del contratto", min_value=0.0, max_value=100.0,
                     step=5.0, format="%.1f"),
                 "Pagato": st.column_config.CheckboxColumn("Saldato"),
-            })
+            }, placeholder="")
         st.session_state.cant_sal = [
             {"percento": float(r["%"] or 0.0), "pagato": bool(r["Pagato"])}
             for _, r in df_sal.iterrows()]
@@ -7233,7 +7242,7 @@ with tab_bp:
                          "sa che il modello ha torto."),
                 "note": st.column_config.TextColumn(
                     "Note / link annuncio", width="large"),
-            })
+            }, placeholder="")
         # ⚠️ Le colonne non si perdono per strada. Il ritorno della tabella
         # torna a essere il dato di partenza del giro dopo: basta che una
         # volta arrivi senza intestazioni e la tabella resta per sempre un

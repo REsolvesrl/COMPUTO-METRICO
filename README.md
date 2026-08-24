@@ -52,8 +52,7 @@ CME/
 ├── archivio_locale.py         # archivio dei progetti in una cartella del PC
 ├── requirements.txt           # librerie necessarie all'app
 ├── requirements-dev.txt       # come sopra + pytest (per lo sviluppo)
-├── Avvia CME.bat              # avvio quotidiano (doppio clic)
-├── Aggiorna CME.bat           # scarica l'ultima versione da GitHub
+├── Avvia CME.bat              # avvio quotidiano (si aggiorna da sé)
 ├── Dockerfile                 # immagine per il deploy su Render
 ├── render.yaml                # ricetta del servizio su Render
 └── pytest.ini
@@ -65,8 +64,18 @@ CME/
 va lasciata aperta — e il browser con l'app. Per chiudere CME si chiude la
 finestra nera.
 
-`Aggiorna CME.bat` scarica l'ultima versione del codice da GitHub; i progetti
-non vengono toccati, vivono in un'altra cartella.
+**L'aggiornamento è automatico**: a ogni avvio `Avvia CME.bat` scarica da
+sé l'ultima versione del codice, poi parte. Non c'è niente da premere.
+
+Se l'aggiornamento non riesce — niente rete, git assente, modifiche locali
+non salvate — **il programma parte lo stesso** con la versione che c'è, e
+scrive nella finestra nera il perché. I progetti non vengono mai toccati:
+vivono in un'altra cartella.
+
+> C'era un `Aggiorna CME.bat` da lanciare a mano. È stato tolto: un
+> aggiornamento che dipende da chi si ricorda di premerlo non è un
+> aggiornamento, e si finisce a lavorare per giorni sulla versione vecchia
+> convinti di avere l'ultima.
 
 ### Perché nel browser e non in una finestra dedicata
 

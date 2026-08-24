@@ -133,3 +133,41 @@ def test_la_guardia_riconosce_il_difetto_che_deve_impedire():
                and getattr(n.func, "attr", "") == "text_input"
                and {k.arg for k in n.keywords} >= {"value", "key"}]
     assert len(trovati) == 1
+
+
+# ---------------------------------------------------------------- schema 4
+
+def test_ogni_tabella_modificabile_dice_come_scrivere_le_celle_vuote():
+    """Senza `placeholder`, una cella vuota si stampa la parola «None».
+
+    È il comportamento documentato di `st.data_editor` — «If this is None
+    (default), missing values are displayed as "None"» — e non c'è un solo
+    posto in quest'app in cui quella parola inglese abbia senso per chi
+    legge.
+
+    Difetto vero, costato tre giri di tentativi a vuoto: nell'elenco dei
+    materiali la quantità è quasi sempre vuota (29 celle su 29 appena si
+    apre un progetto), e la tabella si riempiva di «None». Il dato era
+    perfetto — arrivava al browser come `null` dentro l'Arrow, verificato
+    byte per byte — e proprio per questo nessun test lo vedeva: è la
+    stessa famiglia degli altri difetti sorvegliati qui, un valore giusto
+    in memoria e un altro sotto gli occhi dell'utente.
+
+    Rimedio: `placeholder=""` su OGNI data_editor.
+    """
+    colpevoli = []
+    for chiamata in _chiamate("data_editor"):
+        if "placeholder" not in {k.arg for k in chiamata.keywords}:
+            colpevoli.append(f"riga {chiamata.lineno}")
+    assert not colpevoli, (
+        "data_editor senza placeholder=\"\": le celle vuote mostreranno la "
+        "scritta «None» nel browser.\n" + "\n".join(colpevoli))
+
+
+def test_la_guardia_del_placeholder_riconosce_il_difetto():
+    """Una guardia serve solo se sa accorgersi del caso che vieta."""
+    finto = ast.parse('st.data_editor(df, key="k")')
+    nudi = [n for n in ast.walk(finto) if isinstance(n, ast.Call)
+            and getattr(n.func, "attr", "") == "data_editor"
+            and "placeholder" not in {k.arg for k in n.keywords}]
+    assert len(nudi) == 1

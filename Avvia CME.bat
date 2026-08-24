@@ -21,6 +21,44 @@ if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
     >> "%USERPROFILE%\.streamlit\credentials.toml" echo email = ""
 )
 
+rem ===================================================================
+rem  AGGIORNAMENTO AUTOMATICO
+rem  Prima si scarica l'ultima versione, poi si parte.
+rem
+rem  Prima c'era un "Aggiorna CME.bat" da lanciare a mano: ma un
+rem  aggiornamento che dipende da chi si ricorda di premerlo non e' un
+rem  aggiornamento. Si finisce a lavorare per giorni sulla versione
+rem  vecchia convinti di avere l'ultima, e a segnalare difetti gia'
+rem  corretti - che e' esattamente quello che e' successo.
+rem
+rem  ATTENZIONE: se l'aggiornamento non riesce (niente rete, modifiche locali non
+rem  salvate, git assente) il programma parte LO STESSO con la versione
+rem  che c'e'. Un aggiornamento fallito non deve mai lasciarti senza
+rem  programma; e "--ff-only" fa in modo che non venga mai toccato del
+rem  lavoro non ancora inviato.
+rem  I tuoi progetti non c'entrano: vivono in un'altra cartella e questo
+rem  comando non li sfiora.
+rem ===================================================================
+where git >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo   Git non e' installato: salto l'aggiornamento e parto.
+    goto avvia
+)
+
+echo.
+echo   Cerco aggiornamenti...
+git pull --ff-only
+if errorlevel 1 (
+    echo.
+    echo   ------------------------------------------------
+    echo   Non sono riuscito ad aggiornare: parto con la
+    echo   versione che hai adesso. Il messaggio qui sopra
+    echo   dice perche' - se non e' chiaro, copialo e mandalo.
+    echo   ------------------------------------------------
+)
+
+:avvia
 echo.
 echo   Avvio di CME. Tra pochi secondi si apre il browser da solo.
 echo.
