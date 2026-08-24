@@ -392,6 +392,14 @@ def css_mondo():
     font-weight: 700;
     line-height: 1.15;
 }}
+/* I margini laterali della pagina, dimezzati: 80 px per parte è la misura
+   di Streamlit, tarata su una pagina di testo. Qui il pezzo che comanda è
+   un DISEGNO — lo dice il mondo visivo — e ogni pixel tolto al margine è
+   un pixel in più di planimetria: 160 px recuperati in larghezza. */
+[data-testid="stMainBlockContainer"] {{
+    padding-left: 40px;
+    padding-right: 40px;
+}}
 [data-testid="stMetricDelta"] {{ font-size: .78rem; }}
 /* Un numero tagliato non è un numero: «97,32 …» non dice né quanto né di
    che cosa. Streamlit taglia con i puntini quello che non ci sta; qui si
@@ -494,6 +502,16 @@ def css_mondo():
    caratteri, ben oltre la misura in cui l'occhio ritrova l'inizio della riga
    dopo. Il limite non allarga nulla, taglia solo le righe troppo lunghe. */
 [data-testid="stCaptionContainer"] {{ max-width: 82ch; }}
+/* ⚠️ ECCEZIONE, e ha una ragione precisa. Alcune didascalie non sono
+   prosa: sono il CONTO da cui esce la tabella che intestano — «fascia
+   lorda meno vani porta meno finestre», con i numeri dentro. Spezzate a
+   82 caratteri diventano un paragrafo in cui la sottrazione si perde,
+   mentre larghe quanto la tabella si leggono come la riga di calcolo che
+   sono. Il limite resta il valore predefinito per tutte le altre: qui si
+   toglie solo dove il testo è una formula. */
+[class*="st-key-notalarga_"] [data-testid="stCaptionContainer"] {{
+    max-width: none;
+}}
 
 /* ---- La tabella dei comparabili scorre di lato --------------------- */
 /* Venti colonne: le tre dei dati, le quindici della griglia di merito, il
@@ -4378,11 +4396,19 @@ with sotto_materiali:
         # 29 all'apertura): la tabella si riempiva di «None» in inglese.
         # Vale per OGNI data_editor di quest'app: non c'è un solo posto in
         # cui quella parola abbia senso per chi legge.
+        # ⚠️ `row_height` NON è un vezzo estetico: è l'unico interruttore
+        # che Streamlit offre per far ANDARE A CAPO il testo nelle celle.
+        # Nel suo codice la regola è letterale — il testo va a capo solo se
+        # l'altezza della riga supera 4rem (64 px) — e sotto quella soglia
+        # una descrizione lunga viene troncata con i puntini. 66 px è il
+        # minimo che accende l'a capo: due righe quando servono, e non un
+        # pixel di più del necessario per chi ne usa una sola.
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
             num_rows="dynamic", hide_index=True, width="stretch",
             key=f"editor_materiali_{st.session_state.versione_mat}",
-            column_config=config_colonne_materiali(), placeholder="")
+            column_config=config_colonne_materiali(), placeholder="",
+            row_height=66)
         # come per le spese: l'input del data_editor resta il DataFrame
         # stabile, il ritorno vive a parte per l'export e il salvataggio
         st.session_state.df_materiali_live = df_mat_ed
@@ -5126,7 +5152,12 @@ with tab_plan:
             except Exception as errore:  # noqa: BLE001
                 st.error(f"Non riesco a leggere questo file: {errore}")
     else:
-        col_pagine, col_area = st.columns([1, 4], gap="medium")
+        # 1 su 4 dava alla colonna delle miniature un quinto della pagina
+        # per contenere dei nomi brevi («Piano terra»), mentre il disegno —
+        # che è il pezzo da guardare, e il DESIGN dice che comanda — si
+        # stringeva. Adesso l'elenco prende quello che gli serve e il resto
+        # va alla tela.
+        col_pagine, col_area = st.columns([0.55, 4], gap="medium")
 
         # ------------------------------------------------ elenco planimetrie
         with col_pagine:
@@ -5552,9 +5583,6 @@ with tab_plan:
                if c.get("soglia") and c.get("oltre") is not None else "")
             + '</span>'
             for c in st.session_state.categorie)
-        st.caption("Categorie di superficie (colore · peso commerciale). "
-                   "Per i **giardini** l'incidenza piena vale fino a 25 m²: "
-                   "l'eccedenza pesa la percentuale ridotta indicata.")
         st.markdown(legenda, unsafe_allow_html=True)
 
         with st.expander("🔤 Etichette sulle zone (layout)"):
@@ -5601,11 +5629,6 @@ with tab_plan:
         righe_sup, tot_sup, tot_comm, senza_scala = (
             planimetria.riepilogo_superfici(piante, mappa_percentuali(),
                                             escludi=CATEGORIE_SOLO_COMPUTO))
-        st.caption("Le **superfici interne** non compaiono qui: servono al "
-                   "computo metrico (pavimenti, battiscopa, tinteggiature). "
-                   "La parte vendibile si misura col perimetro **Superficie "
-                   "commerciale**, che le racchiude già — contarle entrambe "
-                   "vorrebbe dire contare due volte lo stesso spazio.")
         if senza_scala:
             st.warning("Escluse dal totale perché **senza scala**: "
                        + ", ".join(senza_scala))
@@ -5677,12 +5700,13 @@ with tab_plan:
             st.info("Quando ci sono zone disegnate (su piante con scala), "
                     "qui trovi i perimetri per battiscopa e tinteggiature.")
         else:
-            st.caption("Spunta, locale per locale, che cosa si rifà. "
-                       "**Rivestito** (bagni, fascia della cucina): niente "
-                       "battiscopa, e la fascia piastrellata non si rasa né "
-                       "si tinteggia. Pavimento = superficie calpestabile; "
-                       "pareti = perimetro × altezza; soffitti = superficie "
-                       "calpestabile.")
+            with st.container(key="notalarga_locali"):
+                st.caption("Spunta, locale per locale, che cosa si rifà. "
+                           "**Rivestito** (bagni, fascia della cucina): "
+                           "niente battiscopa, e la fascia piastrellata non "
+                           "si rasa né si tinteggia. Pavimento = superficie "
+                           "calpestabile; pareti = perimetro × altezza; "
+                           "soffitti = superficie calpestabile.")
             zona_per_rif = {(p["uid"], z["id"]): z
                             for p in piante for z in p["zone"]}
             righe_tab = []
@@ -5786,12 +5810,14 @@ with tab_plan:
             # ---- vani porta e rivestimenti: quello che va detratto ----
             with st.container(key="pan_porte"):
                 st.markdown("**🚪 Porte e rivestimenti (detrazioni)**")
-                st.caption("Il vano di una porta non ha battiscopa e non si "
-                           "tinteggia; nei locali rivestiti la fascia "
-                           "piastrellata non si rasa né si tinteggia. Una "
-                           "porta **interna** affaccia su due locali, quindi "
-                           "vale **due lati**; il portoncino d'ingresso uno "
-                           "solo. Le quantità qui sotto sono già al netto.")
+                with st.container(key="notalarga_porte"):
+                    st.caption("Il vano di una porta non ha battiscopa e non "
+                               "si tinteggia; nei locali rivestiti la fascia "
+                               "piastrellata non si rasa né si tinteggia. Una "
+                               "porta **interna** affaccia su due locali, "
+                               "quindi vale **due lati**; il portoncino "
+                               "d'ingresso uno solo. Le quantità qui sotto "
+                               "sono già al netto.")
                 d1, d2, d3, d4, d5 = st.columns(5)
                 larg_porta = d1.number_input(
                     "Larghezza porte (m)", min_value=0.0, max_value=3.0,
@@ -5850,14 +5876,16 @@ with tab_plan:
             # ---- finestre e porte finestra ----
             with st.container(key="pan_finestre"):
                 st.markdown("**🪟 Finestre e porte finestra (detrazioni)**")
-                st.caption("Stanno su un muro perimetrale, quindi affacciano "
-                           "su **un solo locale**: valgono un lato. La "
-                           "finestra ha il davanzale in alto e il battiscopa "
-                           "ci passa sotto, quindi toglie superficie **solo** "
-                           "a rasatura e tinteggiatura; la **porta finestra** "
-                           "arriva a terra e interrompe anche il battiscopa. "
-                           "Le misure predefinite sono quelle correnti: "
-                           "cambiale se le tue sono diverse.")
+                with st.container(key="notalarga_finestre"):
+                    st.caption("Stanno su un muro perimetrale, quindi "
+                               "affacciano su **un solo locale**: valgono un "
+                               "lato. La finestra ha il davanzale in alto e "
+                               "il battiscopa ci passa sotto, quindi toglie "
+                               "superficie **solo** a rasatura e "
+                               "tinteggiatura; la **porta finestra** arriva a "
+                               "terra e interrompe anche il battiscopa. Le "
+                               "misure predefinite sono quelle correnti: "
+                               "cambiale se le tue sono diverse.")
                 f1, f2, f3, f4, f5, f6 = st.columns(6)
                 n_fin = f1.number_input(
                     "Finestre", min_value=0, max_value=200, step=1,
@@ -5944,14 +5972,15 @@ with tab_plan:
                              else None),
                       delta_color="off")
             if q["rivestimenti_lordi"]:
-                st.caption(
-                    f":gray[Fascia lorda {numero_it(q['rivestimenti_lordi'], 2)} m² "
-                    f"(perimetro dei locali rivestiti × {numero_it(h_riv, 2)} m) − "
-                    f"{numero_it(q['detr_riv_porte'], 2)} m² di vani porta − "
-                    f"{numero_it(q['detr_riv_finestre'], 2)} m² di finestre. "
-                    "Dei vani si toglie solo la parte che cade dentro la "
-                    "fascia: una porta alta 2,10 su una fascia da 1,20 vale "
-                    "0,80 × 1,20.]")
+                with st.container(key="notalarga_fascia"):
+                    st.caption(
+                        f":gray[Fascia lorda {numero_it(q['rivestimenti_lordi'], 2)} m² "
+                        f"(perimetro dei locali rivestiti × {numero_it(h_riv, 2)} m) − "
+                        f"{numero_it(q['detr_riv_porte'], 2)} m² di vani porta − "
+                        f"{numero_it(q['detr_riv_finestre'], 2)} m² di finestre. "
+                        "Dei vani si toglie solo la parte che cade dentro la "
+                        "fascia: una porta alta 2,10 su una fascia da 1,20 vale "
+                        "0,80 × 1,20.]")
             elif any(l.get("rivestito") for l in locali_calcolo) is False:
                 st.caption(
                     ":gray[Nessun locale spuntato **Rivestito**: la voce dei "
@@ -5959,18 +5988,19 @@ with tab_plan:
                     "dei locali qui sopra — di norma i bagni e la fascia "
                     "della cucina.]")
             if detr_ml or detr_m2:
-                st.caption(
-                    f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
-                    f"(i locali rivestiti sono già esclusi) − "
-                    f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta "
-                    f"({q['lati_porta']} lati) − "
-                    f"{numero_it(q['detr_aperture_ml'], 2)} m di porte "
-                    f"finestra. "
-                    f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
-                    f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
-                    f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "
-                    f"vani porta − {numero_it(q['detr_aperture_m2'], 2)} m² "
-                    f"di finestre e porte finestra.]")
+                with st.container(key="notalarga_battiscopa"):
+                    st.caption(
+                        f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
+                        f"(i locali rivestiti sono già esclusi) − "
+                        f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta "
+                        f"({q['lati_porta']} lati) − "
+                        f"{numero_it(q['detr_aperture_ml'], 2)} m di porte "
+                        f"finestra. "
+                        f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
+                        f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
+                        f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "
+                        f"vani porta − {numero_it(q['detr_aperture_m2'], 2)} m² "
+                        f"di finestre e porte finestra.]")
 
             grandezze.update({
                 "pavimento": pav_m2,
@@ -5999,10 +6029,12 @@ with tab_plan:
             cos = riep_muri.get("costruire", vuoto)
             car = riep_muri.get("cartongesso", vuoto)
             esi = riep_muri.get("esistente", vuoto)
-            st.caption(f"Superficie = lunghezza × altezza "
-                       f"(**{numero_it(altezza, 2)} m**), al netto delle "
-                       "aperture dichiarate qui sotto: dove c'è un vano non "
-                       "c'è muratura da buttare giù né da tirare su.")
+            with st.container(key="notalarga_muri"):
+                st.caption(f"Superficie = lunghezza × altezza "
+                           f"(**{numero_it(altezza, 2)} m**), al netto delle "
+                           "aperture dichiarate qui sotto: dove c'è un vano "
+                           "non c'è muratura da buttare giù né da tirare "
+                           "su.")
             with st.container(key="pan_aperture"):
                 a1, a2, a5, a3, a4 = st.columns(5)
                 n_apert_dem = a1.number_input(
@@ -6052,15 +6084,16 @@ with tab_plan:
             apert_car = planimetria.superficie_aperture(
                 n_apert_car, larg_apert, alt_apert)
             if apert_dem or apert_cos or apert_car:
-                st.caption(
-                    f":gray[Un vano da {numero_it(larg_apert, 2)} × "
-                    f"{numero_it(alt_apert, 2)} m vale "
-                    f"**{numero_it(larg_apert * alt_apert, 2)} m²**: "
-                    f"{n_apert_dem} da demolire = "
-                    f"{numero_it(apert_dem, 2)} m², {n_apert_cos} da "
-                    f"costruire = {numero_it(apert_cos, 2)} m², "
-                    f"{n_apert_car} in cartongesso = "
-                    f"{numero_it(apert_car, 2)} m².]")
+                with st.container(key="notalarga_vani"):
+                    st.caption(
+                        f":gray[Un vano da {numero_it(larg_apert, 2)} × "
+                        f"{numero_it(alt_apert, 2)} m vale "
+                        f"**{numero_it(larg_apert * alt_apert, 2)} m²**: "
+                        f"{n_apert_dem} da demolire = "
+                        f"{numero_it(apert_dem, 2)} m², {n_apert_cos} da "
+                        f"costruire = {numero_it(apert_cos, 2)} m², "
+                        f"{n_apert_car} in cartongesso = "
+                        f"{numero_it(apert_car, 2)} m².]")
 
             dem_netto = planimetria.muri_al_netto(dem["m2"], apert_dem)
             cos_netto = planimetria.muri_al_netto(cos["m2"], apert_cos)
@@ -6126,14 +6159,11 @@ with tab_plan:
                      "nel computo si aggiorna da sé. Spento: la porti tu, con "
                      "il bottone.")
             st.session_state.auto_computo = auto
-            st.caption(
-                "Le quantità vengono **scritte** nelle voci del listino, non "
-                "sommate: si può rifare il rilevamento e cambiare le spunte "
-                "senza contare niente due volte. I prezzi restano quelli del "
-                "listino, modificabili come sempre. Le voci non spuntate qui "
-                "sotto non vengono mai toccate, e una misura che scende a "
-                "zero (nessun muro tracciato) **non cancella** un numero "
-                "battuto a mano.")
+            with st.container(key="notalarga_quantita"):
+                st.caption(
+                    "Le quantità vengono **scritte** nelle voci del listino, "
+                    "non sommate: si può rifare il rilevamento e cambiare le "
+                    "spunte senza contare niente due volte.")
             selezionate = []
             for codice, grandezza, acceso in VOCI_DA_SUPERFICI:
                 voce = listino.voce_per_codice(codice)
