@@ -4417,19 +4417,23 @@ with sotto_materiali:
         # 29 all'apertura): la tabella si riempiva di «None» in inglese.
         # Vale per OGNI data_editor di quest'app: non c'è un solo posto in
         # cui quella parola abbia senso per chi legge.
-        # ⚠️ `row_height` NON è un vezzo estetico: è l'unico interruttore
-        # che Streamlit offre per far ANDARE A CAPO il testo nelle celle.
-        # Nel suo codice la regola è letterale — il testo va a capo solo se
-        # l'altezza della riga supera 4rem (64 px) — e sotto quella soglia
-        # una descrizione lunga viene troncata con i puntini. 66 px è il
-        # minimo che accende l'a capo: due righe quando servono, e non un
-        # pixel di più del necessario per chi ne usa una sola.
+        # ⚠️ NIENTE `row_height`: è l'unico interruttore che Streamlit offre
+        # per far ANDARE A CAPO il testo nelle celle, ma è un tutto-o-niente
+        # sull'INTERA tabella, non riga per riga — non esiste un'altezza
+        # automatica che cresca solo dove serve. E il suo stesso codice fa
+        # la scelta secca: sotto 4 rem (64 px) niente a capo, sopra sì.
+        # Qui vince la densità: righe alla misura minima di fabbrica, «che
+        # ci sta una riga di testo» (così la documenta Streamlit). Il costo
+        # è che una descrizione più lunga della cella si tronca con i
+        # puntini invece di andare a capo — sull'elenco standard non
+        # succede mai (sono tutti nomi corti); se un giorno servisse
+        # scriverne una lunga, si allarga la colonna Descrizione, non la
+        # riga.
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
             num_rows="dynamic", hide_index=True, width="stretch",
             key=f"editor_materiali_{st.session_state.versione_mat}",
-            column_config=config_colonne_materiali(), placeholder="",
-            row_height=66)
+            column_config=config_colonne_materiali(), placeholder="")
         # come per le spese: l'input del data_editor resta il DataFrame
         # stabile, il ritorno vive a parte per l'export e il salvataggio
         st.session_state.df_materiali_live = df_mat_ed
