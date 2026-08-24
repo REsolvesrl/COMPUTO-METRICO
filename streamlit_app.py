@@ -4397,7 +4397,7 @@ tab_computo, tab_plan, tab_bp = st.tabs(
 # settecento righe, e ogni riga spostata è una riga da rileggere.
 with tab_computo:
     sotto_computo, sotto_materiali = st.tabs(
-        ["📝 Il computo", "🛒 Materiali · a cura del Committente"])
+        ["📝 Il computo", "🛒 Materiali"])
 
 
 # ⚠️ I materiali sono scritti PRIMA del computo, che a schermo sta a
@@ -4407,7 +4407,7 @@ with tab_computo:
 # sarebbe finito nel foglio solo al giro successivo.
 with sotto_materiali:
     with st.container(key="card_materiali"):
-        st.markdown("🛒 Materiali · a cura del Committente")
+        st.markdown("🛒 Materiali")
 
         # ⚠️⚠️ `placeholder=""` NON è un dettaglio: senza, ogni cella vuota
         # si stampa da sola la parola **«None»**. È il comportamento

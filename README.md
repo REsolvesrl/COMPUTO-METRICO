@@ -238,8 +238,8 @@ sessioni per volta; per un uso contemporaneo di più persone serve il piano da
 ## Materiali a cura del Committente
 
 La scheda **Computo metrico** ha due linguette: **📝 Il computo** e **🛒
-Materiali · a cura del Committente**. La seconda è l'elenco di quello che
-compri tu e l'impresa non fornisce. Non sono voci di computo e non entrano
+Materiali**. La seconda è l'elenco di quello che compri tu e l'impresa non
+fornisce. Non sono voci di computo e non entrano
 nel totale dei lavori: quel documento è dell'impresa, e questa roba dalla
 sua fattura non passa.
 
