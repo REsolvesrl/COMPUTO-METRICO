@@ -392,15 +392,29 @@ def css_mondo():
     font-weight: 700;
     line-height: 1.15;
 }}
-/* I margini laterali della pagina, dimezzati: 80 px per parte è la misura
-   di Streamlit, tarata su una pagina di testo. Qui il pezzo che comanda è
-   un DISEGNO — lo dice il mondo visivo — e ogni pixel tolto al margine è
-   un pixel in più di planimetria: 160 px recuperati in larghezza. */
+/* I margini della pagina, ridotti al minimo. Laterali dimezzati: 80 px
+   per parte è la misura di Streamlit, tarata su una pagina di testo — qui
+   il pezzo che comanda è un DISEGNO, e ogni pixel tolto al margine è un
+   pixel in più di planimetria (160 px recuperati in larghezza).
+   ⚠️ Sopra il minimo NON è zero: la barra header di Streamlit (hamburger,
+   «Deploy») è alta 60 px ed è ASSOLUTA sopra il contenuto — misurata dal
+   vivo. Sotto quella soglia il primo titolo ci finisce sotto. 96 px erano
+   60 di barra più 36 di aria; qui restano 60 più il minimo che si vede
+   ancora come uno stacco, non un buco. */
 [data-testid="stMainBlockContainer"] {{
     padding-left: 40px;
     padding-right: 40px;
+    padding-top: 68px;
 }}
 [data-testid="stMetricDelta"] {{ font-size: .78rem; }}
+/* Le tre schede «→ superficie» dei muri: altezza fissata a quella con la
+   riga di detrazione (114 px, misurati dal vivo), perché quella riga
+   compare solo se QUEL tipo di muro ha aperture — su un cantiere vero è
+   quasi sempre così per un tipo e non per gli altri — e senza il minimo la
+   scheda senza detrazione restava più bassa, spezzando la fila. */
+[class*="st-key-sup_muro_"] [data-testid="stMetric"] {{
+    min-height: 114px;
+}}
 /* Un numero tagliato non è un numero: «97,32 …» non dice né quanto né di
    che cosa. Streamlit taglia con i puntini quello che non ci sta; qui si
    preferisce andare a capo, sempre — l'unità di misura fa parte del dato. */
@@ -5258,9 +5272,7 @@ with tab_plan:
                                "modificato il disegno in questa sessione.]")
 
             if pianta["mpp"]:
-                st.caption("✅ Scala impostata — le misure sono in metri "
-                           "reali. ✏️ disegna le aree, 📏 misura al volo, "
-                           "↔️ per ricalibrare.")
+                st.caption("✅ Scala impostata — le misure sono in metri reali.")
             else:
                 st.warning("⚠️ Scala non impostata per questa planimetria: "
                            "scegli **Scala** nella barra sul disegno, poi "
@@ -6101,25 +6113,30 @@ with tab_plan:
             w1, w2, w3, w4 = st.columns(4)
             w1.metric(f"🔴 Da demolire ({dem['n']})",
                       f"{numero_it(dem['ml'], 2)} m")
-            w2.metric("→ superficie", f"{numero_it(dem_netto, 2)} m²",
-                      delta=(f"−{numero_it(apert_dem, 2)} m² aperture"
-                             if apert_dem else None), delta_color="off")
+            # ⚠️ Le tre schede «→ superficie» hanno un'altezza in comune
+            # (`sup_muro_*`, CSS più sotto) perché la riga della detrazione
+            # compare solo quando quel tipo di muro ha aperture — e un
+            # cantiere reale quasi sempre le ha su un tipo e non sugli
+            # altri (qui: demolire e cartongesso sì, costruire no). Senza
+            # l'altezza fissata, la scheda senza detrazione era più bassa
+            # delle altre due, e la fila sembrava rotta.
+            with w2.container(key="sup_muro_1"):
+                st.metric("→ superficie", f"{numero_it(dem_netto, 2)} m²",
+                          delta=(f"−{numero_it(apert_dem, 2)} m² aperture"
+                                 if apert_dem else None), delta_color="off")
             w3.metric(f"🟡 Da costruire ({cos['n']})",
                       f"{numero_it(cos['ml'], 2)} m")
-            w4.metric("→ superficie", f"{numero_it(cos_netto, 2)} m²",
-                      delta=(f"−{numero_it(apert_cos, 2)} m² aperture"
-                             if apert_cos else None), delta_color="off")
+            with w4.container(key="sup_muro_2"):
+                st.metric("→ superficie", f"{numero_it(cos_netto, 2)} m²",
+                          delta=(f"−{numero_it(apert_cos, 2)} m² aperture"
+                                 if apert_cos else None), delta_color="off")
             w5, w6 = st.columns(2)
             w5.metric(f"🟢 In cartongesso ({car['n']})",
                       f"{numero_it(car['ml'], 2)} m")
-            w6.metric("→ superficie", f"{numero_it(car_netto, 2)} m²",
-                      delta=(f"−{numero_it(apert_car, 2)} m² aperture"
-                             if apert_car else None), delta_color="off")
-            if apert_dem or apert_cos or apert_car:
-                st.caption(f":gray[Muri lordi: "
-                           f"{numero_it(dem['m2'], 2)} m² da demolire, "
-                           f"{numero_it(cos['m2'], 2)} m² da costruire e "
-                           f"{numero_it(car['m2'], 2)} m² in cartongesso.]")
+            with w6.container(key="sup_muro_3"):
+                st.metric("→ superficie", f"{numero_it(car_netto, 2)} m²",
+                          delta=(f"−{numero_it(apert_car, 2)} m² aperture"
+                                 if apert_car else None), delta_color="off")
             if esi["n"]:
                 st.caption(f":gray[Esclusi {esi['n']} muri «esistenti» "
                            f"({numero_it(esi['ml'], 2)} m): non sono "
