@@ -2219,8 +2219,11 @@ def riga_voce_computo(voce):
     aggiornare e con cui il pool sa che questa voce è già presa.
     """
     codice = voce["codice"]
+    # ⚠️ Questi PESI devono restare identici a quelli dell'intestazione
+    # qui sotto (h_cod, h_voce, …), o le colonne non tornano incolonnate:
+    # cambiando l'uno va cambiato anche l'altro.
     c_cod, c_desc, c_um, c_qta, c_prezzo, c_parz, c_x = st.columns(
-        [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45],
+        [0.65, 3.02, 1.2, 0.85, 0.8, 1.0, 0.45],
         vertical_alignment="center")
     aiuto = voce.get("nota")
     if voce.get("analisi"):
@@ -4692,13 +4695,18 @@ with sotto_computo:
                     st.session_state.cat_aperte ^= {cat}   # apre o chiude
                     st.rerun()
                 if aperta and voci_cat:
+                    # ⚠️ Pesi uguali a quelli di riga_voce_computo(), o le
+                    # colonne non tornano incolonnate con quelle sotto.
                     (h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz,
                      h_x) = st.columns(
-                        [0.5, 3.17, 1.2, 0.85, 0.8, 1.0, 0.45])
-                    # Centrata come il bottone della riga sotto: di suo la
-                    # didascalia sta a sinistra, e in una colonna larga
-                    # 0,5 la scritta finisce a capo su due righe — «Cod» e
-                    # «.» — sfasata dal codice che intesta.
+                        [0.65, 3.02, 1.2, 0.85, 0.8, 1.0, 0.45])
+                    # ⚠️ IL «CENTRATO» NON BASTAVA: la colonna del codice
+                    # era larga ESATTAMENTE quanto «Cod.» (45 px misurati),
+                    # e centrare un testo dentro una scatola grande quanto
+                    # lui stesso non sposta un pixel — non c'era spazio in
+                    # cui centrarlo. La correzione vera è nel peso della
+                    # colonna qui sopra (0,50 → 0,65): un po' di margine
+                    # perché il centrato abbia un effetto da vedere.
                     with h_cod.container(key=f"tcod_{indice}"):
                         st.caption("Cod.")
                     h_voce.caption("Voce")
