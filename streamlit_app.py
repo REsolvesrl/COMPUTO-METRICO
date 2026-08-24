@@ -4429,9 +4429,17 @@ with sotto_materiali:
         # succede mai (sono tutti nomi corti); se un giorno servisse
         # scriverne una lunga, si allarga la colonna Descrizione, non la
         # riga.
+        # `height="content"`: la tabella cresce quanto le sue righe, niente
+        # più scatola a scroll interno fissa a dieci righe («auto», il
+        # default). Con l'elenco standard (29 voci) si vedono tutte senza
+        # scorrere — è la pagina intera a scorrere, non una gabbia dentro
+        # di lei. Il tetto è 10.000 px (di Streamlit): un elenco enorme
+        # smetterebbe di crescere, ma per un elenco di materiali non ci si
+        # avvicina nemmeno.
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
             num_rows="dynamic", hide_index=True, width="stretch",
+            height="content",
             key=f"editor_materiali_{st.session_state.versione_mat}",
             column_config=config_colonne_materiali(), placeholder="")
         # come per le spese: l'input del data_editor resta il DataFrame
