@@ -1113,24 +1113,25 @@ def config_colonne_materiali():
     Se un giorno tornasse qui, tornerebbero anche due numeri diversi per la
     stessa cosa.
     """
-    # ⚠️ LE LARGHEZZE SONO UN BILANCIO, non sei numeri scelti a occhio: le
-    # sei dichiarate sommano 932 px più la colonnina delle spunte (~43), e
-    # la settima — Note — è di proposito SENZA larghezza, così si prende
-    # tutto quello che avanza. È il modo che Streamlit offre per riempire
-    # la riga; forzarlo dal CSS ha fatto schiantare la tabella una volta,
-    # e non si rifà (il perché è scritto nel foglio di stile).
-    # Descrizione è la più larga fra quelle fissate perché è, con Note,
-    # l'unica che porta testo libero — le due che si vedevano troncate.
+    # ⚠️ NESSUNA LARGHEZZA DICHIARATA, ed è la scelta: senza `width` ogni
+    # colonna si dimensiona sul proprio CONTENUTO — è l'«autosize» che il
+    # menu dell'intestazione offre a mano, qui acceso per tutte fin
+    # dall'inizio. Meglio delle misure fissate a occhio, che erano un
+    # bilancio da rifare a ogni cambiamento: si allargava una colonna e se
+    # ne doveva stringere un'altra, o compariva la barra di scorrimento.
+    # Così «BAGNO» non si porta dietro lo spazio che serve a «IMPIANTO
+    # RISCALDAMENTO», e le due colonne di testo libero — Descrizione e
+    # Note — prendono quanto gli serve invece di troncare.
     return {
         # Il pallino colorato è lo stesso ripiego della categoria di spesa:
         # il data_editor è disegnato su tela grafica e ignora il CSS, quindi
         # il colore arriva incollato al testo, non nello sfondo della cella.
         "capitolo": st.column_config.SelectboxColumn(
-            "Capitolo", width=185, options=CAPITOLI_EMOJI,
+            "Capitolo", options=CAPITOLI_EMOJI,
             help="Il capitolo dell'allegato: raggruppa le voci sul foglio "
                  "che si firma con l'impresa."),
         "descrizione": st.column_config.TextColumn(
-            "Descrizione", width=300,
+            "Descrizione",
             help="Il nome della cosa, come lo scriveresti sull'allegato. "
                  "È l'unica colonna che serve perché la riga esista."),
         # «localized» e non «euro»: qui i decimali sono quelli del numero
@@ -1142,32 +1143,27 @@ def config_colonne_materiali():
         # bianche — non confermato con certezza, ma è l'unica differenza
         # con la colonna gemella che quel difetto non lo mostra.
         "quantita": st.column_config.NumberColumn(
-            "Q.tà", width=62, min_value=0.0,
+            "Q.tà", min_value=0.0,
             help="Quante ne servono. Si può lasciare vuota: sull'allegato "
                  "una quantità non scritta resta non scritta."),
         "fornitore": st.column_config.TextColumn(
-            "Fornitore", width=150,
+            "Fornitore",
             help="Da chi lo compri. Non finisce sull'allegato: è roba tua."),
         # LinkColumn e non TextColumn: la cella diventa cliccabile, ed è
         # tutto il punto — sei mesi dopo si torna sulla scheda di QUEL
         # modello, non su una ricerca da rifare. `display_text` tiene la
         # colonna stretta: l'indirizzo per esteso mangerebbe mezza tabella.
         "link": st.column_config.LinkColumn(
-            "Link", width=95, display_text="apri ↗",
+            "Link", display_text="apri ↗",
             help="La pagina del negozio dove l'hai comprato. Incolla "
                  "l'indirizzo: la cella diventa un collegamento."),
         # Il semaforo: rosso quello che manca, giallo quello mosso, verde
         # quello arrivato — la stessa lettura a colpo d'occhio con cui si
         # guarda un cantiere.
         "stato": st.column_config.SelectboxColumn(
-            "Stato", width=140, options=STATI_EMOJI,
+            "Stato", options=STATI_EMOJI,
             help="A che punto è l'acquisto. Il pagamento no: quello ha già "
                  "il suo registro nelle spese a consuntivo."),
-        # SENZA `width`: è l'ultima colonna e porta il testo più lungo, e
-        # lasciarla libera le fa prendere lo spazio che avanza dopo le
-        # altre sei. ⚠️ Da sola non basta a riempire la riga — provato: il
-        # buco a destra restava — ed è il CSS a portare la griglia a
-        # larghezza piena; qui si evita solo di stringerla per due volte.
         "note": st.column_config.TextColumn(
             "Note",
             help="Sull'allegato diventa la nota in fondo, richiamata da un "
