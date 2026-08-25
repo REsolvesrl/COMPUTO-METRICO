@@ -559,6 +559,17 @@ def css_mondo():
    è questo, il contenitore dell'ELEMENTO — la stessa lezione di MCA qui
    sopra, non imparata la prima volta. */
 [class*="st-key-editor_materiali"] {{ overflow-x: auto; }}
+/* ⚠️ E la tabella deve PRENDERSI tutta la larghezza che ha.
+   `stDataFrame` è `display:inline-block`: si stringe sul contenuto, e su
+   uno schermo largo lasciava un buco a destra — misurati 253 px sprecati
+   a 1.500 di finestra, con la griglia ferma a 1.124 dentro un contenitore
+   da 1.379. Non bastava il `width:100%` sul guscio interno qui sopra:
+   quel 100% si calcola sul PADRE, ed era il padre a essere stretto.
+   Con questa riga la griglia arriva a 1.367 e Streamlit distribuisce lo
+   spazio avanzato fra le colonne, invece di lasciarlo vuoto. */
+[class*="st-key-editor_materiali"] [data-testid="stDataFrame"] {{
+    width: 100%;
+}}
 
 /* ---- La barra degli strumenti delle tabelle ------------------------ */
 /* Aggiungi riga · mostra colonne · scarica CSV · cerca · schermo intero.
@@ -1099,13 +1110,13 @@ def config_colonne_materiali():
     stessa cosa.
     """
     # ⚠️ LE LARGHEZZE SONO UN BILANCIO, non sette numeri scelti a occhio:
-    # sommate fanno 1.092 px, e con la colonnina delle spunte (~43) stanno
-    # dentro i ~1.149 che la scheda offre a pagina intera. Serve perché la
-    # tabella è alta quanto tutte le sue righe (`height="content"`): la
-    # barra di scorrimento orizzontale finirebbe in fondo, a 700 px sotto
-    # il bordo dello schermo, cioè irraggiungibile — misurato dal vivo. Con
-    # le colonne che ci stanno, quella barra non serve proprio.
-    # Chi allarga una colonna ne stringa un'altra, o il difetto torna.
+    # sommate fanno 1.162 px più la colonnina delle spunte (~43). Su uno
+    # schermo largo avanza spazio e Streamlit lo distribuisce fra le
+    # colonne; su uno stretto si scorre di lato (`overflow-x` sul
+    # contenitore, nel CSS). Descrizione e Note sono le larghe apposta:
+    # sono le uniche due che portano testo libero, e sono le uniche che si
+    # vedevano troncate. Chi ne allarga una ne stringa un'altra, o si
+    # scorre di lato anche dove prima non serviva.
     return {
         # Il pallino colorato è lo stesso ripiego della categoria di spesa:
         # il data_editor è disegnato su tela grafica e ignora il CSS, quindi
@@ -1115,7 +1126,7 @@ def config_colonne_materiali():
             help="Il capitolo dell'allegato: raggruppa le voci sul foglio "
                  "che si firma con l'impresa."),
         "descrizione": st.column_config.TextColumn(
-            "Descrizione", width=285,
+            "Descrizione", width=300,
             help="Il nome della cosa, come lo scriveresti sull'allegato. "
                  "È l'unica colonna che serve perché la riga esista."),
         # «localized» e non «euro»: qui i decimali sono quelli del numero
@@ -1149,7 +1160,7 @@ def config_colonne_materiali():
             help="A che punto è l'acquisto. Il pagamento no: quello ha già "
                  "il suo registro nelle spese a consuntivo."),
         "note": st.column_config.TextColumn(
-            "Note", width=175,
+            "Note", width=230,
             help="Sull'allegato diventa la nota in fondo, richiamata da un "
                  "asterisco accanto alla descrizione."),
     }
@@ -4470,18 +4481,13 @@ with sotto_materiali:
         # 29 all'apertura): la tabella si riempiva di «None» in inglese.
         # Vale per OGNI data_editor di quest'app: non c'è un solo posto in
         # cui quella parola abbia senso per chi legge.
-        # ⚠️ NIENTE `row_height`: è l'unico interruttore che Streamlit offre
-        # per far ANDARE A CAPO il testo nelle celle, ma è un tutto-o-niente
-        # sull'INTERA tabella, non riga per riga — non esiste un'altezza
-        # automatica che cresca solo dove serve. E il suo stesso codice fa
-        # la scelta secca: sotto 4 rem (64 px) niente a capo, sopra sì.
-        # Qui vince la densità: righe alla misura minima di fabbrica, «che
-        # ci sta una riga di testo» (così la documenta Streamlit). Il costo
-        # è che una descrizione più lunga della cella si tronca con i
-        # puntini invece di andare a capo — sull'elenco standard non
-        # succede mai (sono tutti nomi corti); se un giorno servisse
-        # scriverne una lunga, si allarga la colonna Descrizione, non la
-        # riga.
+        # ⚠️ `row_height=66` è il MINIMO che fa andare a capo il testo: è un
+        # tutto-o-niente sull'INTERA tabella — non esiste un'altezza
+        # automatica che cresca solo sulla riga che ne ha bisogno — e la
+        # soglia nel codice di Streamlit è secca, 4 rem (64 px). Sotto,
+        # nessuna cella va a capo e le note lunghe si troncano coi puntini;
+        # sopra, tutte le righe si alzano. 66 è il prezzo minimo per avere
+        # le note su due righe: due pixel oltre la soglia, non uno di più.
         # `height="content"`: la tabella cresce quanto le sue righe, niente
         # più scatola a scroll interno fissa a dieci righe («auto», il
         # default). Con l'elenco standard (29 voci) si vedono tutte senza
@@ -4515,7 +4521,7 @@ with sotto_materiali:
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
             num_rows="dynamic", hide_index=True, width="stretch",
-            height="content",
+            height="content", row_height=66,
             key=f"editor_materiali_{st.session_state.versione_mat}",
             column_config=config_colonne_materiali(), placeholder="")
         # Inserire, cancellare e copiare righe la tabella lo sa già fare da
