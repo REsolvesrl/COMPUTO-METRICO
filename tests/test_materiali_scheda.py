@@ -104,6 +104,76 @@ def test_le_voci_portano_il_pallino_del_loro_capitolo():
     assert df["capitolo"].iloc[0] == "🟦 BAGNO"
 
 
+# ------------------------------------------------------- l'ordinamento
+
+def _con_stati(cambi):
+    """L'elenco standard con qualche stato/fornitore cambiato a mano.
+
+    `cambi` e' {posizione: {campo: valore}} — un dizionario normale, non
+    argomenti con la stella: le chiavi devono restare NUMERI, e con `**`
+    Python le trasformerebbe in stringhe.
+    """
+    righe = materiali.elenco_standard()
+    for indice, campi in cambi.items():
+        righe[indice].update(campi)
+    return tabelle.df_materiali_da_righe(righe)
+
+
+def test_ordina_per_stato_mette_in_cima_quello_da_fare():
+    """Rosso, giallo, verde: quello che ti resta da comprare per primo."""
+    at = _avvia(df_materiali=_con_stati(
+        {0: {"stato": "Consegnato"}, 1: {"stato": "Ordinato"}}))
+    at.button(key="ord_mat_stato").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    righe = _materiali(at)
+    posizioni = [materiali.STATI.index(r["stato"]) for r in righe]
+    assert posizioni == sorted(posizioni)
+    assert righe[-1]["stato"] == "Consegnato"
+
+
+def test_ordinare_non_perde_ne_duplica_righe():
+    at = _avvia(df_materiali=_con_stati({3: {"stato": "Ordinato"}}))
+    at.button(key="ord_mat_stato").click().run()
+    assert len(_materiali(at)) == len(materiali.ELENCO_STANDARD)
+
+
+def test_l_ordinamento_e_stabile_e_non_disfa_l_ordine_del_foglio():
+    """Dentro il gruppo resta l'ordine dell'allegato firmato — piatto
+    doccia, box doccia, mobile — che un alfabetico distruggerebbe."""
+    at = _avvia(df_materiali=_con_stati({0: {"stato": "Consegnato"}}))
+    at.button(key="ord_mat_stato").click().run()
+    da_ordinare = [r["descrizione"] for r in _materiali(at)
+                   if r["stato"] == "Da ordinare"]
+    standard = [r["descrizione"] for r in materiali.elenco_standard()
+                if r["descrizione"] != "PIATTO DOCCIA"]
+    assert da_ordinare == standard
+
+
+def test_ordina_per_fornitore_manda_in_fondo_chi_non_ce_l_ha():
+    """La cima della lista e' il posto di quello che e' gia' deciso."""
+    at = _avvia(df_materiali=_con_stati({5: {"fornitore": "Bricoman"}}))
+    at.button(key="ord_mat_fornitore").click().run()
+    righe = _materiali(at)
+    assert righe[0]["fornitore"] == "Bricoman"
+    assert righe[-1]["fornitore"] == ""
+
+
+def test_ordina_per_capitolo_segue_l_ordine_dell_allegato():
+    at = _avvia(df_materiali=tabelle.df_materiali_da_righe(
+        list(reversed(materiali.elenco_standard()))))
+    at.button(key="ord_mat_capitolo").click().run()
+    capitoli = [materiali.CAPITOLI.index(r["capitolo"])
+                for r in _materiali(at)]
+    assert capitoli == sorted(capitoli)
+
+
+def test_ordinare_un_elenco_vuoto_non_esplode():
+    at = _avvia(df_materiali=tabelle.df_materiali_vuoto())
+    at.button(key="ord_mat_stato").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert _materiali(at) == []
+
+
 # --------------------------------------------------------------- il confine
 
 @pytest.fixture(scope="module")

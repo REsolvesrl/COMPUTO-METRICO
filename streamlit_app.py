@@ -1098,16 +1098,24 @@ def config_colonne_materiali():
     Se un giorno tornasse qui, tornerebbero anche due numeri diversi per la
     stessa cosa.
     """
+    # ⚠️ LE LARGHEZZE SONO UN BILANCIO, non sette numeri scelti a occhio:
+    # sommate fanno 1.092 px, e con la colonnina delle spunte (~43) stanno
+    # dentro i ~1.149 che la scheda offre a pagina intera. Serve perché la
+    # tabella è alta quanto tutte le sue righe (`height="content"`): la
+    # barra di scorrimento orizzontale finirebbe in fondo, a 700 px sotto
+    # il bordo dello schermo, cioè irraggiungibile — misurato dal vivo. Con
+    # le colonne che ci stanno, quella barra non serve proprio.
+    # Chi allarga una colonna ne stringa un'altra, o il difetto torna.
     return {
         # Il pallino colorato è lo stesso ripiego della categoria di spesa:
         # il data_editor è disegnato su tela grafica e ignora il CSS, quindi
         # il colore arriva incollato al testo, non nello sfondo della cella.
         "capitolo": st.column_config.SelectboxColumn(
-            "Capitolo", width=210, options=CAPITOLI_EMOJI,
+            "Capitolo", width=185, options=CAPITOLI_EMOJI,
             help="Il capitolo dell'allegato: raggruppa le voci sul foglio "
                  "che si firma con l'impresa."),
         "descrizione": st.column_config.TextColumn(
-            "Descrizione", width=300,
+            "Descrizione", width=285,
             help="Il nome della cosa, come lo scriveresti sull'allegato. "
                  "È l'unica colonna che serve perché la riga esista."),
         # «localized» e non «euro»: qui i decimali sono quelli del numero
@@ -1119,29 +1127,29 @@ def config_colonne_materiali():
         # bianche — non confermato con certezza, ma è l'unica differenza
         # con la colonna gemella che quel difetto non lo mostra.
         "quantita": st.column_config.NumberColumn(
-            "Q.tà", width=70, min_value=0.0,
+            "Q.tà", width=62, min_value=0.0,
             help="Quante ne servono. Si può lasciare vuota: sull'allegato "
                  "una quantità non scritta resta non scritta."),
         "fornitore": st.column_config.TextColumn(
-            "Fornitore", width=165,
+            "Fornitore", width=150,
             help="Da chi lo compri. Non finisce sull'allegato: è roba tua."),
         # LinkColumn e non TextColumn: la cella diventa cliccabile, ed è
         # tutto il punto — sei mesi dopo si torna sulla scheda di QUEL
         # modello, non su una ricerca da rifare. `display_text` tiene la
         # colonna stretta: l'indirizzo per esteso mangerebbe mezza tabella.
         "link": st.column_config.LinkColumn(
-            "Link", width=110, display_text="apri ↗",
+            "Link", width=95, display_text="apri ↗",
             help="La pagina del negozio dove l'hai comprato. Incolla "
                  "l'indirizzo: la cella diventa un collegamento."),
         # Il semaforo: rosso quello che manca, giallo quello mosso, verde
         # quello arrivato — la stessa lettura a colpo d'occhio con cui si
         # guarda un cantiere.
         "stato": st.column_config.SelectboxColumn(
-            "Stato", width=155, options=STATI_EMOJI,
+            "Stato", width=140, options=STATI_EMOJI,
             help="A che punto è l'acquisto. Il pagamento no: quello ha già "
                  "il suo registro nelle spese a consuntivo."),
         "note": st.column_config.TextColumn(
-            "Note", width=200,
+            "Note", width=175,
             help="Sull'allegato diventa la nota in fondo, richiamata da un "
                  "asterisco accanto alla descrizione."),
     }
@@ -1164,6 +1172,48 @@ def materiali_correnti():
     if df is None:
         return []
     return materiali_da_df(df)
+
+
+def riordina_materiali(criterio):
+    """Riordina l'elenco dei materiali per capitolo, stato o fornitore.
+
+    ⚠️ Riordina i DATI, non la vista, e non è un ripiego: la tabella
+    modificabile di Streamlit **non sa ordinare le colonne** quando si
+    possono aggiungere righe. Sta scritto nel suo manuale, alla voce
+    `num_rows`: «"dynamic": the user can add and delete rows, **and column
+    sorting is disabled**». Fra il poter inserire righe e il poter cliccare
+    l'intestazione per ordinare, Streamlit fa scegliere — e qui servono
+    tutt'e due, quindi l'ordinamento se lo prende questa funzione.
+
+    ⚠️⚠️ Ordinare di sola facciata sarebbe un difetto silenzioso: il
+    data_editor indirizza le modifiche per POSIZIONE della riga, quindi con
+    una vista ordinata diversamente dai dati una correzione finirebbe sulla
+    riga sbagliata. Riordinando i dati veri il problema non esiste — e si
+    fa ripartire la tabella (`versione_mat`) così che non resti in giro
+    nessuna modifica indirizzata all'ordine di prima.
+
+    L'ordinamento è STABILE e su una chiave sola, di proposito: dentro il
+    gruppo l'ordine resta quello che c'era — sull'elenco standard è
+    l'ordine del foglio firmato (piatto doccia, box doccia, mobile…), che
+    un alfabetico distruggerebbe senza guadagnarci niente.
+    """
+    righe = materiali_correnti()
+    if not righe:
+        return
+    if criterio == "Stato":
+        posizione = {s: i for i, s in enumerate(materiali.STATI)}
+        chiave = lambda r: posizione.get(r["stato"], len(posizione))  # noqa: E731
+    elif criterio == "Fornitore":
+        # Chi il fornitore non ce l'ha ancora va in CODA, non in testa: la
+        # cima della lista è il posto di quello che è già deciso.
+        chiave = lambda r: (r["fornitore"] or "").strip().upper() or "￿"  # noqa: E731
+    else:
+        posizione = {c: i for i, c in enumerate(materiali.CAPITOLI)}
+        chiave = lambda r: posizione.get(r["capitolo"], len(posizione))  # noqa: E731
+    righe.sort(key=chiave)
+    st.session_state.df_materiali = df_materiali_da_righe(righe)
+    st.session_state.pop("df_materiali_live", None)
+    st.session_state.versione_mat += 1
 
 
 def dati_fattura_da_file(file):
@@ -4439,12 +4489,45 @@ with sotto_materiali:
         # di lei. Il tetto è 10.000 px (di Streamlit): un elenco enorme
         # smetterebbe di crescere, ma per un elenco di materiali non ci si
         # avvicina nemmeno.
+        # L'ordinamento vive QUI e non nelle intestazioni della tabella
+        # perché Streamlit lo spegne quando si possono aggiungere righe
+        # (vedi `riordina_materiali`). Bottoni e non una tendina: sono
+        # azioni che si rifanno quando serve, non uno stato da ricordare —
+        # con una tendina, riordinare due volte di fila sullo stesso
+        # criterio non avrebbe fatto niente.
+        o_cap, o_sta, o_for, _o_resto = st.columns([1, 1, 1, 3.4])
+        o_cap.button("⇅ Capitolo", key="ord_mat_capitolo", width="stretch",
+                     on_click=riordina_materiali, args=("Capitolo",),
+                     help="Raggruppa per capitolo, nell'ordine "
+                          "dell'allegato: bagno, porte e infissi, "
+                          "elettrico, muratura, pavimenti, riscaldamento.")
+        o_sta.button("⇅ Stato", key="ord_mat_stato", width="stretch",
+                     on_click=riordina_materiali, args=("Stato",),
+                     help="Prima quello da ordinare, poi l'ordinato, in "
+                          "fondo il consegnato: quello che ti resta da "
+                          "fare in cima.")
+        o_for.button("⇅ Fornitore", key="ord_mat_fornitore", width="stretch",
+                     on_click=riordina_materiali, args=("Fornitore",),
+                     help="Raggruppa per negozio — comodo quando si va a "
+                          "comprare. Chi non ha ancora un fornitore va in "
+                          "fondo.")
+
         df_mat_ed = st.data_editor(
             st.session_state.df_materiali,
             num_rows="dynamic", hide_index=True, width="stretch",
             height="content",
             key=f"editor_materiali_{st.session_state.versione_mat}",
             column_config=config_colonne_materiali(), placeholder="")
+        # Inserire, cancellare e copiare righe la tabella lo sa già fare da
+        # sé: sono gesti del componente, non roba da aggiungere. Non si
+        # vedono però da nessuna parte — la barra degli strumenti compare
+        # solo passandoci sopra col mouse — e una riga che li nomina vale
+        # più di tre bottoni che rifarebbero le stesse cose peggio.
+        st.caption(
+            ":gray[**+** in alto a destra aggiunge una riga · la casella a "
+            "sinistra della riga la seleziona, e da lì si cancella · "
+            "**Ctrl+C** e **Ctrl+V** copiano una riga o un blocco di celle, "
+            "anche da e verso Excel.]")
         # come per le spese: l'input del data_editor resta il DataFrame
         # stabile, il ritorno vive a parte per l'export e il salvataggio
         st.session_state.df_materiali_live = df_mat_ed
