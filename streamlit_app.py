@@ -549,6 +549,16 @@ def css_mondo():
    (`editor_mca_<versione>`), la stessa che qui sotto serve alla barra
    degli strumenti — per questo il selettore è a sottostringa. */
 [class*="st-key-editor_mca"] {{ overflow-x: auto; }}
+/* Stesso difetto, stessa cura, sulla tabella dei materiali: sette colonne
+   (capitolo, descrizione, quantità, fornitore, link, stato, note) misurano
+   più della card che le contiene — la colonna Note, l'ultima, finiva
+   tagliata senza modo di raggiungerla. Prima avevo messo l'`overflow-x`
+   sul posto sbagliato (`stDataFrameResizable`, il guscio che Streamlit
+   forza già a `width:100%`, dove non c'è mai nulla che ecceda quella
+   larghezza): lì la regola non aveva niente da scorrere. Il posto giusto
+   è questo, il contenitore dell'ELEMENTO — la stessa lezione di MCA qui
+   sopra, non imparata la prima volta. */
+[class*="st-key-editor_materiali"] {{ overflow-x: auto; }}
 
 /* ---- La barra degli strumenti delle tabelle ------------------------ */
 /* Aggiungi riga · mostra colonne · scarica CSV · cerca · schermo intero.
@@ -1810,13 +1820,6 @@ def css_schede_computo():
     line-height: 1.4;
     margin: 0;
     color: var(--ottone);
-}
-/* Colonne colorate e col link vogliono più spazio delle sole quattro di
-   prima: se un giorno non ci stanno tutte, si scorre invece di stringersi
-   — la tela del data_editor lo sa già fare da sé, qui si toglie solo
-   qualunque taglio del contenitore che glielo impedisse. */
-.st-key-card_materiali [data-testid="stDataFrameResizable"] {
-    overflow-x: auto;
 }
 """)
     # --------------------------------------------- le righe del computo
