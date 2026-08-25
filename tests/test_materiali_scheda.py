@@ -66,6 +66,28 @@ def _materiali(at):
     return tabelle.materiali_da_df(at.session_state["df_materiali"])
 
 
+def _tabella(at):
+    """La tabella dei materiali, trovata per NOME e non per posizione.
+
+    at.dataframe[1] funzionava per caso: l'indice cambia appena la scheda
+    disegna un elemento in piu' o in meno, e il test finiva a guardare il
+    registro delle spese senza accorgersene.
+    """
+    for d in at.dataframe:
+        if "editor_materiali" in str(getattr(d.proto, "id", "")):
+            return d
+    raise AssertionError("la tabella dei materiali non c'e'")
+
+
+def _elenco_vero(at):
+    """L'elenco INTERO, non quello che si vede: col filtro attivo sono
+    due cose diverse, ed e' il primo a non dover perdere righe."""
+    df = at.session_state["df_materiali"]
+    if "df_materiali_live" in at.session_state:
+        df = at.session_state["df_materiali_live"]
+    return tabelle.materiali_da_df(df)
+
+
 # ------------------------------------------------- l'elenco di partenza
 
 def test_una_sessione_nuova_nasce_con_l_elenco_standard():
@@ -172,6 +194,73 @@ def test_ordinare_un_elenco_vuoto_non_esplode():
     at.button(key="ord_mat_stato").click().run()
     assert not at.exception, [e.value for e in at.exception]
     assert _materiali(at) == []
+
+
+# ----------------------------------------------------------- il filtro
+
+def test_il_filtro_mostra_solo_lo_stato_scelto():
+    at = _avvia(df_materiali=_con_stati(
+        {0: {"stato": "Ordinato"}, 1: {"stato": "Ordinato"}}))
+    at.selectbox(key="mat_filtro_w").select("🟨 Ordinato").run()
+    assert not at.exception, [e.value for e in at.exception]
+    vista = _tabella(at).value
+    assert len(vista) == 2
+    assert {tabelle.stato_pulito(v) for v in vista["stato"]} == {"Ordinato"}
+
+
+def test_le_righe_nascoste_dal_filtro_NON_spariscono():
+    """Il difetto da cui questo test guarda le spalle: il data_editor
+    riceve solo le righe viste, e prendere il suo ritorno per l'elenco
+    intero cancellerebbe tutte le altre senza che nessuno l'abbia
+    chiesto."""
+    at = _avvia(df_materiali=_con_stati({0: {"stato": "Ordinato"}}))
+    at.selectbox(key="mat_filtro_w").select("🟨 Ordinato").run()
+    assert not at.exception, [e.value for e in at.exception]
+    # l'elenco vero resta intero, anche se a video se ne vede una sola
+    assert len(_elenco_vero(at)) == len(materiali.ELENCO_STANDARD)
+
+
+def test_col_filtro_attivo_non_si_aggiungono_righe():
+    """Con l'aggiunta accesa il ritorno cambierebbe numero di righe, e
+    rimetterle al loro posto nell'elenco intero sarebbe un indovinello."""
+    at = _avvia(df_materiali=_con_stati({0: {"stato": "Ordinato"}}))
+    at.selectbox(key="mat_filtro_w").select("🟨 Ordinato").run()
+    assert _tabella(at).proto.editing_mode == 1     # FIXED
+
+
+def test_senza_filtro_si_torna_a_poter_aggiungere():
+    at = _avvia()
+    assert _tabella(at).proto.editing_mode == 2     # DYNAMIC
+
+
+def test_il_filtro_dice_quante_voci_sta_nascondendo():
+    at = _avvia(df_materiali=_con_stati({0: {"stato": "Ordinato"}}))
+    at.selectbox(key="mat_filtro_w").select("🟨 Ordinato").run()
+    testo = _testi(at)
+    assert "Filtro attivo" in testo
+    assert f"**{len(materiali.ELENCO_STANDARD) - 1}** sono nascoste" in testo
+
+
+def test_i_conteggi_restano_su_tutto_l_elenco_anche_filtrando():
+    """I riquadri sotto contano l'elenco, non la vista: sono il riassunto
+    di quello che devi comprare, non di quello che stai guardando."""
+    at = _avvia(df_materiali=_con_stati({0: {"stato": "Ordinato"}}))
+    at.selectbox(key="mat_filtro_w").select("🟨 Ordinato").run()
+    metriche = {m.label: m.value for m in at.metric}
+    assert metriche["Voci in elenco"] == str(len(materiali.ELENCO_STANDARD))
+
+
+def test_aprire_un_progetto_spegne_il_filtro():
+    """Un progetto appena aperto non deve mostrarsi a meta' per un filtro
+    scelto su un altro lavoro."""
+    at = _avvia(df_materiali=_con_stati({0: {"stato": "Ordinato"}}))
+    at.selectbox(key="mat_filtro_w").select("🟨 Ordinato").run()
+    at.session_state["da_caricare"] = {"progetto": {"nome": "Nuovo"}}
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert ("mat_filtro_w" not in at.session_state
+            or at.session_state["mat_filtro_w"] == "Tutti gli stati")
+    assert len(_tabella(at).value) == len(materiali.ELENCO_STANDARD)
 
 
 # --------------------------------------------------------------- il confine

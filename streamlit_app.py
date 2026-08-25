@@ -88,6 +88,7 @@ from tabelle import (
     mca_da_df,
     senza_iva_derivata,
     spese_da_df,
+    stato_pulito,
     voci_da_df,
 )
 import planimetria
@@ -1191,6 +1192,26 @@ def materiali_correnti():
     if df is None:
         return []
     return materiali_da_df(df)
+
+
+FILTRO_TUTTI = "Tutti gli stati"
+
+
+def cambia_filtro_materiali():
+    """Prima di cambiare vista, mette al sicuro quello che hai scritto.
+
+    ⚠️ Serve perché la tabella modificabile tiene le modifiche nel proprio
+    stato, legato alla CHIAVE del widget, e le riapplica ogni volta al
+    DataFrame stabile che le si ripassa. Cambiando filtro cambia la
+    chiave: nasce un widget nuovo, con lo stato vuoto — e tutto quello che
+    era stato scritto e non ancora versato nel DataFrame stabile sarebbe
+    perso, senza un errore e senza un avviso. Qui si versa prima.
+    """
+    righe = materiali_correnti()
+    if righe:
+        st.session_state.df_materiali = df_materiali_da_righe(righe)
+    st.session_state.pop("df_materiali_live", None)
+    st.session_state.versione_mat += 1
 
 
 def riordina_materiali(criterio):
@@ -4091,6 +4112,12 @@ if "da_caricare" in st.session_state:
         _materiali_salvati = materiali.elenco_standard()
     st.session_state.df_materiali = df_materiali_da_righe(_materiali_salvati)
     st.session_state.pop("df_materiali_live", None)
+    # ⚠️ E il filtro si azzera: se restasse acceso, il progetto appena
+    # aperto si mostrerebbe a metà — «dove sono finite le altre voci?» —
+    # per un filtro scelto su un altro lavoro. È lo stesso motivo per cui
+    # si ripuliscono le caselle qui sopra, ed è la guardia in
+    # test_guardie_stato.py ad averlo preteso.
+    st.session_state.pop("mat_filtro_w", None)
     st.session_state.versione_mat = st.session_state.get(
         "versione_mat", 0) + 1
     try:
@@ -4489,13 +4516,14 @@ with sotto_materiali:
         # 29 all'apertura): la tabella si riempiva di «None» in inglese.
         # Vale per OGNI data_editor di quest'app: non c'è un solo posto in
         # cui quella parola abbia senso per chi legge.
-        # ⚠️ `row_height=66` è il MINIMO che fa andare a capo il testo: è un
-        # tutto-o-niente sull'INTERA tabella — non esiste un'altezza
-        # automatica che cresca solo sulla riga che ne ha bisogno — e la
-        # soglia nel codice di Streamlit è secca, 4 rem (64 px). Sotto,
-        # nessuna cella va a capo e le note lunghe si troncano coi puntini;
-        # sopra, tutte le righe si alzano. 66 è il prezzo minimo per avere
-        # le note su due righe: due pixel oltre la soglia, non uno di più.
+        # ⚠️ NIENTE `row_height`: righe alla misura minima di fabbrica, il
+        # testo con addosso solo l'aria che serve a non toccare il bordo.
+        # Il prezzo è che le note lunghe si troncano coi puntini invece di
+        # andare a capo — la soglia dell'a capo, nel codice di Streamlit,
+        # è secca a 4 rem (64 px), e non esiste un'altezza che cresca solo
+        # sulla riga che ne ha bisogno: o si alzano tutte, o nessuna. Fra
+        # ventinove righe alte il doppio e una nota da aprire con un clic,
+        # qui vince la densità. La nota intera si legge cliccando la cella.
         # `height="content"`: la tabella cresce quanto le sue righe, niente
         # più scatola a scroll interno fissa a dieci righe («auto», il
         # default). Con l'elenco standard (29 voci) si vedono tutte senza
@@ -4509,7 +4537,8 @@ with sotto_materiali:
         # azioni che si rifanno quando serve, non uno stato da ricordare —
         # con una tendina, riordinare due volte di fila sullo stesso
         # criterio non avrebbe fatto niente.
-        o_cap, o_sta, o_for, _o_resto = st.columns([1, 1, 1, 3.4])
+        o_cap, o_sta, o_for, o_filtro, _o_resto = st.columns(
+            [1, 1, 1, 1.5, 1.9])
         o_cap.button("⇅ Capitolo", key="ord_mat_capitolo", width="stretch",
                      on_click=riordina_materiali, args=("Capitolo",),
                      help="Raggruppa per capitolo, nell'ordine "
@@ -4525,23 +4554,78 @@ with sotto_materiali:
                      help="Raggruppa per negozio — comodo quando si va a "
                           "comprare. Chi non ha ancora un fornitore va in "
                           "fondo.")
+        o_filtro.selectbox(
+            "Mostra", [FILTRO_TUTTI] + STATI_EMOJI, key="mat_filtro_w",
+            label_visibility="collapsed", on_change=cambia_filtro_materiali,
+            help="Mostra solo le voci in un certo stato — per esempio solo "
+                 "quelle da ordinare. Mentre il filtro è attivo non si "
+                 "aggiungono né si cancellano righe: torna a «tutti gli "
+                 "stati» per farlo.")
+
+        # ⚠️ IL FILTRO NASCONDE RIGHE, E LE RIGHE NASCOSTE NON DEVONO
+        # SPARIRE. Il data_editor indirizza le modifiche per POSIZIONE:
+        # dandogli solo un pezzo dell'elenco, il suo ritorno è quel pezzo,
+        # e se lo si prendesse per l'elenco intero le altre voci sarebbero
+        # cancellate senza che nessuno lo chieda. Quindi: si tiene da parte
+        # a quale posizione dell'elenco vero corrisponde ogni riga vista, e
+        # alla fine si rimettono al loro posto.
+        # ⚠️⚠️ Le posizioni si leggono dal DataFrame, non dalla lista di
+        # dizionari: `materiali_da_df` scarta le righe senza descrizione, e
+        # basterebbe svuotarne una perché tutte le posizioni successive
+        # scivolassero di uno — le modifiche finirebbero sulla riga
+        # sbagliata, in silenzio.
+        filtro = st.session_state.get("mat_filtro_w", FILTRO_TUTTI)
+        _df_tutte = st.session_state.df_materiali.reset_index(drop=True)
+        if filtro == FILTRO_TUTTI:
+            _indici = None
+            _df_vista = _df_tutte
+        else:
+            _cercato = stato_pulito(filtro)
+            _indici = [i for i, v in enumerate(_df_tutte["stato"])
+                       if (stato_pulito(v) or materiali.STATO_PREDEFINITO)
+                       == _cercato]
+            _df_vista = _df_tutte.iloc[_indici].reset_index(drop=True)
 
         df_mat_ed = st.data_editor(
-            st.session_state.df_materiali,
-            num_rows="dynamic", hide_index=True, width="stretch",
-            height="content", row_height=66,
+            _df_vista,
+            # Righe fisse mentre si filtra: con l'aggiunta e la
+            # cancellazione attive il ritorno cambierebbe numero di righe, e
+            # rimetterle al loro posto nell'elenco intero diventerebbe un
+            # indovinello. Meglio spegnere due gesti per un momento che
+            # sbagliare a rimettere a posto i dati.
+            num_rows=("dynamic" if _indici is None else "fixed"),
+            hide_index=True, width="stretch", height="content",
             key=f"editor_materiali_{st.session_state.versione_mat}",
             column_config=config_colonne_materiali(), placeholder="")
+
+        if _indici is not None:
+            # ogni riga vista torna esattamente da dove veniva
+            _df_unito = _df_tutte.copy()
+            _ritorno = df_mat_ed.reset_index(drop=True)
+            for _posizione, _indice in enumerate(_indici):
+                _df_unito.iloc[_indice] = _ritorno.iloc[_posizione]
+            df_mat_ed = _df_unito
         # Inserire, cancellare e copiare righe la tabella lo sa già fare da
         # sé: sono gesti del componente, non roba da aggiungere. Non si
         # vedono però da nessuna parte — la barra degli strumenti compare
         # solo passandoci sopra col mouse — e una riga che li nomina vale
         # più di tre bottoni che rifarebbero le stesse cose peggio.
-        st.caption(
-            ":gray[**+** in alto a destra aggiunge una riga · la casella a "
-            "sinistra della riga la seleziona, e da lì si cancella · "
-            "**Ctrl+C** e **Ctrl+V** copiano una riga o un blocco di celle, "
-            "anche da e verso Excel.]")
+        if _indici is None:
+            st.caption(
+                ":gray[**+** in alto a destra aggiunge una riga · la casella "
+                "a sinistra della riga la seleziona, e da lì si cancella · "
+                "**Ctrl+C** e **Ctrl+V** copiano una riga o un blocco di "
+                "celle, anche da e verso Excel.]")
+        else:
+            # Si dice SEMPRE quante voci restano fuori: una tabella filtrata
+            # che non dichiara di esserlo è il modo più facile per credere
+            # di aver perso delle righe.
+            _nascoste = len(_df_tutte) - len(_indici)
+            st.caption(
+                f":orange[Filtro attivo: vedi **{len(_indici)}** voci, "
+                f"**{_nascoste}** sono nascoste.] :gray[Le modifiche si "
+                "salvano normalmente; per aggiungere o cancellare righe "
+                "torna a «tutti gli stati».]")
         # come per le spese: l'input del data_editor resta il DataFrame
         # stabile, il ritorno vive a parte per l'export e il salvataggio
         st.session_state.df_materiali_live = df_mat_ed
