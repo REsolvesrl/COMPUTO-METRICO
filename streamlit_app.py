@@ -549,24 +549,27 @@ def css_mondo():
    (`editor_mca_<versione>`), la stessa che qui sotto serve alla barra
    degli strumenti — per questo il selettore è a sottostringa. */
 [class*="st-key-editor_mca"] {{ overflow-x: auto; }}
-/* Stesso difetto, stessa cura, sulla tabella dei materiali: sette colonne
-   (capitolo, descrizione, quantità, fornitore, link, stato, note) misurano
-   più della card che le contiene — la colonna Note, l'ultima, finiva
-   tagliata senza modo di raggiungerla. Prima avevo messo l'`overflow-x`
-   sul posto sbagliato (`stDataFrameResizable`, il guscio che Streamlit
-   forza già a `width:100%`, dove non c'è mai nulla che ecceda quella
-   larghezza): lì la regola non aveva niente da scorrere. Il posto giusto
-   è questo, il contenitore dell'ELEMENTO — la stessa lezione di MCA qui
-   sopra, non imparata la prima volta. */
-[class*="st-key-editor_materiali"] {{ overflow-x: auto; }}
-/* ⚠️ E la tabella deve PRENDERSI tutta la larghezza che ha.
-   `stDataFrame` è `display:inline-block`: si stringe sul contenuto, e su
-   uno schermo largo lasciava un buco a destra — misurati 253 px sprecati
-   a 1.500 di finestra, con la griglia ferma a 1.124 dentro un contenitore
-   da 1.379. Non bastava il `width:100%` sul guscio interno qui sopra:
-   quel 100% si calcola sul PADRE, ed era il padre a essere stretto.
-   Con questa riga la griglia arriva a 1.367 e Streamlit distribuisce lo
-   spazio avanzato fra le colonne, invece di lasciarlo vuoto. */
+/* ---- La tabella dei materiali si prende la larghezza, e basta così --- */
+/* `stDataFrame` è `inline-block` per scelta di Streamlit: si stringe sul
+   contenuto, e su uno schermo largo lasciava un buco a destra — misurati
+   253 px sprecati a 1.500 px di finestra. Portarlo al 100% lo chiude:
+   griglia da 1.036 a 1.130 px su 1.131 disponibili.
+
+   ⚠️⚠️ E QUI NON CI VA UN `overflow-x: auto` SUL CONTENITORE. Le due cose
+   INSIEME hanno fatto schiantare la tabella: compare la barra di
+   scorrimento → la larghezza utile cala → la griglia si rimisura → la
+   barra sparisce → la larghezza risale → si rimisura ancora, e via così
+   finché React non si arrende («Minified React error #185», massimo
+   numero di aggiornamenti superato). Al posto della tabella, un riquadro
+   rosso pieno di stack trace.
+
+   Non serve nemmeno: lo scorrimento orizzontale quando le colonne non ci
+   stanno lo fa la GRIGLIA da sé, dentro la sua tela grafica — con la
+   rotella, il trackpad e una barra che disegna lei. Non si vede dal DOM
+   (è canvas, non elementi), e per questo mi era sembrato assente.
+   MCA qui sopra è un caso diverso: lì le colonne hanno larghezze fisse
+   che sommano il doppio del contenitore, e l'`overflow` sull'elemento
+   serve davvero. */
 [class*="st-key-editor_materiali"] [data-testid="stDataFrame"] {{
     width: 100%;
 }}
@@ -1109,14 +1112,14 @@ def config_colonne_materiali():
     Se un giorno tornasse qui, tornerebbero anche due numeri diversi per la
     stessa cosa.
     """
-    # ⚠️ LE LARGHEZZE SONO UN BILANCIO, non sette numeri scelti a occhio:
-    # sommate fanno 1.162 px più la colonnina delle spunte (~43). Su uno
-    # schermo largo avanza spazio e Streamlit lo distribuisce fra le
-    # colonne; su uno stretto si scorre di lato (`overflow-x` sul
-    # contenitore, nel CSS). Descrizione e Note sono le larghe apposta:
-    # sono le uniche due che portano testo libero, e sono le uniche che si
-    # vedevano troncate. Chi ne allarga una ne stringa un'altra, o si
-    # scorre di lato anche dove prima non serviva.
+    # ⚠️ LE LARGHEZZE SONO UN BILANCIO, non sei numeri scelti a occhio: le
+    # sei dichiarate sommano 932 px più la colonnina delle spunte (~43), e
+    # la settima — Note — è di proposito SENZA larghezza, così si prende
+    # tutto quello che avanza. È il modo che Streamlit offre per riempire
+    # la riga; forzarlo dal CSS ha fatto schiantare la tabella una volta,
+    # e non si rifà (il perché è scritto nel foglio di stile).
+    # Descrizione è la più larga fra quelle fissate perché è, con Note,
+    # l'unica che porta testo libero — le due che si vedevano troncate.
     return {
         # Il pallino colorato è lo stesso ripiego della categoria di spesa:
         # il data_editor è disegnato su tela grafica e ignora il CSS, quindi
@@ -1159,8 +1162,13 @@ def config_colonne_materiali():
             "Stato", width=140, options=STATI_EMOJI,
             help="A che punto è l'acquisto. Il pagamento no: quello ha già "
                  "il suo registro nelle spese a consuntivo."),
+        # SENZA `width`: è l'ultima colonna e porta il testo più lungo, e
+        # lasciarla libera le fa prendere lo spazio che avanza dopo le
+        # altre sei. ⚠️ Da sola non basta a riempire la riga — provato: il
+        # buco a destra restava — ed è il CSS a portare la griglia a
+        # larghezza piena; qui si evita solo di stringerla per due volte.
         "note": st.column_config.TextColumn(
-            "Note", width=230,
+            "Note",
             help="Sull'allegato diventa la nota in fondo, richiamata da un "
                  "asterisco accanto alla descrizione."),
     }
