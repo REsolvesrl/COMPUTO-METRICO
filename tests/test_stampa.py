@@ -146,6 +146,47 @@ def test_col_prezzi_i_totali_ci_sono_ancora():
     assert "TOTALE (IVA inclusa)" in testo
 
 
+# --------------------------------------- la coda dei conti senza IVA
+
+TOTALI_SENZA_IVA = {"somma": 13595.4, "totale_lavori": 13595.4,
+                    "iva_pct": 0.0, "iva": 0.0, "totale": 13595.4}
+
+
+@pytest.mark.parametrize("con_prezzi", [True, False])
+def test_con_aliquota_zero_niente_riga_IVA(con_prezzi):
+    """«IVA 0% — 0,00 €» non e' un'informazione: e' una riga di conto che
+    dichiara di non contare niente."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI_SENZA_IVA,
+                                       con_prezzi=con_prezzi))
+    assert "IVA 0%" not in testo
+
+
+@pytest.mark.parametrize("con_prezzi", [True, False])
+def test_senza_IVA_il_totale_non_si_dice_inclusa(con_prezzi):
+    """Senza una riga d'imposta sopra, «(IVA inclusa)» parla di una cosa
+    che sul foglio non c'e' — e due righe con lo stesso numero ed
+    etichette opposte fanno dubitare del conto."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI_SENZA_IVA,
+                                       con_prezzi=con_prezzi))
+    assert "TOTALE (IVA inclusa)" not in testo
+    assert "TOTALE" in testo
+
+
+def test_con_aliquota_zero_il_totale_resta_giusto():
+    """Togliere una riga non deve togliere una cifra."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI_SENZA_IVA))
+    assert "13.595,40" in testo
+
+
+@pytest.mark.parametrize("con_prezzi", [True, False])
+def test_con_l_IVA_la_sua_riga_resta_dov_era(con_prezzi):
+    """La riga sparisce SOLO a zero: col 10% il foglio non cambia."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                       con_prezzi=con_prezzi))
+    assert "IVA 10%" in testo
+    assert "TOTALE (IVA inclusa)" in testo
+
+
 # ------------------------------- la coda: la clausola e le due firme
 
 def test_la_nota_della_tolleranza_chiude_il_computo():

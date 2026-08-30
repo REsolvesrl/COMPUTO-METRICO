@@ -238,14 +238,26 @@ def _tabella_totali(totali, con_prezzi=True):
         return [Paragraph(etichetta, stile),
                 Paragraph(euro(valore), stile) if con_prezzi else ""]
 
-    iva_pct = numero_it(totali.get("iva_pct"), 0)
+    # ⚠️ Con l'aliquota a ZERO la riga dell'IVA non si scrive: «IVA 0% —
+    # 0,00 €» non è un'informazione, è una riga di conto che dichiara di
+    # non contare niente. E con lei se ne va anche il «(IVA inclusa)» del
+    # totale: senza una riga d'imposta sopra, quella precisazione parla di
+    # una cosa che sul foglio non compare, e due righe identiche con
+    # etichette diverse — «esclusa» ed «inclusa» sullo stesso numero —
+    # fanno solo dubitare del conto.
+    aliquota = float(totali.get("iva_pct") or 0.0)
     righe = [
         riga("Somma dei lavori", totali.get("somma")),
         riga("Totale lavori (IVA esclusa)", totali.get("totale_lavori"),
              forte=True),
-        riga(f"IVA {iva_pct}%", totali.get("iva")),
-        riga("TOTALE (IVA inclusa)", totali.get("totale"), forte=True),
     ]
+    if aliquota > 0:
+        righe.append(
+            riga(f"IVA {numero_it(aliquota, 0)}%", totali.get("iva")))
+        righe.append(
+            riga("TOTALE (IVA inclusa)", totali.get("totale"), forte=True))
+    else:
+        righe.append(riga("TOTALE", totali.get("totale"), forte=True))
     # 75 mm mandavano «Totale lavori (IVA esclusa)» a capo: una riga di conti
     # spezzata in due si legge male e allunga la coda del documento.
     larghezza = 95 * mm
@@ -256,8 +268,11 @@ def _tabella_totali(totali, con_prezzi=True):
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LINEABOVE", (0, 1), (-1, 1), 0.5, colors.HexColor("#D6D2C8")),
-        ("LINEABOVE", (0, 3), (-1, 3), 1, OTTONE),
-        ("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#F0E9DA")),
+        # ⚠️ L'ULTIMA riga, non la quarta: senza IVA le righe sono tre, e
+        # un indice fisso avrebbe messo il filetto d'ottone e il fondo
+        # chiaro su una riga che non c'è — o peggio, sulla riga sbagliata.
+        ("LINEABOVE", (0, -1), (-1, -1), 1, OTTONE),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#F0E9DA")),
     ] + ([] if con_prezzi else [
         ("BOX", (1, 0), (1, -1), 0.5, colors.HexColor("#B9B4A8")),
         ("INNERGRID", (1, 0), (1, -1), 0.25, colors.HexColor("#D6D2C8")),
