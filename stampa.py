@@ -309,10 +309,10 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     con_prezzi: falso per il foglio da dare alle imprese perché ci facciano
         il preventivo. Le colonne del prezzo e dell'importo restano, e
         anche la coda dei conti: sono VUOTE, riquadrate, da riempire —
-        l'impresa deve poter mettere i suoi prezzi e fare la somma. Resta
-        fuori solo la nota della tolleranza, che parla dell'importo totale:
-        dove il totale è una casella da riempire, sarebbe una condizione su
-        una cifra che ancora non esiste. Il gruppo firma c'è in tutt'e due.
+        l'impresa deve poter mettere i suoi prezzi e fare la somma. La
+        nota della tolleranza e il gruppo firma ci sono in tutt'e due: sono
+        le condizioni con cui si fa il prezzo, e vanno lette prima di
+        scriverlo.
     """
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
@@ -340,12 +340,17 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
             con_prezzi=con_prezzi))
     elementi.append(Spacer(1, 3 * mm))
     elementi.extend(_tabella_totali(totali, con_prezzi=con_prezzi))
-    if con_prezzi:
-        # La clausola parla dell'importo totale: dove il totale è una
-        # casella da riempire, sarebbe una condizione su una cifra che
-        # ancora non esiste — e la scrive l'impresa, non noi.
-        elementi.append(Spacer(1, 5 * mm))
-        elementi.append(Paragraph(NOTA_FINALE, STILE_NOTA_FINALE))
+    # La clausola sta su ENTRAMBI i fogli, con prezzi e senza.
+    # ⚠️ Prima era solo su quello coi prezzi, per una ragione che sembrava
+    # buona: parla dell'importo totale, e sul foglio da preventivare il
+    # totale è una casella vuota — sarebbe una condizione su una cifra che
+    # non c'è ancora. Il ragionamento è stato ribaltato di proposito, ed è
+    # più forte: la tolleranza del 10% e l'elenco delle opere comprese
+    # sono le REGOLE con cui l'impresa deve fare il prezzo, non un commento
+    # al numero già fatto. Chi prepara l'offerta deve leggerle PRIMA di
+    # scrivere la cifra, non trovarsele addosso dopo aver firmato.
+    elementi.append(Spacer(1, 5 * mm))
+    elementi.append(Paragraph(NOTA_FINALE, STILE_NOTA_FINALE))
     elementi.extend(_gruppo_firma())
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,

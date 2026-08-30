@@ -156,13 +156,28 @@ def test_la_nota_della_tolleranza_chiude_il_computo():
     assert "riquadratura spallette" in testo
 
 
-def test_senza_importi_niente_clausola_sull_importo():
-    """Dove il totale e' una casella da riempire, la tolleranza sarebbe una
-    condizione su una cifra che ancora non esiste — e la scrive l'impresa,
-    non noi."""
+def test_la_clausola_c_e_anche_sul_foglio_senza_prezzi():
+    """⚠️ Prima NON c'era, e la scelta era motivata: la clausola parla
+    dell'importo totale, che li' e' una casella vuota. Ribaltata di
+    proposito — la tolleranza del 10% e l'elenco delle opere comprese sono
+    le REGOLE con cui l'impresa fa il prezzo, e vanno lette PRIMA di
+    scriverlo, non trovate addosso dopo la firma."""
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
                                        con_prezzi=False))
-    assert "tolleranza" not in testo
+    assert "tolleranza massima del 10%" in testo
+    assert "riquadratura spallette" in testo
+
+
+def test_la_clausola_e_identica_sui_due_fogli():
+    """Stesso testo e stesso formato: e' la stessa condizione, non due
+    versioni che potrebbero divergere."""
+    con = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    senza = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
+                                       con_prezzi=False))
+    def _clausola(testo):
+        i = testo.index("N.B")
+        return " ".join(testo[i:i + 400].split())
+    assert _clausola(con)[:300] == _clausola(senza)[:300]
 
 
 def test_il_gruppo_firma_c_e_in_tutt_e_due():
