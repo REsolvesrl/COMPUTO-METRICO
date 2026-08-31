@@ -218,6 +218,12 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     pendenza, spesso un gres diverso — e ha un prezzo suo. Sommandole si
     finiva per computare i metri del balcone al prezzo del gres da interni.
 
+    Quello che sta FUORI resta fuori anche da battiscopa, pareti e soffitti:
+    un balcone non ha zoccolino e non lo si tinteggia insieme alle stanze.
+    Finché ci entrava, i soffitti risultavano più grandi del pavimento —
+    98,42 contro 94,71 su un progetto vero — e la differenza era esattamente
+    il balcone: un numero che non si spiegava guardando la pianta.
+
     I RIVESTIMENTI (la fascia piastrellata di bagni e cucine) escono come
     quantità positiva, non solo come detrazione della tinteggiatura: sono
     perimetro × `altezza_rivestimento` dei locali spuntati «rivestito».
@@ -278,11 +284,14 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
         m2 = float(locale.get("m2") or 0.0)
         perimetro = float(locale.get("perimetro") or 0.0)
         rivestito = bool(locale.get("rivestito"))
+        esterno = bool(locale.get("esterno"))
         if locale.get("pavimento"):
-            if locale.get("esterno"):
+            if esterno:
                 pavimento_esterno += m2
             else:
                 pavimento += m2
+        if esterno:
+            continue          # fuori: niente zoccolino, niente tinteggiatura
         if locale.get("battiscopa") and not rivestito:
             battiscopa_lordo += perimetro
         if locale.get("pittura"):

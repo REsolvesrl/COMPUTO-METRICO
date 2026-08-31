@@ -3,11 +3,13 @@
 Il testo si rilegge con PyMuPDF (fitz), che il progetto ha già: così i test
 controllano il contenuto del documento, non solo che il file esista.
 """
+import io
+
 import fitz
 import pytest
 
 import materiali
-from stampa import pdf_computo, pdf_materiali
+from stampa import pdf_computo, pdf_materiali, pdf_planimetrie
 
 PROGETTO = {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
             "oggetto": "Ristrutturazione appartamento", "data": "09/08/2026"}
@@ -351,3 +353,38 @@ def test_il_computo_normale_non_e_cambiato():
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
     assert "Computo metrico estimativo" in testo
     assert "ALLEGATO" not in testo
+
+
+# ------------------------------- le planimetrie quotate
+
+def _png(larghezza=400, altezza=300):
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new("RGB", (larghezza, altezza), "white").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_le_planimetrie_escono_una_per_pagina():
+    """Sono disegni: due su un foglio si leggono male."""
+    pdf = pdf_planimetrie(
+        PROGETTO,
+        [{"nome": "Piano terra", "png": _png()},
+         {"nome": "Primo piano", "png": _png()}])
+    documento = fitz.open(stream=pdf, filetype="pdf")
+    assert documento.page_count == 2
+
+
+def test_le_misure_principali_stanno_sotto_la_prima_pianta():
+    """La risposta alla domanda che viene guardando il disegno — «quanti
+    metri sono?» — deve stare sulla stessa pagina."""
+    pdf = pdf_planimetrie(
+        PROGETTO, [{"nome": "Piano", "png": _png()}],
+        [("Pavimento", "94,71 m²"), ("Battiscopa", "94,68 ml")])
+    prima = fitz.open(stream=pdf, filetype="pdf")[0].get_text()
+    assert "PAVIMENTO" in prima and "94,71 m²" in prima
+    assert "BATTISCOPA" in prima and "94,68 ml" in prima
+
+
+def test_senza_planimetrie_il_pdf_lo_dice():
+    testo = _testo_del_pdf(pdf_planimetrie(PROGETTO, []))
+    assert "Nessuna planimetria" in testo

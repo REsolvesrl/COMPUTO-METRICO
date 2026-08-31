@@ -16,12 +16,14 @@ file da scaricare, niente rete — il programma deve funzionare staccato.
 
 import io
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    Image as ImmaginePDF,
     KeepTogether,
     PageBreak,
     Paragraph,
@@ -495,6 +497,90 @@ def pdf_materiali(progetto, righe):
     elementi.append(Paragraph(NOTA_MATERIALI, STILE_NOTA_FINALE))
     elementi.extend(_riga_luogo_data(progetto))
     elementi.extend(_gruppo_firma())
+
+    documento.build(elementi, onFirstPage=_pie_di_pagina,
+                    onLaterPages=_pie_di_pagina)
+    return buffer.getvalue()
+
+
+# ------------------------------------------------- la tavola della planimetria
+
+STILE_MISURA_ETICHETTA = ParagraphStyle(
+    "misura_etichetta", fontName="Helvetica-Bold", fontSize=6.5, leading=9,
+    textColor=CEMENTO)
+STILE_MISURA_VALORE = ParagraphStyle(
+    "misura_valore", fontName="Helvetica-Bold", fontSize=12, leading=15,
+    textColor=ARDESIA)
+
+
+def _riga_misure(misure):
+    """Le misure principali in fila, come le targhette sopra il disegno.
+
+    misure: [(etichetta, valore)] già formattati. Vanno SOTTO la pianta e
+    sulla stessa pagina: sono la risposta alla domanda che viene guardando
+    il disegno — «quanti metri sono?» — e voltare foglio per leggerla vuol
+    dire perdere il collegamento.
+    """
+    if not misure:
+        return []
+    righe = [[Paragraph(e.upper(), STILE_MISURA_ETICHETTA) for e, _ in misure],
+             [Paragraph(v, STILE_MISURA_VALORE) for _, v in misure]]
+    larghezza = LARGHEZZA_UTILE / len(misure)
+    tabella = Table(righe, colWidths=[larghezza] * len(misure))
+    tabella.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, 0), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 0),
+        ("TOPPADDING", (0, 1), (-1, 1), 1),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 5),
+        ("LINEABOVE", (0, 0), (-1, 0), 0.75, OTTONE),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.25, colors.HexColor("#D6D2C8")),
+    ]))
+    return [Spacer(1, 4 * mm), tabella]
+
+
+def pdf_planimetrie(progetto, tavole, misure=(), altezza_max=180 * mm):
+    """Le planimetrie disegnate, con le misure principali sotto la prima.
+
+    progetto: {"nome", "committente", "oggetto", "data"}.
+    tavole: [{"nome", "png"}] — il disegno già composto, in byte PNG.
+    misure: [(etichetta, valore)] da stampare sotto la PRIMA tavola.
+    altezza_max: quanto può essere alta una pianta sul foglio; la larghezza
+        segue in proporzione, e comunque non supera il margine.
+
+    Ritorna i byte del PDF. Una pianta per pagina: sono disegni, e due su
+    un foglio si leggono male.
+    """
+    buffer = io.BytesIO()
+    documento = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=MARGINE, rightMargin=MARGINE,
+        topMargin=MARGINE, bottomMargin=20 * mm,
+        title=f"Planimetrie — {progetto.get('nome') or 'senza nome'}",
+        author="CME — Computo Metrico Estimativo",
+    )
+    documento.titolo_corrente = str(progetto.get("nome")
+                                    or "Progetto senza nome")
+
+    elementi = _testata(progetto, titolo="Planimetrie quotate")
+    if not tavole:
+        elementi.append(Paragraph(
+            "Nessuna planimetria da stampare.", STILE_NOTA))
+    for numero, tavola in enumerate(tavole):
+        if numero:
+            elementi.append(PageBreak())
+        elementi.append(Paragraph(
+            str(tavola.get("nome") or "Planimetria").upper(),
+            STILE_ETICHETTA))
+        elementi.append(Spacer(1, 1.5 * mm))
+        lettore = io.BytesIO(tavola["png"])
+        with PILImage.open(io.BytesIO(tavola["png"])) as pianta:
+            larghezza_px, altezza_px = pianta.size
+        scala = min(LARGHEZZA_UTILE / larghezza_px, altezza_max / altezza_px)
+        elementi.append(ImmaginePDF(lettore, larghezza_px * scala,
+                                    altezza_px * scala))
+        if numero == 0:
+            elementi.extend(_riga_misure(misure))
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,
                     onLaterPages=_pie_di_pagina)

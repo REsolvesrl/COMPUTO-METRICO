@@ -762,3 +762,21 @@ def test_voci_da_riscrivere_lascia_stare_quelle_scritte_a_mano():
         MAPPA, {"muri_demolire": 21.6, "muri_costruire": 10.8}, {},
         escluse=["2.2"])
     assert proposte == {"3.1": 10.8}
+
+
+def test_quello_che_sta_fuori_non_ha_battiscopa_ne_tinteggiatura():
+    """Il balcone non ha zoccolino e non lo si tinteggia con le stanze.
+    Finche' ci entrava, i soffitti risultavano piu' grandi del pavimento e
+    la differenza era esattamente il balcone."""
+    locali = [
+        {"m2": 20.0, "perimetro": 18.0, "pavimento": True, "battiscopa": True,
+         "pittura": True, "rivestito": False, "esterno": False},
+        {"m2": 4.0, "perimetro": 8.0, "pavimento": True, "battiscopa": True,
+         "pittura": True, "rivestito": False, "esterno": True},
+    ]
+    q = quantita_finiture(locali, 3.0)
+    assert q["pavimento"] == 20.0
+    assert q["pavimento_esterno"] == 4.0
+    assert q["soffitti"] == 20.0            # non 24: il balcone resta fuori
+    assert q["battiscopa"] == 18.0          # non 26
+    assert q["pareti_lorde"] == 54.0        # 18 × 3, senza gli 8 del balcone

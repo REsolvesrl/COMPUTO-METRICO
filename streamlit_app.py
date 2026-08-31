@@ -62,6 +62,7 @@ import listino_personale
 import materiali
 import merito
 import stampa
+import tavola
 import storico
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
@@ -3293,6 +3294,62 @@ def etichetta_zona(zona, mpp, perc_map, impostazioni):
     return "\n".join(righe)
 
 
+def pdf_planimetrie_bytes(grandezze):
+    """Il PDF delle planimetrie disegnate, con le misure principali sotto.
+
+    Il perimetro commerciale resta FUORI: è il contorno che serve a misurare
+    la superficie vendibile, non una lavorazione, e su una tavola che va in
+    cantiere sarebbe una linea che gira attorno a tutto senza dire niente.
+    """
+    perc_map = mappa_percentuali()
+    col_map = mappa_colori()
+    impostazioni = {"nome": st.session_state.et_nome,
+                    "m2": st.session_state.et_m2,
+                    "percento": st.session_state.et_pct,
+                    "perimetro": st.session_state.et_perim}
+    tavole = []
+    for pianta in st.session_state.piante:
+        zone_pdf = [{
+            "punti": z["punti"],
+            "colore": col_map.get(z["categoria"], "#9E9E9E"),
+            "etichetta": etichetta_zona(z, pianta["mpp"], perc_map,
+                                        impostazioni),
+            "etichetta_pos": z.get("etichetta_pos"),
+        } for z in pianta["zone"]
+            if z.get("categoria") not in CATEGORIE_INVOLUCRO]
+        pareti_pdf = [{
+            "p1": p["p1"], "p2": p["p2"],
+            "colore": TIPI_PARETE.get(p.get("tipo", "esistente"),
+                                      TIPI_PARETE["esistente"])["colore"],
+            "etichetta": etichetta_parete(p, pianta["mpp"]),
+            "etichetta_pos": p.get("etichetta_pos"),
+        } for p in pianta["pareti"]]
+        disegnata = tavola.disegna(pianta["img"], zone_pdf, pareti_pdf)
+        buffer = io.BytesIO()
+        disegnata.save(buffer, format="PNG")
+        tavole.append({"nome": pianta["nome"], "png": buffer.getvalue()})
+
+    # le stesse cifre delle targhette sotto la tela, nello stesso ordine
+    etichette = (("Pavimento (interni)", "pavimento", "m²"),
+                 ("Pavimento esterno", "pavimento_esterno", "m²"),
+                 ("Battiscopa", "battiscopa", "ml"),
+                 ("Pareti", "tinteggiatura_pareti", "m²"),
+                 ("Soffitti", "soffitti", "m²"),
+                 ("Rivestimenti", "rivestimenti", "m²"),
+                 ("Muri da demolire", "muri_demolire", "m²"),
+                 ("Muri da costruire", "muri_costruire", "m²"),
+                 ("Cartongesso", "muri_cartongesso", "m²"))
+    misure = [(nome, f"{numero_it(grandezze[chiave], 2)} {um}")
+              for nome, chiave, um in etichette
+              if grandezze.get(chiave)]
+    return stampa.pdf_planimetrie(
+        {"nome": st.session_state.prg_nome,
+         "committente": st.session_state.prg_committente,
+         "oggetto": st.session_state.prg_oggetto,
+         "data": st.session_state.prg_data.isoformat()},
+        tavole, misure)
+
+
 def etichetta_parete(parete, mpp):
     if not mpp:
         return "— m"
@@ -6219,6 +6276,11 @@ with tab_plan:
                 "rivestimenti": riv_m2,
                 "battiscopa": batt_m,
                 "tinteggiatura": pareti_m2 + soffitti_m2,
+                # pareti e soffitti separati non alimentano nessuna voce —
+                # la 3.19 li vuole sommati — ma sulla tavola stampata si
+                # leggono distinti, come sulle targhette sotto la tela
+                "tinteggiatura_pareti": pareti_m2,
+                "soffitti": soffitti_m2,
             })
 
         # ------------------------------- dai muri tracciati alle demolizioni
@@ -6445,8 +6507,26 @@ with tab_plan:
                 st.rerun()
 
         st.divider()
+        c_pdf_plan, c_json_plan = st.columns([1, 2])
+        # Le tavole si compongono SOLO quando si preme: ridisegnare ogni
+        # planimetria a ogni giro dell'app costerebbe qualche decimo di
+        # secondo per pianta, su una scheda dove si trascina il mouse.
+        if c_pdf_plan.button("🖨️ Stampa planimetrie (PDF)",
+                             width="stretch", key="prepara_pdf_plan",
+                             help="Le piante disegnate, con le misure delle "
+                                  "zone e dei muri, e sotto la prima le "
+                                  "quantità principali."):
+            st.session_state._pdf_planimetrie = pdf_planimetrie_bytes(
+                grandezze)
+        if st.session_state.get("_pdf_planimetrie"):
+            c_pdf_plan.download_button(
+                "⬇️ Scarica il PDF delle planimetrie",
+                data=st.session_state._pdf_planimetrie,
+                file_name=nome_file("pdf").replace(".pdf", "_planimetrie.pdf"),
+                mime="application/pdf", width="stretch",
+                key="scarica_pdf_plan")
         bottone_salva_json(
-            st, "planimetria",
+            c_json_plan, "planimetria",
             st.session_state.get("_firma_progetto") or firma_progetto(),
             etichetta="💾 Salva progetto (.json) — computo e planimetrie")
 
