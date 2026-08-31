@@ -68,7 +68,11 @@ echo.
 
 rem Streamlit su questa macchina si lancia con "python -m": la cartella degli
 rem eseguibili installati da pip non e' nel PATH.
-python -m streamlit run streamlit_app.py --browser.gatherUsageStats=false
+rem
+rem Porta fissa 8501: senza, CME e CATASTO (altro programma sulla stessa
+rem macchina) finiscono a contendersi la stessa porta di default, e chi
+rem parte per secondo si becca la scheda del browser gia' aperta sull'altro.
+python -m streamlit run streamlit_app.py --server.port=8501 --browser.gatherUsageStats=false
 
 if errorlevel 1 (
     echo.
