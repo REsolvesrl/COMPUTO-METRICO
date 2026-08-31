@@ -55,3 +55,16 @@ def test_nome_e_metri_sulla_tavola_restano_a_scelta():
     for chiave in ("nome", "m2", "perimetro"):
         assert isinstance(impostazioni[chiave], ast.Attribute), (
             f"«{chiave}» non arriva più dalle impostazioni dell'utente")
+
+
+def test_la_scala_della_pianta_arriva_al_disegno_stampato():
+    """Senza mpp la barra di scala non compare, e sparirebbe in silenzio:
+    il PDF verrebbe lo stesso, solo senza la cosa che permette di misurare
+    con un righello quello che sul foglio non è quotato."""
+    chiamate = [n for n in ast.walk(_funzione("pdf_planimetrie_bytes"))
+                if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "disegna"]
+    assert chiamate, "la tavola non si disegna più da pdf_planimetrie_bytes"
+    passati = {k.arg for k in chiamate[0].keywords}
+    assert "mpp" in passati, "la scala non arriva più alla tavola stampata"

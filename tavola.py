@@ -34,6 +34,13 @@ SPESSORE_ZONA = 3
 SPESSORE_PARETE = 6
 SPESSORE_RICHIAMO = 2
 
+# I metri che una barra di scala può valere: la solita successione 1-2-5,
+# quella dei righelli. Una barra da «3,70 m» sarebbe esatta e inutilizzabile
+# — il senso è poterci appoggiare sopra il pollice e leggere una distanza
+# senza fare divisioni.
+PASSI_SCALA = (0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500)
+INCHIOSTRO = (30, 30, 30)
+
 
 def _carattere(dimensione):
     for percorso in CARATTERI:
@@ -95,6 +102,55 @@ def _scrivi(disegno, pos, testo, carattere, colore):
         disegno.text((x, y + n * alto), riga, font=carattere, fill=(30, 30, 30))
 
 
+def misura_barra(larghezza_px, mpp):
+    """Quanti metri far valere la barra di scala: un numero tondo.
+
+    Si punta a circa un quinto della larghezza del foglio — abbastanza da
+    misurarci sopra, non tanto da attraversare il disegno — e da lì si
+    scende al passo tondo più vicino. Torna None se la pianta non ha scala:
+    senza mpp non c'è nessuna distanza da dichiarare.
+    """
+    if not mpp or mpp <= 0 or larghezza_px <= 0:
+        return None
+    obiettivo = larghezza_px * mpp / 5.0
+    tondi = [passo for passo in PASSI_SCALA if passo <= obiettivo]
+    if not tondi:
+        return None          # un disegno che non arriva a 20 cm di larghezza
+    return tondi[-1]
+
+
+def _barra_scala(disegno, sinistra, base, metri, mpp, carattere):
+    """La barra graduata, in basso a sinistra, con la sua misura scritta.
+
+    ⚠️ GRAFICA, non «1:100», e non è una scelta di gusto: il PDF rimpicciolisce
+    il disegno finché non entra nel foglio, e chi stampa può rimpicciolirlo
+    ancora. Una scala scritta in cifre da quel momento è FALSA — dice 1:100 e
+    sul foglio è 1:137 — mentre la barra si rimpicciolisce insieme al disegno
+    e resta vera in ogni fotocopia. In cantiere qualcuno il metro sopra il
+    foglio ce lo appoggia davvero.
+
+    Quattro campi alternati pieni e vuoti, come sulle carte: si contano a
+    colpo d'occhio e danno anche il quarto della misura.
+    """
+    lunghezza = metri / mpp
+    alta = max(4, round(carattere.size * 0.45))
+    campo = lunghezza / 4.0
+    for n in range(4):
+        x0 = sinistra + n * campo
+        riquadro = [x0, base, x0 + campo, base + alta]
+        disegno.rectangle(riquadro,
+                          fill=INCHIOSTRO + (255,) if n % 2 == 0 else None,
+                          outline=INCHIOSTRO + (255,), width=2)
+    # le cifre sotto la barra: lo zero all'inizio, la misura in fondo, così
+    # si legge come un righello invece che come una didascalia
+    disegno.text((sinistra, base + alta + 4), "0", font=carattere,
+                 fill=INCHIOSTRO + (255,))
+    testo = (f"{metri:g}".replace(".", ",") + " m")
+    disegno.text((sinistra + lunghezza - disegno.textlength(
+        testo, font=carattere), base + alta + 4), testo, font=carattere,
+        fill=INCHIOSTRO + (255,))
+
+
 def _sposta_punto(punto, scarto):
     if punto is None:
         return None
@@ -127,7 +183,7 @@ def _margini(dimensione, zone, pareti, corpo):
     return (max(0, sx), max(0, sopra), max(0, dx), max(0, sotto))
 
 
-def disegna(immagine, zone=(), pareti=(), dimensione_testo=None):
+def disegna(immagine, zone=(), pareti=(), dimensione_testo=None, mpp=None):
     """La planimetria con sopra zone, pareti e le loro misure.
 
     immagine: la pianta caricata (PIL).
@@ -138,6 +194,9 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None):
     dimensione_testo: in pixel; se manca si sceglie sulla larghezza della
         pianta, così una scansione grande e una piccola stampano etichette
         della stessa grandezza sul foglio.
+    mpp: metri per pixel della pianta. Se c'è, in basso a sinistra compare
+        la barra di scala; se manca — planimetria mai calibrata — non
+        compare, perché non c'è nessuna distanza da dichiarare.
 
     Ritorna una nuova immagine RGB: l'originale non si tocca.
     """
@@ -156,6 +215,12 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None):
     # vedono lo stesso, perché la tela è più grande della pianta. Qui il
     # foglio se lo deve fare: si misura quanto sporgono e si allarga.
     margine = _margini(pianta.size, zone, pareti, corpo)
+    # La barra vuole una striscia sua in fondo al foglio: dentro il disegno
+    # finirebbe sopra una stanza, e una scala che copre quello che serve a
+    # misurare è peggio di nessuna scala.
+    metri_barra = misura_barra(pianta.size[0], mpp)
+    banda = round(corpo * 2.6) if metri_barra else 0
+    margine = (margine[0], margine[1], margine[2], margine[3] + banda)
     base = Image.new("RGBA", (pianta.size[0] + margine[0] + margine[2],
                               pianta.size[1] + margine[1] + margine[3]),
                      (255, 255, 255, 255))
@@ -208,5 +273,9 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None):
                                               (p1[1] + p2[1]) / 2)
         _scrivi(disegno, tuple(pos), parete.get("etichetta"), carattere,
                 _rgb(parete.get("colore")))
+
+    if metri_barra:
+        _barra_scala(disegno, margine[0], base.size[1] - banda + corpo * 0.4,
+                     metri_barra, mpp, carattere)
 
     return Image.alpha_composite(base, strato).convert("RGB")

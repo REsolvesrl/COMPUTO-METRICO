@@ -3512,7 +3512,8 @@ def pdf_planimetrie_bytes(grandezze, orizzontale=False):
             "etichetta": etichetta_parete(p, pianta["mpp"]),
             "etichetta_pos": p.get("etichetta_pos"),
         } for p in pianta["pareti"]]
-        disegnata = tavola.disegna(pianta["img"], zone_pdf, pareti_pdf)
+        disegnata = tavola.disegna(pianta["img"], zone_pdf, pareti_pdf,
+                                   mpp=pianta["mpp"])
         buffer = io.BytesIO()
         disegnata.save(buffer, format="PNG")
         # I tipi di muro presenti su QUESTA pianta, nell'ordine in cui

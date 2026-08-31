@@ -92,3 +92,59 @@ def test_il_richiamo_arriva_sul_bordo_che_guarda_l_etichetta():
     disegno che dovrebbe indicare."""
     lungo = [[50, 50], [350, 50], [350, 100], [50, 100]]
     assert tavola._aggancio([tuple(p) for p in lungo], (350, 200)) == (350, 100)
+
+
+# ------------------------------------------------- la barra di scala
+
+def test_la_barra_vale_un_numero_tondo():
+    """Una barra da «2,40 m» sarebbe esatta e inservibile: il senso e'
+    appoggiarci sopra il pollice, non fare divisioni."""
+    # 1200 px a 0,01 m/px = 12 m: un quinto e' 2,40, il passo tondo e' 2
+    assert tavola.misura_barra(1200, 0.01) == 2
+    # 600 px a 0,02 = 12 m: stessa storia, altra scansione
+    assert tavola.misura_barra(600, 0.02) == 2
+    # una pianta lunga: 4000 px a 0,01 = 40 m, un quinto e' 8 -> 5
+    assert tavola.misura_barra(4000, 0.01) == 5
+
+
+def test_senza_scala_niente_barra():
+    """Una planimetria mai calibrata non ha nessuna distanza da dichiarare,
+    e una barra inventata su un foglio di cantiere e' peggio del niente."""
+    assert tavola.misura_barra(1200, None) is None
+    assert tavola.misura_barra(1200, 0) is None
+    tav = tavola.disegna(_pianta(400, 300))
+    assert tav.size == (400, 300)           # nessuna striscia aggiunta
+
+
+def test_un_disegno_troppo_piccolo_non_prende_la_barra():
+    """Sotto il passo piu' corto (20 cm) la barra sarebbe un trattino."""
+    assert tavola.misura_barra(50, 0.01) is None      # mezzo metro in tutto
+
+
+def test_la_barra_si_prende_una_striscia_sua_in_fondo():
+    """Dentro il disegno finirebbe sopra una stanza, e una scala che copre
+    quello che serve a misurare e' peggio di nessuna scala."""
+    senza = tavola.disegna(_pianta(1200, 800))
+    con = tavola.disegna(_pianta(1200, 800), mpp=0.01)
+    assert con.size[0] == senza.size[0]     # larga uguale
+    assert con.size[1] > senza.size[1]      # e piu' alta: la striscia
+    # la pianta e' intatta: la striscia sta SOTTO, non ci va sopra
+    assert con.getpixel((600, 400)) == (255, 255, 255)
+
+
+def test_la_barra_e_lunga_i_metri_che_dichiara():
+    """E' l'unica cosa che deve essere vera: il PDF rimpicciolisce il
+    disegno per farlo stare nel foglio, e una scala scritta «1:100» da quel
+    momento e' falsa — la barra invece si rimpicciolisce insieme a lui."""
+    metri, mpp = 2, 0.01
+    tav = tavola.disegna(_pianta(1200, 800), mpp=mpp)
+    assert tavola.misura_barra(1200, mpp) == metri
+    # la riga a meta' altezza della barra: si contano i pixel scuri da
+    # sinistra fino a dove finisce, campi vuoti compresi
+    banda = tav.size[1] - 800
+    y = 800 + round(banda * 0.28)
+    scuri = [x for x in range(tav.size[0])
+             if sum(tav.getpixel((x, y))) < 250]
+    assert scuri, "la barra non e' stata disegnata"
+    lunghezza = max(scuri) - min(scuri) + 1
+    assert abs(lunghezza - metri / mpp) <= 4     # 200 px, a meno del tratto
