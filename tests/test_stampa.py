@@ -420,3 +420,48 @@ def test_la_pianta_arriva_quasi_al_bordo_del_foglio():
     pagina = fitz.open(stream=pdf, filetype="pdf")[0]
     immagine = pagina.get_image_rects(pagina.get_images(full=True)[0][0])[0]
     assert immagine.x0 < 30 and immagine.x1 > pagina.rect.width - 30
+
+
+def test_in_orizzontale_il_foglio_e_steso():
+    pdf = pdf_planimetrie(PROGETTO, [{"nome": "Piano", "png": _png()}],
+                          NOVE_MISURE, orizzontale=True)
+    pagina = fitz.open(stream=pdf, filetype="pdf")[0]
+    assert pagina.rect.width > pagina.rect.height
+
+
+def test_in_orizzontale_le_misure_stanno_in_colonna_a_destra():
+    """Sul foglio steso lo spazio scarso è l'altezza: una fila sotto la
+    pianta le ruberebbe proprio quello che le serve."""
+    pdf = pdf_planimetrie(PROGETTO, [{"nome": "Piano", "png": _png(1200, 700)}],
+                          NOVE_MISURE, orizzontale=True)
+    pagina = fitz.open(stream=pdf, filetype="pdf")[0]
+    immagine = pagina.get_image_rects(pagina.get_images(full=True)[0][0])[0]
+    quote = []
+    for blocco in pagina.get_text("dict")["blocks"]:
+        for riga in blocco.get("lines", []):
+            testo = "".join(s["text"] for s in riga["spans"])
+            if testo.strip() in ("PAVIMENTO (INTERNI)", "CARTONGESSO"):
+                quote.append(riga["bbox"])
+    assert len(quote) == 2
+    # a destra del disegno, e incolonnate: la prima misura sopra l'ultima
+    assert all(b[0] >= immagine.x1 for b in quote)
+    assert quote[0][1] < quote[1][1]
+
+
+def test_la_pianta_riempie_il_foglio_anche_senza_testata():
+    """Il disegno prende TUTTO quello che resta: un massimo scritto a mano
+    andrebbe bene per un formato solo e su tutti gli altri lascerebbe
+    bianco. Sulla seconda tavola, senza testata, resta di più."""
+    pdf = pdf_planimetrie(
+        PROGETTO, [{"nome": "Piano terra", "png": _png(900, 1400)},
+                   {"nome": "Primo piano", "png": _png(900, 1400)}])
+    documento = fitz.open(stream=pdf, filetype="pdf")
+    assert documento.page_count == 2        # niente fogli bianchi in mezzo
+    altezze = []
+    for pagina in documento:
+        immagini = pagina.get_images(full=True)
+        assert immagini, "una tavola è finita fuori dal foglio"
+        riquadro = pagina.get_image_rects(immagini[0][0])[0]
+        altezze.append(riquadro.height)
+    assert altezze[1] > altezze[0]          # la seconda non ha la testata
+    assert altezze[1] > 0.88 * documento[1].rect.height

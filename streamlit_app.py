@@ -3294,8 +3294,8 @@ def etichetta_zona(zona, mpp, perc_map, impostazioni):
     return "\n".join(righe)
 
 
-def pdf_planimetrie_bytes(grandezze):
-    """Il PDF delle planimetrie disegnate, con le misure principali sotto.
+def pdf_planimetrie_bytes(grandezze, orizzontale=False):
+    """Il PDF delle planimetrie disegnate, con le misure principali accanto.
 
     Il perimetro commerciale resta FUORI: è il contorno che serve a misurare
     la superficie vendibile, non una lavorazione, e su una tavola che va in
@@ -3347,7 +3347,7 @@ def pdf_planimetrie_bytes(grandezze):
          "committente": st.session_state.prg_committente,
          "oggetto": st.session_state.prg_oggetto,
          "data": st.session_state.prg_data.isoformat()},
-        tavole, misure)
+        tavole, misure, orizzontale=orizzontale)
 
 
 def etichetta_parete(parete, mpp):
@@ -6511,13 +6511,23 @@ with tab_plan:
         # Le tavole si compongono SOLO quando si preme: ridisegnare ogni
         # planimetria a ogni giro dell'app costerebbe qualche decimo di
         # secondo per pianta, su una scheda dove si trascina il mouse.
+        # Una pianta è quasi sempre più larga che alta: sul foglio in piedi
+        # metà pagina resta bianca, e in cantiere il disegno si legge dalla
+        # dimensione. Il foglio steso resta però una scelta, non un obbligo:
+        # una tavola alta e stretta sul verticale viene meglio.
+        c_pdf_plan.checkbox(
+            "Foglio orizzontale", key="pdf_plan_orizzontale",
+            help="Il foglio steso: la pianta più grande, e le misure "
+                 "principali in colonna a destra invece che sotto.")
         if c_pdf_plan.button("🖨️ Stampa planimetrie (PDF)",
                              width="stretch", key="prepara_pdf_plan",
                              help="Le piante disegnate, con le misure delle "
-                                  "zone e dei muri, e sotto la prima le "
+                                  "zone e dei muri, e con la prima le "
                                   "quantità principali."):
             st.session_state._pdf_planimetrie = pdf_planimetrie_bytes(
-                grandezze)
+                grandezze,
+                orizzontale=st.session_state.get("pdf_plan_orizzontale",
+                                                 False))
         if st.session_state.get("_pdf_planimetrie"):
             c_pdf_plan.download_button(
                 "⬇️ Scarica il PDF delle planimetrie",

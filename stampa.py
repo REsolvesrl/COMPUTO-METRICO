@@ -19,7 +19,7 @@ import io
 from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -512,8 +512,42 @@ def pdf_materiali(progetto, righe):
 MARGINE_TAVOLA = 8 * mm
 LARGHEZZA_TAVOLA = A4[0] - 2 * MARGINE_TAVOLA
 
+# Quanto si porta via la colonna delle misure, in orizzontale: il foglio
+# steso è largo, e questa fetta di lato costa alla pianta molto meno di
+# quanto le costerebbe in altezza una fila sotto (in orizzontale l'altezza
+# è la misura scarsa).
+COLONNA_MISURE = 46 * mm
+STACCO_COLONNA = 5 * mm
 
-def _riga_misure(misure):
+# quello che si lascia libero sotto il disegno, per gli arrotondamenti
+RESPIRO = 4
+
+# ⚠️ Il riquadro di SimpleDocTemplate ha 6 punti di imbottitura per lato
+# OLTRE ai margini, e `documento.width/height` non li tolgono: erano i dodici
+# punti che facevano scivolare la pianta alla pagina dopo, lasciando due
+# fogli bianchi in mezzo al fascicolo.
+IMBOTTITURA = 6
+
+
+def _altezza(flowables, larghezza):
+    """Quanto spazio si prendono, per sapere quanto ne resta al disegno.
+
+    ⚠️ `wrap` da solo non basta: ReportLab aggiunge gli stacchi degli stili
+    (spaceBefore/spaceAfter) FUORI dall'altezza dichiarata, ed erano i venti
+    punti che facevano scivolare la fila delle misure alla pagina dopo,
+    lasciando mezzo foglio bianco. Sommandoli si sbaglia semmai per eccesso
+    (fra due elementi vicini ReportLab tiene il maggiore, non la somma): il
+    disegno esce un capello più piccolo, non fuori pagina.
+    """
+    totale = 0
+    for f in flowables:
+        totale += f.wrap(larghezza, 10 ** 6)[1]
+        totale += getattr(f, "getSpaceBefore", lambda: 0)()
+        totale += getattr(f, "getSpaceAfter", lambda: 0)()
+    return totale
+
+
+def _riga_misure(misure, larghezza=None):
     """Le misure principali in fila, su UNA riga, come le targhette a video.
 
     misure: [(etichetta, valore)] già formattati. Vanno SOTTO la pianta e
@@ -528,6 +562,7 @@ def _riga_misure(misure):
     """
     if not misure:
         return []
+    larghezza = LARGHEZZA_TAVOLA if larghezza is None else larghezza
     etichette = [e.upper() for e, _ in misure]
     valori = [v for _, v in misure]
     corpo_etichetta, corpo_valore = 7.5, 13.0
@@ -537,13 +572,13 @@ def _riga_misure(misure):
                 pdfmetrics.stringWidth(v, "Helvetica-Bold", corpo_valore))
             + 3 * mm
             for e, v in zip(etichette, valori)]
-        if sum(larghezze) <= LARGHEZZA_TAVOLA:
+        if sum(larghezze) <= larghezza:
             break
         corpo_etichetta *= 0.95
         corpo_valore *= 0.95
     # l'avanzo si spalma in parti uguali: le colonne restano larghe quanto
     # serve al contenuto, e la fila arriva fino al bordo del foglio
-    avanzo = LARGHEZZA_TAVOLA - sum(larghezze)
+    avanzo = larghezza - sum(larghezze)
     if avanzo > 0:
         larghezze = [w + avanzo / len(larghezze) for w in larghezze]
 
@@ -566,48 +601,150 @@ def _riga_misure(misure):
     return [Spacer(1, 4 * mm), tabella]
 
 
-def pdf_planimetrie(progetto, tavole, misure=(), altezza_max=205 * mm):
-    """Le planimetrie disegnate, con le misure principali sotto la prima.
+def _colonna_misure(misure, larghezza, altezza):
+    """Le stesse misure, ma incolonnate di fianco al disegno.
+
+    Sul foglio steso in orizzontale l'altezza è la misura scarsa: una fila
+    sotto la pianta le ruberebbe proprio quello che le serve. Di lato, la
+    colonna occupa spazio che alla pianta avanzava comunque.
+
+    altezza: quanta ne ha a disposizione; il corpo scende finché ci sta.
+    """
+    if not misure:
+        return None
+    etichette = [e.upper() for e, _ in misure]
+    valori = [v for _, v in misure]
+    corpo_etichetta, corpo_valore = 7.5, 13.0
+    for _ in range(20):
+        # riga etichetta + riga valore per ogni misura, con i loro margini
+        alta = len(misure) * (corpo_etichetta * 1.35 + corpo_valore * 1.2 + 7)
+        largo = max(
+            max(pdfmetrics.stringWidth(e, "Helvetica-Bold", corpo_etichetta),
+                pdfmetrics.stringWidth(v, "Helvetica-Bold", corpo_valore))
+            for e, v in zip(etichette, valori))
+        if alta <= altezza and largo <= larghezza:
+            break
+        corpo_etichetta *= 0.95
+        corpo_valore *= 0.95
+
+    righe, stile = [], [
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]
+    for n in range(len(misure)):
+        riga_e, riga_v = 2 * n, 2 * n + 1
+        righe.append([etichette[n]])
+        righe.append([valori[n]])
+        stile += [
+            ("FONT", (0, riga_e), (0, riga_e), "Helvetica-Bold",
+             corpo_etichetta),
+            ("TEXTCOLOR", (0, riga_e), (0, riga_e), CEMENTO),
+            ("TOPPADDING", (0, riga_e), (0, riga_e), 4 if n else 3),
+            ("BOTTOMPADDING", (0, riga_e), (0, riga_e), 1),
+            ("FONT", (0, riga_v), (0, riga_v), "Helvetica-Bold", corpo_valore),
+            ("TEXTCOLOR", (0, riga_v), (0, riga_v), ARDESIA),
+            ("TOPPADDING", (0, riga_v), (0, riga_v), 0),
+            ("BOTTOMPADDING", (0, riga_v), (0, riga_v), 3),
+            ("LINEABOVE", (0, riga_e), (0, riga_e), 0.75 if not n else 0.25,
+             OTTONE if not n else colors.HexColor("#D6D2C8")),
+        ]
+    tabella = Table(righe, colWidths=[larghezza])
+    tabella.setStyle(TableStyle(stile))
+    return tabella
+
+
+def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
+    """Le planimetrie disegnate, con le misure principali sulla prima.
 
     progetto: {"nome", "committente", "oggetto", "data"}.
     tavole: [{"nome", "png"}] — il disegno già composto, in byte PNG.
-    misure: [(etichetta, valore)] da stampare sotto la PRIMA tavola.
-    altezza_max: quanto può essere alta una pianta sul foglio; la larghezza
-        segue in proporzione, e comunque non supera il margine.
+    misure: [(etichetta, valore)] da stampare con la PRIMA tavola.
+    orizzontale: il foglio steso. Una pianta è quasi sempre più larga che
+        alta, e sul foglio in piedi metà pagina resta bianca; in orizzontale
+        le misure passano in colonna a destra, perché lì lo spazio scarso è
+        l'altezza.
 
     Ritorna i byte del PDF. Una pianta per pagina: sono disegni, e due su
     un foglio si leggono male.
+
+    ⚠️ Il disegno si prende TUTTO quello che resta: l'altezza non è un
+    numero fisso ma la si misura: si tolgono testata, etichetta e — sul
+    foglio in piedi — la fila delle misure, e il resto è della pianta. Un
+    massimo scritto a mano andrebbe bene per un formato solo, e su tutti
+    gli altri lascerebbe bianco.
     """
+    foglio = landscape(A4) if orizzontale else A4
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
-        buffer, pagesize=A4,
+        buffer, pagesize=foglio,
         leftMargin=MARGINE_TAVOLA, rightMargin=MARGINE_TAVOLA,
-        topMargin=MARGINE_TAVOLA, bottomMargin=14 * mm,
+        topMargin=MARGINE_TAVOLA, bottomMargin=12 * mm,
         title=f"Planimetrie — {progetto.get('nome') or 'senza nome'}",
         author="CME — Computo Metrico Estimativo",
     )
     documento.titolo_corrente = str(progetto.get("nome")
                                     or "Progetto senza nome")
+    utile_x = documento.width - 2 * IMBOTTITURA
+    utile_y = documento.height - 2 * IMBOTTITURA
 
-    elementi = _testata(progetto, titolo="Planimetrie quotate")
+    testata = _testata(progetto, titolo="Planimetrie quotate")
+    elementi = list(testata)
     if not tavole:
         elementi.append(Paragraph(
             "Nessuna planimetria da stampare.", STILE_NOTA))
+    alta_testata = _altezza(testata, utile_x)
+
     for numero, tavola in enumerate(tavole):
-        if numero:
+        prima = numero == 0
+        if not prima:
             elementi.append(PageBreak())
-        elementi.append(Paragraph(
-            str(tavola.get("nome") or "Planimetria").upper(),
-            STILE_ETICHETTA))
-        elementi.append(Spacer(1, 1.5 * mm))
+        intestazione = [
+            Paragraph(str(tavola.get("nome") or "Planimetria").upper(),
+                      STILE_ETICHETTA),
+            Spacer(1, 1.5 * mm)]
+        elementi.extend(intestazione)
+
+        # quanto foglio resta al disegno, misurato e non indovinato
+        larghezza_utile = utile_x
+        altezza_utile = utile_y - _altezza(intestazione, utile_x)
+        if prima:
+            altezza_utile -= alta_testata
+        colonna = None
+        if prima and misure and orizzontale:
+            colonna = _colonna_misure(misure, COLONNA_MISURE, altezza_utile)
+            larghezza_utile -= COLONNA_MISURE + STACCO_COLONNA
+        riga = _riga_misure(misure, utile_x) if prima and not orizzontale else []
+        altezza_utile -= _altezza(riga, utile_x)
+
         lettore = io.BytesIO(tavola["png"])
         with PILImage.open(io.BytesIO(tavola["png"])) as pianta:
             larghezza_px, altezza_px = pianta.size
-        scala = min(LARGHEZZA_TAVOLA / larghezza_px, altezza_max / altezza_px)
-        elementi.append(ImmaginePDF(lettore, larghezza_px * scala,
-                                    altezza_px * scala))
-        if numero == 0:
-            elementi.extend(_riga_misure(misure))
+        # un pelo di respiro: se il disegno riempie il frame al millesimo,
+        # basta un arrotondamento di ReportLab per farlo scivolare alla
+        # pagina dopo — e restano due fogli bianchi in mezzo al fascicolo
+        scala = min(larghezza_utile / larghezza_px,
+                    (altezza_utile - RESPIRO) / altezza_px)
+        disegno = ImmaginePDF(lettore, larghezza_px * scala,
+                              altezza_px * scala)
+        if colonna is None:
+            elementi.append(disegno)
+        else:
+            fianco = Table([[disegno, colonna]],
+                           colWidths=[larghezza_utile + STACCO_COLONNA,
+                                      COLONNA_MISURE])
+            fianco.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), STACCO_COLONNA),
+                ("LEFTPADDING", (1, 0), (1, 0), 0),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            elementi.append(fianco)
+        elementi.extend(riga)
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,
                     onLaterPages=_pie_di_pagina)
