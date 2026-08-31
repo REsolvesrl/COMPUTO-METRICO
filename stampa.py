@@ -601,6 +601,50 @@ def _riga_misure(misure, larghezza=None):
     return [Spacer(1, 4 * mm), tabella]
 
 
+def _legenda_muri(legenda):
+    """I colori dei muri, spiegati. Sotto il disegno, piccola.
+
+    legenda: [(nome, "#RRGGBB")] — solo i tipi che su QUELLA pianta ci sono
+    davvero. Una legenda che elenca il cartongesso dove di cartongesso non
+    ce n'è fa cercare in giro per il foglio una linea verde che non esiste.
+
+    In cantiere la tavola la guarda chi non ha disegnato: quattro linee
+    colorate senza didascalia sono quattro linee colorate, e il muro giallo
+    da tirare su somiglia parecchio a quello rosso da buttare giù.
+    """
+    if not legenda:
+        return []
+    corpo = 7.0
+    celle, stile = [], [
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("FONT", (0, 0), (-1, -1), "Helvetica", corpo),
+        ("TEXTCOLOR", (0, 0), (-1, -1), CEMENTO),
+    ]
+    larghezze = []
+    for nome, colore in legenda:
+        i = len(celle)
+        celle.extend(["", nome])
+        # il campione: una cella vuota tinta del colore del muro, alta
+        # quanto la riga — la riga di penna che si vede sul disegno
+        stile.append(("BACKGROUND", (i, 0), (i, 0), colors.HexColor(colore)))
+        # il testo staccato dal suo campione, e staccato dal campione dopo:
+        # attaccati, quattro voci in fila diventano una parola sola
+        stile.append(("LEFTPADDING", (i + 1, 0), (i + 1, 0), 1.5 * mm))
+        larghezze.extend([
+            5 * mm,
+            pdfmetrics.stringWidth(nome, "Helvetica", corpo) + 6 * mm])
+    tabella = Table([celle], colWidths=larghezze, rowHeights=[2.2 * mm])
+    tabella.setStyle(TableStyle(stile))
+    tabella.hAlign = "LEFT"
+    # sotto ci passa il filo del piè di pagina: senza respiro la legenda
+    # gli si appoggia sopra, e sul foglio steso si toccano
+    return [Spacer(1, 2 * mm), tabella, Spacer(1, 2 * mm)]
+
+
 def _colonna_misure(misure, larghezza, altezza):
     """Le stesse misure, ma incolonnate di fianco al disegno.
 
@@ -658,7 +702,9 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
     """Le planimetrie disegnate, con le misure principali sulla prima.
 
     progetto: {"nome", "committente", "oggetto", "data"}.
-    tavole: [{"nome", "png"}] — il disegno già composto, in byte PNG.
+    tavole: [{"nome", "png", "legenda"}] — il disegno già composto, in byte
+        PNG, e la legenda dei muri: [(nome, "#RRGGBB")], solo i tipi che su
+        quella pianta ci sono.
     misure: [(etichetta, valore)] da stampare con la PRIMA tavola.
     orizzontale: il foglio steso. Una pianta è quasi sempre più larga che
         alta, e sul foglio in piedi metà pagina resta bianca; in orizzontale
@@ -716,6 +762,10 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
             larghezza_utile -= COLONNA_MISURE + STACCO_COLONNA
         riga = _riga_misure(misure, utile_x) if prima and not orizzontale else []
         altezza_utile -= _altezza(riga, utile_x)
+        # La legenda è di questa pianta, non del fascicolo: sta su ogni
+        # pagina che ha muri tracciati, e su quelle senza non compare.
+        chiave = _legenda_muri(tavola.get("legenda") or ())
+        altezza_utile -= _altezza(chiave, utile_x)
 
         lettore = io.BytesIO(tavola["png"])
         with PILImage.open(io.BytesIO(tavola["png"])) as pianta:
@@ -744,6 +794,7 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]))
             elementi.append(fianco)
+        elementi.extend(chiave)
         elementi.extend(riga)
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,

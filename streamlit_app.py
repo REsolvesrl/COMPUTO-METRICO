@@ -1576,6 +1576,162 @@ def riaggancia_al_disegno(codice=None):
         st.session_state.voci_a_mano.remove(codice)
 
 
+def _riga_conto(voce, conto, valore, um, segno=""):
+    """Una riga della scaletta: che cos'è, come si calcola, quanto fa."""
+    return f"| {voce} | {conto} | {segno}{numero_it(abs(valore), 2)} {um} |"
+
+
+def _scaletta(intestazione, righe, totale, um):
+    """Le righe in una tabella markdown, col totale in fondo in grassetto."""
+    testa = [f"| {intestazione} | Come si calcola | Quanto |",
+             "|---|---|---:|"]
+    coda = [f"| **Totale** | | **{numero_it(totale, 2)} {um}** |"]
+    return "\n".join(testa + righe + coda)
+
+
+def mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta, alt_porta,
+                              aperture):
+    """Il conto delle finiture in chiaro: chi entra, e ogni detrazione.
+
+    Le sei schede in cima danno sei numeri tondi, e un numero tondo non si
+    controlla: o lo si prende per buono, o non lo si prende. Chi somma a
+    mano i perimetri sulla planimetria e non ritrova il battiscopa non ha
+    modo di capire dove sia finita la differenza — e nove volte su dieci
+    non è un errore di conto, è un locale rimasto fuori: un bagno
+    piastrellato, un balcone, una spunta tolta e dimenticata.
+
+    Qui il conto si legge come lo si rifarebbe su un foglio: prima il
+    censimento dei locali, con uno zero dove il locale non ha messo niente,
+    poi ogni totale con le sue detrazioni una per una. I numeri vengono
+    tutti da `quantita_finiture`: qui non si ricalcola niente, altrimenti
+    il pannello del controllo e il computo potrebbero dire due cose
+    diverse — che è esattamente il guasto che un pannello così dovrebbe
+    scoprire.
+    """
+    dettaglio = q.get("dettaglio") or []
+    if dettaglio:
+        st.markdown("**Locale per locale — chi entra in quale totale**")
+        st.caption("Uno zero vuol dire che quel locale, in quel totale, non "
+                   "c'è: le sue spunte sono nella tabella qui sopra.")
+        righe_cens = [{
+            "Locale": r["nome"],
+            "Perimetro (m)": round(r["perimetro"], 2),
+            "Battiscopa (m)": round(r["battiscopa"], 2),
+            "Pareti (m²)": round(r["pareti"], 2),
+            "Soffitti (m²)": round(r["soffitti"], 2),
+            "Fascia rivestita (m²)": round(r["fascia"], 2),
+            "Perché è fuori": (
+                "balcone o terrazzo: niente zoccolino né tinteggiatura"
+                if r["esterno"] else
+                "rivestito, e senza la spunta del battiscopa"
+                if r["rivestito"] and not r["battiscopa"] else ""),
+        } for r in dettaglio]
+        somme = {c: round(sum(r[c] for r in righe_cens), 2)
+                 for c in ("Perimetro (m)", "Battiscopa (m)", "Pareti (m²)",
+                           "Soffitti (m²)", "Fascia rivestita (m²)")}
+        righe_cens.append({"Locale": "TOTALE", "Perché è fuori": "", **somme})
+        st.dataframe(pd.DataFrame(righe_cens), hide_index=True,
+                     width="stretch")
+
+    # ---- battiscopa
+    lati_b = q["lati_battiscopa"]
+    intero = abs(lati_b - round(lati_b)) < 1e-9
+    lati_txt = f"{lati_b:.0f}" if intero else numero_it(lati_b, 1)
+    righe = [_riga_conto("Perimetri dei locali con lo zoccolino",
+                         "somma della colonna «Battiscopa» qui sopra",
+                         q["battiscopa_lordo"], "m")]
+    if q["detr_porte_ml"]:
+        conto = f"{numero_it(larg_porta, 2)} m × {lati_txt} lati"
+        if abs(lati_b - q["lati_porta"]) > 1e-9:
+            conto += (f" (non {q['lati_porta']}: un lato che dà in un locale "
+                      "rivestito senza zoccolino non interrompe niente)")
+        righe.append(_riga_conto("Vani porta", conto, q["detr_porte_ml"],
+                                 "m", "−"))
+    for ap in aperture:
+        n = int(ap.get("n") or 0)
+        larg = float(ap.get("larghezza") or 0.0)
+        nome = ap.get("nome") or "Aperture"
+        if not n:
+            continue
+        if ap.get("battiscopa"):
+            righe.append(_riga_conto(
+                nome, f"{n} × {numero_it(larg, 2)} m: arrivano a terra e "
+                      "interrompono lo zoccolino", n * larg, "m", "−"))
+        else:
+            righe.append(f"| {nome} | il davanzale sta in alto: lo zoccolino "
+                         "ci passa sotto indisturbato | — |")
+    st.markdown("**Battiscopa**")
+    st.markdown(_scaletta("Battiscopa", righe, q["battiscopa"], "m"))
+
+    # ---- pareti
+    righe = [_riga_conto(
+        "Perimetri dei locali da tinteggiare × altezza",
+        f"somma della colonna «Pareti»: perimetro × {numero_it(altezza, 2)} m",
+        q["pareti_lorde"], "m²")]
+    if q["detr_rivestimenti"]:
+        righe.append(_riga_conto(
+            "Fasce rivestite",
+            f"perimetro dei locali rivestiti × {numero_it(h_riv, 2)} m: "
+            "sotto la piastrella non si rasa né si tinteggia",
+            q["detr_rivestimenti"], "m²", "−"))
+    if q["detr_porte_m2"]:
+        righe.append(_riga_conto(
+            "Vani porta",
+            f"{numero_it(larg_porta, 2)} × {numero_it(alt_porta, 2)} m × "
+            f"{q['lati_porta']} lati", q["detr_porte_m2"], "m²", "−"))
+    for ap in aperture:
+        n = int(ap.get("n") or 0)
+        if not n:
+            continue
+        larg = float(ap.get("larghezza") or 0.0)
+        alt = float(ap.get("altezza") or 0.0)
+        righe.append(_riga_conto(
+            ap.get("nome") or "Aperture",
+            f"{n} × {numero_it(larg, 2)} × {numero_it(alt, 2)} m",
+            n * larg * alt, "m²", "−"))
+    if q["recupero_vani_riv"]:
+        righe.append(_riga_conto(
+            "Vani dei locali rivestiti, restituiti",
+            "la fascia se li era già portati via tutti interi: toglierli "
+            "una seconda volta scontava due volte la striscia bassa",
+            q["recupero_vani_riv"], "m²", "+"))
+    st.markdown("**Pareti da rasare e tinteggiare**")
+    st.markdown(_scaletta("Pareti", righe, q["pareti"], "m²"))
+
+    # ---- soffitti e pavimenti: nessuna detrazione, ed è una notizia
+    st.markdown("**Soffitti e pavimenti — nessuna detrazione**")
+    st.markdown(_scaletta("Voce", [
+        _riga_conto("Soffitti", "superficie dei locali da tinteggiare: un "
+                    "soffitto non ha vani da togliere", q["soffitti"], "m²"),
+        _riga_conto("Pavimento (interni)", "superficie dei locali spuntati, "
+                    "balconi e terrazzi esclusi", q["pavimento"], "m²"),
+        _riga_conto("Pavimento esterno", "balconi, terrazzi e logge: altra "
+                    "posa, altro prezzo, voce sua",
+                    q["pavimento_esterno"], "m²"),
+    ], q["soffitti"] + q["pavimento"] + q["pavimento_esterno"], "m²"))
+
+    # ---- rivestimenti
+    if q["rivestimenti_lordi"]:
+        righe = [_riga_conto(
+            "Fascia dei locali rivestiti",
+            f"perimetro dei locali rivestiti × {numero_it(h_riv, 2)} m",
+            q["rivestimenti_lordi"], "m²")]
+        if q["detr_riv_porte"]:
+            righe.append(_riga_conto(
+                "Vani porta, la parte dentro la fascia",
+                f"una porta alta {numero_it(alt_porta, 2)} su una fascia da "
+                f"{numero_it(h_riv, 2)} vale {numero_it(larg_porta, 2)} × "
+                f"{numero_it(h_riv, 2)}, non il vano intero",
+                q["detr_riv_porte"], "m²", "−"))
+        if q["detr_riv_finestre"]:
+            righe.append(_riga_conto(
+                "Finestre, la parte dentro la fascia",
+                "solo quello che cade sotto il bordo alto della fascia",
+                q["detr_riv_finestre"], "m²", "−"))
+        st.markdown("**Rivestimenti (la fascia piastrellata)**")
+        st.markdown(_scaletta("Rivestimenti", righe, q["rivestimenti"], "m²"))
+
+
 def scelte():
     """I codici delle voci di listino portate nel computo."""
     return list(st.session_state.voci_scelte)
@@ -3309,9 +3465,14 @@ def pdf_planimetrie_bytes(grandezze, orizzontale=False):
     """
     perc_map = mappa_percentuali()
     col_map = mappa_colori()
+    # La percentuale non va in stampa, e non è una dimenticanza: dice
+    # quanto di quella superficie fa mercato — serve a valutare, non a
+    # costruire. Sulla tavola che va in cantiere è un numero senza mestiere,
+    # e per giunta il perimetro commerciale, che è quello a cui la
+    # percentuale si riferisce, da questo foglio è già escluso.
     impostazioni = {"nome": st.session_state.et_nome,
                     "m2": st.session_state.et_m2,
-                    "percento": st.session_state.et_pct,
+                    "percento": False,
                     "perimetro": st.session_state.et_perim}
     tavole = []
     for pianta in st.session_state.piante:
@@ -3333,7 +3494,15 @@ def pdf_planimetrie_bytes(grandezze, orizzontale=False):
         disegnata = tavola.disegna(pianta["img"], zone_pdf, pareti_pdf)
         buffer = io.BytesIO()
         disegnata.save(buffer, format="PNG")
-        tavole.append({"nome": pianta["nome"], "png": buffer.getvalue()})
+        # I tipi di muro presenti su QUESTA pianta, nell'ordine in cui
+        # stanno in TIPI_PARETE: l'esistente per primo, poi le lavorazioni.
+        # Una legenda che elenca anche quello che non c'è fa cercare sul
+        # foglio una linea che non è stata disegnata.
+        tipi = {mu.get("tipo") or "esistente" for mu in pianta["pareti"]}
+        tavole.append({
+            "nome": pianta["nome"], "png": buffer.getvalue(),
+            "legenda": [(TIPI_PARETE[t]["nome"], TIPI_PARETE[t]["colore"])
+                        for t in TIPI_PARETE if t in tipi]})
 
     # le stesse cifre delle targhette sotto la tela, nello stesso ordine
     etichette = (("Pavimento (interni)", "pavimento", "m²"),
@@ -6075,6 +6244,7 @@ with tab_plan:
                 zona["pittura"] = bool(riga["Tinteggiatura"])
                 zona["rivestito"] = bool(riga.get("Rivestito", False))
                 locali_calcolo.append({
+                    "nome": str(riga["Locale"]),
                     "m2": float(riga["Superficie (m²)"]),
                     "perimetro": float(riga["Perimetro (m)"]),
                     "pavimento": zona["pavimento"],
@@ -6198,10 +6368,10 @@ with tab_plan:
                 st.session_state.pf_alt = alt_pf
 
             aperture = [
-                {"n": n_fin, "larghezza": larg_fin, "altezza": alt_fin,
-                 "battiscopa": False},
-                {"n": n_pf, "larghezza": larg_pf, "altezza": alt_pf,
-                 "battiscopa": True},
+                {"nome": "Finestre", "n": n_fin, "larghezza": larg_fin,
+                 "altezza": alt_fin, "battiscopa": False},
+                {"nome": "Porte finestra", "n": n_pf, "larghezza": larg_pf,
+                 "altezza": alt_pf, "battiscopa": True},
             ]
 
             q = planimetria.quantita_finiture(
@@ -6249,50 +6419,26 @@ with tab_plan:
                              and (q["detr_riv_porte"] or q["detr_riv_finestre"])
                              else None),
                       delta_color="off")
-            if q["rivestimenti_lordi"]:
-                with st.container(key="notalarga_fascia"):
-                    st.caption(
-                        f":gray[Fascia lorda {numero_it(q['rivestimenti_lordi'], 2)} m² "
-                        f"(perimetro dei locali rivestiti × {numero_it(h_riv, 2)} m) − "
-                        f"{numero_it(q['detr_riv_porte'], 2)} m² di vani porta − "
-                        f"{numero_it(q['detr_riv_finestre'], 2)} m² di finestre. "
-                        "Dei vani si toglie solo la parte che cade dentro la "
-                        "fascia: una porta alta 2,10 su una fascia da 1,20 vale "
-                        "0,80 × 1,20.]")
-            elif any(l.get("rivestito") for l in locali_calcolo) is False:
+            if not q["rivestimenti_lordi"] and not any(
+                    l.get("rivestito") for l in locali_calcolo):
                 st.caption(
                     ":gray[Nessun locale spuntato **Rivestito**: la voce dei "
                     "rivestimenti resta a zero. La spunta è nella tabella "
                     "dei locali qui sopra — di norma i bagni e la fascia "
                     "della cucina.]")
-            if detr_ml or detr_m2:
-                lati_b = q["lati_battiscopa"]
-                intero = abs(lati_b - round(lati_b)) < 1e-9
-                lati_txt = (f"{lati_b:.0f}" if intero
-                            else numero_it(lati_b, 1))
-                nota_lati = ""
-                if abs(lati_b - q["lati_porta"]) > 1e-9:
-                    nota_lati = (f", non {q['lati_porta']}: quelli che danno "
-                                 "in un bagno senza zoccolino non "
-                                 "interrompono niente")
-                recupero = ""
-                if q["recupero_vani_riv"]:
-                    rec = numero_it(q['recupero_vani_riv'], 2)
-                    recupero = (f" + {rec} m² di vani dei locali rivestiti, "
-                                "già dentro la fascia e tolti una volta di "
-                                "troppo")
-                with st.container(key="notalarga_battiscopa"):
-                    st.caption(
-                        f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
-                        f"− {numero_it(q['detr_porte_ml'], 2)} m di vani "
-                        f"porta ({lati_txt} lati{nota_lati}) − "
-                        f"{numero_it(q['detr_aperture_ml'], 2)} m di porte "
-                        f"finestra. "
-                        f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
-                        f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
-                        f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "
-                        f"vani porta − {numero_it(q['detr_aperture_m2'], 2)} m² "
-                        f"di finestre e porte finestra{recupero}.]")
+
+            # ---- il conto in chiaro, riga per riga ----
+            # Sei numeri tondi non si controllano: si prendono per buoni
+            # oppure no. Chi somma a mano i perimetri sul disegno e non
+            # ritrova il totale dell'app non ha modo di capire dove sia
+            # finita la differenza — ed è quasi sempre un locale rimasto
+            # fuori, non un errore di conto. Qui c'è tutto: chi entra, chi
+            # no, e ogni detrazione col suo perché. Chiuso, perché serve
+            # per il controllo, non per il lavoro di tutti i giorni.
+            with st.expander("🔍 Il conto in chiaro — chi entra nei totali "
+                             "e ogni detrazione, riga per riga"):
+                mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta,
+                                          alt_porta, aperture)
 
             grandezze.update({
                 "pavimento": pav_m2,

@@ -256,7 +256,10 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     porta finestra invece arriva a terra e lo interrompe.
 
     Le detrazioni non possono portare sotto zero. Ritorna anche i valori
-    lordi e le detrazioni, per poterli mostrare.
+    lordi e le detrazioni, per poterli mostrare, e in `dettaglio` il
+    censimento locale per locale: quanto ciascuno ha messo in ciascun
+    totale, zero dov'è rimasto fuori. È quello che permette di rifare il
+    conto a mano e trovare la riga che non torna.
     """
     h = float(altezza or 0.0)
     h_riv = float(altezza_rivestimento or 0.0)
@@ -288,16 +291,31 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     battiscopa_lordo = pareti_lorde = soffitti = 0.0
     detr_rivestimenti = 0.0
     riv_totali = riv_senza_zoccolino = 0
+    # Il censimento, locale per locale: che cosa ha messo ciascuno in
+    # ciascun totale, e zero dove non ha messo niente. Serve al doppio
+    # controllo — sommare a mano i perimetri sul disegno e non ritrovare il
+    # numero dell'app vuol dire quasi sempre che un locale è rimasto fuori,
+    # e finché il conto era tutto dentro questo ciclo non c'era modo di
+    # vedere QUALE. Le regole restano scritte una volta sola, qui.
+    dettaglio = []
     for locale in locali:
         m2 = float(locale.get("m2") or 0.0)
         perimetro = float(locale.get("perimetro") or 0.0)
         rivestito = bool(locale.get("rivestito"))
         esterno = bool(locale.get("esterno"))
+        riga = {"nome": locale.get("nome") or "Locale", "m2": round(m2, 3),
+                "perimetro": round(perimetro, 3), "rivestito": rivestito,
+                "esterno": esterno, "pavimento": 0.0,
+                "pavimento_esterno": 0.0, "battiscopa": 0.0, "pareti": 0.0,
+                "soffitti": 0.0, "fascia": 0.0}
+        dettaglio.append(riga)
         if locale.get("pavimento"):
             if esterno:
                 pavimento_esterno += m2
+                riga["pavimento_esterno"] = round(m2, 3)
             else:
                 pavimento += m2
+                riga["pavimento"] = round(m2, 3)
         if esterno:
             continue          # fuori: niente zoccolino, niente tinteggiatura
         if rivestito:
@@ -306,11 +324,15 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
                 riv_senza_zoccolino += 1
         if locale.get("battiscopa"):
             battiscopa_lordo += perimetro
+            riga["battiscopa"] = round(perimetro, 3)
         if locale.get("pittura"):
             pareti_lorde += perimetro * h
             soffitti += m2
+            riga["pareti"] = round(perimetro * h, 3)
+            riga["soffitti"] = round(m2, 3)
             if rivestito:
                 detr_rivestimenti += perimetro * h_riv
+                riga["fascia"] = round(perimetro * h_riv, 3)
 
     # Dei lati contati sopra, quelli che danno DENTRO un bagno senza
     # zoccolino non interrompono nessun battiscopa: là non ce n'è. Prima si
@@ -340,6 +362,7 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     detr_porte_ml = larg_p * lati_batt
     detr_porte_m2 = larg_p * alt_p * lati
     return {
+        "dettaglio": dettaglio,
         "lati_porta": lati,
         "lati_battiscopa": round(lati_batt, 3),
         "recupero_vani_riv": round(recupero_riv, 3),

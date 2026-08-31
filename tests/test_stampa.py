@@ -385,6 +385,42 @@ def test_le_misure_principali_stanno_sotto_la_prima_pianta():
     assert "BATTISCOPA" in prima and "94,68 ml" in prima
 
 
+MURI = [("Esistente", "#C9A96A"), ("Da demolire", "#E53935"),
+        ("Da costruire", "#FFD400")]
+
+
+def test_la_legenda_dei_muri_e_sul_foglio():
+    """In cantiere la tavola la guarda chi non l'ha disegnata: quattro
+    linee colorate senza didascalia restano quattro linee colorate."""
+    pdf = pdf_planimetrie(
+        PROGETTO, [{"nome": "Piano", "png": _png(), "legenda": MURI}])
+    prima = fitz.open(stream=pdf, filetype="pdf")[0].get_text()
+    for nome, _ in MURI:
+        assert nome in prima
+
+
+def test_la_legenda_sta_su_ogni_pagina_che_ha_muri():
+    """E' della pianta, non del fascicolo: la seconda tavola ha i suoi
+    muri, e chi la guarda non deve tornare al foglio di prima."""
+    pdf = pdf_planimetrie(PROGETTO, [
+        {"nome": "Piano terra", "png": _png(), "legenda": MURI},
+        {"nome": "Primo piano", "png": _png(),
+         "legenda": [("Da costruire in cartongesso", "#43A047")]}])
+    documento = fitz.open(stream=pdf, filetype="pdf")
+    assert "Da demolire" in documento[0].get_text()
+    assert "cartongesso" in documento[1].get_text()
+    # e quello che su quella pianta non c'e' non si nomina: cercare sul
+    # foglio una linea che non e' stata disegnata e' peggio che niente
+    assert "Da demolire" not in documento[1].get_text()
+
+
+def test_senza_muri_niente_legenda():
+    """Una pianta con le sole aree non ha colori da spiegare."""
+    pdf = pdf_planimetrie(PROGETTO, [{"nome": "Piano", "png": _png()}])
+    prima = fitz.open(stream=pdf, filetype="pdf")[0].get_text()
+    assert "Da demolire" not in prima and "Esistente" not in prima
+
+
 def test_senza_planimetrie_il_pdf_lo_dice():
     testo = _testo_del_pdf(pdf_planimetrie(PROGETTO, []))
     assert "Nessuna planimetria" in testo
