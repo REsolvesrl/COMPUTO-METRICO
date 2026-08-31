@@ -5564,10 +5564,19 @@ with sotto_computo:
     # perché ci scrivano la LORO offerta. Un prezzo già stampato sopra non
     # è una richiesta di preventivo, è una proposta — e quello che torna
     # indietro non è più un confronto.
+    #
+    # ⚠️ La data qui è quella di OGGI, non `progetto["data"]`: quel campo è
+    # la data del progetto (spesso impostata una volta e mai più toccata,
+    # o portata da un salvataggio vecchio), mentre questo foglio va a un
+    # fornitore ogni volta che si preme il bottone — e la data che gli
+    # interessa è quella in cui gli viene chiesto il preventivo, non quella
+    # in cui è nato il progetto.
+    progetto_richiesta = dict(progetto, data=date.today().strftime("%d/%m/%Y"))
     col_pdf_muto.download_button(
         "📄 PDF senza prezzi",
-        data=stampa.pdf_computo(progetto, voci_calcolate, _totali_pdf,
-                                tinte=_tinte_pdf, con_prezzi=False),
+        data=stampa.pdf_computo(progetto_richiesta, voci_calcolate,
+                                _totali_pdf, tinte=_tinte_pdf,
+                                con_prezzi=False),
         help="Da mandare alle imprese per il preventivo: lavorazioni e "
              "quantità, senza prezzi né importi.",
         file_name=nome_file("pdf").replace(".pdf", "_senza_prezzi.pdf"),
