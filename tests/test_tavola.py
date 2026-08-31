@@ -74,3 +74,21 @@ def test_un_colore_illeggibile_non_fa_saltare_la_stampa():
     tav = tavola.disegna(_pianta(), [{"punti": QUADRATO, "colore": "verdino",
                                       "etichetta": "x"}])
     assert tav.size == (400, 300)
+
+
+def test_il_richiamo_unisce_la_targhetta_alla_sua_area():
+    """L'etichetta sta FUORI dall'area: senza il segmento, una fila di
+    misure a lato del disegno non dice a quale stanza appartiene nessuna."""
+    tav = tavola.disegna(_pianta(), [{"punti": QUADRATO, "colore": "#E57373",
+                                      "etichetta": "Camera",
+                                      "etichetta_pos": [300, 100]}])
+    # a metà strada fra il bordo destro del quadrato (x=150) e la targhetta
+    r, g, b = tav.getpixel((225, 100))
+    assert r > g and r > b                  # il rosso della zona
+
+
+def test_il_richiamo_arriva_sul_bordo_che_guarda_l_etichetta():
+    """Sul baricentro attraverserebbe la stanza e taglierebbe in due il
+    disegno che dovrebbe indicare."""
+    lungo = [[50, 50], [350, 50], [350, 100], [50, 100]]
+    assert tavola._aggancio([tuple(p) for p in lungo], (350, 200)) == (350, 100)

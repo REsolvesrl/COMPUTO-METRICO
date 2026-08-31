@@ -32,6 +32,7 @@ CARATTERI = (
 VELO = 60           # 0-255
 SPESSORE_ZONA = 3
 SPESSORE_PARETE = 6
+SPESSORE_RICHIAMO = 2
 
 
 def _carattere(dimensione):
@@ -57,6 +58,23 @@ def _rgb(colore):
 def _baricentro(punti):
     return (sum(p[0] for p in punti) / len(punti),
             sum(p[1] for p in punti) / len(punti))
+
+
+def _aggancio(punti, verso):
+    """Il punto del contorno più vicino all'etichetta.
+
+    L'etichetta sta fuori dall'area: il segmento di richiamo deve arrivare
+    sul BORDO che le sta davanti, non sul baricentro — se no attraversa
+    mezza stanza e taglia in due il disegno che dovrebbe indicare.
+    """
+    candidati = list(punti)
+    # anche i punti di mezzo dei lati: su una stanza lunga il vertice più
+    # vicino può essere lontanissimo dal lato che guarda l'etichetta
+    for i, punto in enumerate(punti):
+        dopo = punti[(i + 1) % len(punti)]
+        candidati.append(((punto[0] + dopo[0]) / 2, (punto[1] + dopo[1]) / 2))
+    return min(candidati,
+               key=lambda p: (p[0] - verso[0]) ** 2 + (p[1] - verso[1]) ** 2)
 
 
 def _scrivi(disegno, pos, testo, carattere, colore):
@@ -174,9 +192,16 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None):
         punti = [tuple(p) for p in (zona.get("punti") or [])]
         if len(punti) < 3:
             continue
-        pos = zona.get("etichetta_pos") or _baricentro(punti)
-        _scrivi(disegno, tuple(pos), zona.get("etichetta"), carattere,
-                _rgb(zona.get("colore")))
+        pos = tuple(zona.get("etichetta_pos") or _baricentro(punti))
+        colore = _rgb(zona.get("colore"))
+        # Il richiamo si disegna PRIMA della targhetta, così il tratto che
+        # finirebbe sotto il testo lo copre la targhetta stessa: senza, una
+        # riga di etichette a lato del disegno non dice a quale stanza
+        # appartiene nessuna delle misure.
+        if zona.get("etichetta"):
+            disegno.line([pos, _aggancio(punti, pos)], fill=colore + (255,),
+                         width=SPESSORE_RICHIAMO)
+        _scrivi(disegno, pos, zona.get("etichetta"), carattere, colore)
     for parete in pareti:
         p1, p2 = tuple(parete["p1"]), tuple(parete["p2"])
         pos = parete.get("etichetta_pos") or ((p1[0] + p2[0]) / 2,

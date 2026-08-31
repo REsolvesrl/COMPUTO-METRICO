@@ -388,3 +388,35 @@ def test_le_misure_principali_stanno_sotto_la_prima_pianta():
 def test_senza_planimetrie_il_pdf_lo_dice():
     testo = _testo_del_pdf(pdf_planimetrie(PROGETTO, []))
     assert "Nessuna planimetria" in testo
+
+
+NOVE_MISURE = [("Pavimento (interni)", "94,71 m²"),
+               ("Pavimento esterno", "12,40 m²"),
+               ("Battiscopa", "128,50 m"), ("Rivestimenti", "18,72 m²"),
+               ("Tinteggiatura", "312,88 m²"), ("Soffitti", "94,71 m²"),
+               ("Muri da demolire", "8,20 m²"),
+               ("Muri da costruire", "6,50 m²"), ("Cartongesso", "4,10 m²")]
+
+
+def test_le_misure_stanno_su_una_riga_anche_quando_sono_nove():
+    """Con le colonne tutte uguali «PAVIMENTO (INTERNI)» andava a capo tre
+    volte e «94,71» finiva sopra «m²»: la fila diventava illeggibile."""
+    pdf = pdf_planimetrie(PROGETTO, [{"nome": "Piano", "png": _png()}],
+                          NOVE_MISURE)
+    pagina = fitz.open(stream=pdf, filetype="pdf")[0]
+    quote = set()
+    for riga in pagina.get_text("dict")["blocks"]:
+        for r in riga.get("lines", []):
+            if "PAVIMENTO (INTERNI)" in "".join(s["text"] for s in r["spans"]) \
+                    or "94,71 m²" in "".join(s["text"] for s in r["spans"]):
+                quote.add(round(r["bbox"][1]))
+    assert len(quote) == 2          # una riga di etichette, una di valori
+
+
+def test_la_pianta_arriva_quasi_al_bordo_del_foglio():
+    """I margini della tavola sono quasi azzerati: il disegno si legge
+    dalla dimensione, e il foglio sprecato è disegno perso."""
+    pdf = pdf_planimetrie(PROGETTO, [{"nome": "Piano", "png": _png(1200, 700)}])
+    pagina = fitz.open(stream=pdf, filetype="pdf")[0]
+    immagine = pagina.get_image_rects(pagina.get_images(full=True)[0][0])[0]
+    assert immagine.x0 < 30 and immagine.x1 > pagina.rect.width - 30

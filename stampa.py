@@ -22,6 +22,7 @@ from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
 from reportlab.platypus import (
     Image as ImmaginePDF,
     KeepTogether,
@@ -505,33 +506,59 @@ def pdf_materiali(progetto, righe):
 
 # ------------------------------------------------- la tavola della planimetria
 
-STILE_MISURA_ETICHETTA = ParagraphStyle(
-    "misura_etichetta", fontName="Helvetica-Bold", fontSize=6.5, leading=9,
-    textColor=CEMENTO)
-STILE_MISURA_VALORE = ParagraphStyle(
-    "misura_valore", fontName="Helvetica-Bold", fontSize=12, leading=15,
-    textColor=ARDESIA)
+# La tavola vuole tutto il foglio: margini quasi azzerati, perché un disegno
+# si legge dalla dimensione. Il computo no — quello è un documento di testo
+# e i suoi margini restano quelli di prima (MARGINE).
+MARGINE_TAVOLA = 8 * mm
+LARGHEZZA_TAVOLA = A4[0] - 2 * MARGINE_TAVOLA
 
 
 def _riga_misure(misure):
-    """Le misure principali in fila, come le targhette sopra il disegno.
+    """Le misure principali in fila, su UNA riga, come le targhette a video.
 
     misure: [(etichetta, valore)] già formattati. Vanno SOTTO la pianta e
     sulla stessa pagina: sono la risposta alla domanda che viene guardando
     il disegno — «quanti metri sono?» — e voltare foglio per leggerla vuol
     dire perdere il collegamento.
+
+    ⚠️ Testo semplice, non Paragraph: in una colonna stretta il Paragraph
+    manda a capo, e «PAVIMENTO (INTERNI)» diventava tre righe con «94,71»
+    sopra e «m²» sotto. Qui invece ogni colonna si misura sul proprio
+    contenuto e il corpo scende finché la fila non ci sta: una riga, sempre.
     """
     if not misure:
         return []
-    righe = [[Paragraph(e.upper(), STILE_MISURA_ETICHETTA) for e, _ in misure],
-             [Paragraph(v, STILE_MISURA_VALORE) for _, v in misure]]
-    larghezza = LARGHEZZA_UTILE / len(misure)
-    tabella = Table(righe, colWidths=[larghezza] * len(misure))
+    etichette = [e.upper() for e, _ in misure]
+    valori = [v for _, v in misure]
+    corpo_etichetta, corpo_valore = 7.5, 13.0
+    for _ in range(20):
+        larghezze = [
+            max(pdfmetrics.stringWidth(e, "Helvetica-Bold", corpo_etichetta),
+                pdfmetrics.stringWidth(v, "Helvetica-Bold", corpo_valore))
+            + 3 * mm
+            for e, v in zip(etichette, valori)]
+        if sum(larghezze) <= LARGHEZZA_TAVOLA:
+            break
+        corpo_etichetta *= 0.95
+        corpo_valore *= 0.95
+    # l'avanzo si spalma in parti uguali: le colonne restano larghe quanto
+    # serve al contenuto, e la fila arriva fino al bordo del foglio
+    avanzo = LARGHEZZA_TAVOLA - sum(larghezze)
+    if avanzo > 0:
+        larghezze = [w + avanzo / len(larghezze) for w in larghezze]
+
+    tabella = Table([etichette, valori], colWidths=larghezze)
     tabella.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, 0), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 0),
-        ("TOPPADDING", (0, 1), (-1, 1), 1),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", corpo_etichetta),
+        ("TEXTCOLOR", (0, 0), (-1, 0), CEMENTO),
+        ("FONT", (0, 1), (-1, 1), "Helvetica-Bold", corpo_valore),
+        ("TEXTCOLOR", (0, 1), (-1, 1), ARDESIA),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, 0), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+        ("TOPPADDING", (0, 1), (-1, 1), 0),
         ("BOTTOMPADDING", (0, 1), (-1, 1), 5),
         ("LINEABOVE", (0, 0), (-1, 0), 0.75, OTTONE),
         ("LINEBELOW", (0, 1), (-1, 1), 0.25, colors.HexColor("#D6D2C8")),
@@ -539,7 +566,7 @@ def _riga_misure(misure):
     return [Spacer(1, 4 * mm), tabella]
 
 
-def pdf_planimetrie(progetto, tavole, misure=(), altezza_max=180 * mm):
+def pdf_planimetrie(progetto, tavole, misure=(), altezza_max=205 * mm):
     """Le planimetrie disegnate, con le misure principali sotto la prima.
 
     progetto: {"nome", "committente", "oggetto", "data"}.
@@ -554,8 +581,8 @@ def pdf_planimetrie(progetto, tavole, misure=(), altezza_max=180 * mm):
     buffer = io.BytesIO()
     documento = SimpleDocTemplate(
         buffer, pagesize=A4,
-        leftMargin=MARGINE, rightMargin=MARGINE,
-        topMargin=MARGINE, bottomMargin=20 * mm,
+        leftMargin=MARGINE_TAVOLA, rightMargin=MARGINE_TAVOLA,
+        topMargin=MARGINE_TAVOLA, bottomMargin=14 * mm,
         title=f"Planimetrie — {progetto.get('nome') or 'senza nome'}",
         author="CME — Computo Metrico Estimativo",
     )
@@ -576,7 +603,7 @@ def pdf_planimetrie(progetto, tavole, misure=(), altezza_max=180 * mm):
         lettore = io.BytesIO(tavola["png"])
         with PILImage.open(io.BytesIO(tavola["png"])) as pianta:
             larghezza_px, altezza_px = pianta.size
-        scala = min(LARGHEZZA_UTILE / larghezza_px, altezza_max / altezza_px)
+        scala = min(LARGHEZZA_TAVOLA / larghezza_px, altezza_max / altezza_px)
         elementi.append(ImmaginePDF(lettore, larghezza_px * scala,
                                     altezza_px * scala))
         if numero == 0:
