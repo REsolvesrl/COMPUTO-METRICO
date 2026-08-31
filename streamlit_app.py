@@ -1589,8 +1589,27 @@ def _scaletta(intestazione, righe, totale, um):
     return "\n".join(testa + righe + coda)
 
 
+def _conto_lati(n_porte, n_porte_esterne):
+    """«5 interne × 2 lati + 1 esterna» — da dove viene il numero dei lati.
+
+    Scritto solo «12 lati» non si controlla: bisogna sapere che una porta
+    interna ne vale due e il portoncino uno, e poi rifare la divisione a
+    mente per capire se il portoncino d'ingresso è stato contato o no. Un
+    totale PARI, con una blindata sola, vuol dire quasi sempre che nella
+    casella delle porte esterne è rimasto uno zero.
+    """
+    pezzi = []
+    if n_porte:
+        pezzi.append(f"{n_porte} interne × 2 lati")
+    if n_porte_esterne:
+        pezzi.append(f"{n_porte_esterne} esterne × 1 lato")
+    if not pezzi:
+        return ""
+    return " + ".join(pezzi) + " = "
+
+
 def mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta, alt_porta,
-                              aperture):
+                              aperture, n_porte=0, n_porte_esterne=0):
     """Il conto delle finiture in chiaro: chi entra, e ogni detrazione.
 
     Le sei schede in cima danno sei numeri tondi, e un numero tondo non si
@@ -1641,7 +1660,8 @@ def mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta, alt_porta,
                          "somma della colonna «Battiscopa» qui sopra",
                          q["battiscopa_lordo"], "m")]
     if q["detr_porte_ml"]:
-        conto = f"{numero_it(larg_porta, 2)} m × {lati_txt} lati"
+        conto = (f"{numero_it(larg_porta, 2)} m × "
+                 f"{_conto_lati(n_porte, n_porte_esterne)}{lati_txt} lati")
         if abs(lati_b - q["lati_porta"]) > 1e-9:
             conto += (f" (non {q['lati_porta']}: un lato che dà in un locale "
                       "rivestito senza zoccolino non interrompe niente)")
@@ -1678,7 +1698,8 @@ def mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta, alt_porta,
         righe.append(_riga_conto(
             "Vani porta",
             f"{numero_it(larg_porta, 2)} × {numero_it(alt_porta, 2)} m × "
-            f"{q['lati_porta']} lati", q["detr_porte_m2"], "m²", "−"))
+            f"{_conto_lati(n_porte, n_porte_esterne)}{q['lati_porta']} lati",
+            q["detr_porte_m2"], "m²", "−"))
     for ap in aperture:
         n = int(ap.get("n") or 0)
         if not n:
@@ -6438,7 +6459,8 @@ with tab_plan:
             with st.expander("🔍 Il conto in chiaro — chi entra nei totali "
                              "e ogni detrazione, riga per riga"):
                 mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta,
-                                          alt_porta, aperture)
+                                          alt_porta, aperture, n_porte,
+                                          n_porte_est)
 
             grandezze.update({
                 "pavimento": pav_m2,
