@@ -445,7 +445,8 @@ def test_riepilogo_superfici_applica_lo_scaglione():
 LOCALI = [
     {"m2": 20.0, "perimetro": 18.0, "pavimento": True, "battiscopa": True,
      "pittura": True, "rivestito": False},
-    {"m2": 6.0, "perimetro": 10.0, "pavimento": True, "battiscopa": True,
+    # il bagno: piastrellato e senza zoccolino, come nasce dalla tabella
+    {"m2": 6.0, "perimetro": 10.0, "pavimento": True, "battiscopa": False,
      "pittura": True, "rivestito": True},
 ]
 
@@ -453,15 +454,29 @@ LOCALI = [
 def test_finiture_senza_detrazioni():
     q = quantita_finiture(LOCALI, altezza=2.7)
     assert q["pavimento"] == pytest.approx(26.0)
-    # il bagno e' rivestito: niente battiscopa nemmeno senza porte
+    # il bagno non ha lo zoccolino spuntato: resta fuori anche senza porte
     assert q["battiscopa"] == pytest.approx(18.0)
     # pareti lorde 28 m di perimetro x 2,7 = 75,6
     assert q["pareti_lorde"] == pytest.approx(75.6)
 
 
-def test_finiture_bagno_rivestito_fuori_dal_battiscopa():
+def test_finiture_bagno_senza_zoccolino_fuori_dal_battiscopa():
     q = quantita_finiture(LOCALI, altezza=2.7)
     assert q["battiscopa_lordo"] == pytest.approx(18.0)   # solo il soggiorno
+
+
+def test_il_battiscopa_del_bagno_lo_comanda_la_spunta():
+    """La fascia a 90 cm vuole lo zoccolino sotto, e si deve poter dire.
+
+    Prima «Rivestito» annullava la spunta in silenzio: la si metteva, restava
+    li' accesa, e quel perimetro spariva lo stesso dal totale.
+    """
+    con_zoccolino = [dict(LOCALI[0]), dict(LOCALI[1], battiscopa=True)]
+    q = quantita_finiture(con_zoccolino, altezza=2.7)
+    assert q["battiscopa_lordo"] == pytest.approx(28.0)   # 18 + 10
+    # e la fascia resta comunque fuori da rasatura e tinteggiatura
+    q = quantita_finiture(con_zoccolino, altezza=2.7, altezza_rivestimento=1.2)
+    assert q["detr_rivestimenti"] == pytest.approx(12.0)
 
 
 def test_finiture_detrae_la_fascia_rivestita():
@@ -504,6 +519,61 @@ def test_finiture_tutte_le_detrazioni_insieme():
     assert q["battiscopa"] == pytest.approx(10.0)          # 18 - 8
     assert q["pareti"] == pytest.approx(75.6 - 12.0 - 16.8)  # 46,8
     assert q["soffitti"] == pytest.approx(26.0)            # i soffitti restano
+
+
+def test_la_porta_del_bagno_interrompe_un_lato_solo():
+    """Dove non c'e' zoccolino non c'e' niente da interrompere.
+
+    La porta interna vale due lati perche' affaccia su due locali; ma se di
+    la' c'e' il bagno piastrellato, quel lato il battiscopa non ce l'ha e
+    non si puo' scontare. Prima si scontava lo stesso: 0,80 m di troppo per
+    ogni bagno, che su un appartamento con due bagni fa 1,60 m.
+    """
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=1, n_porte_rivestiti=1)
+    assert q["lati_porta"] == 2                  # per le pareti restano due
+    assert q["lati_battiscopa"] == pytest.approx(1.0)
+    assert q["battiscopa"] == pytest.approx(18.0 - 0.8)
+
+
+def test_se_il_bagno_ha_lo_zoccolino_la_porta_torna_a_due_lati():
+    """Il conto segue la spunta: zoccolino nel bagno, vano da scontare."""
+    con_zoccolino = [dict(LOCALI[0]), dict(LOCALI[1], battiscopa=True)]
+    q = quantita_finiture(con_zoccolino, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=1, n_porte_rivestiti=1)
+    assert q["lati_battiscopa"] == pytest.approx(2.0)
+    assert q["battiscopa"] == pytest.approx(28.0 - 1.6)
+
+
+def test_il_vano_del_bagno_non_si_toglie_due_volte_dalle_pareti():
+    """La fascia si porta via gia' la striscia bassa del vano porta.
+
+    Il bagno: 10 m di perimetro x 2,70 = 27 m2 lordi, meno 12 di fascia,
+    meno la parte di vano che sta SOPRA la fascia (0,80 x 0,90 = 0,72).
+    Togliere anche il vano intero (1,68) su quel lato voleva dire scontare
+    due volte la striscia 0,80 x 1,20: 0,96 m2 di pareti in meno, a bagno.
+    """
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=1,
+                          altezza_rivestimento=1.2, n_porte_rivestiti=1)
+    assert q["recupero_vani_riv"] == pytest.approx(0.96)
+    # soggiorno 18 x 2,7 - 1,68 = 46,92 | bagno 27 - 12 - 0,72 = 14,28
+    assert q["pareti"] == pytest.approx(46.92 + 14.28)
+
+
+def test_il_recupero_non_regala_quello_che_non_era_stato_tolto():
+    """Porta contata solo fra quelle dei bagni, e non fra le porte interne.
+
+    Li' dalle pareti non era stato scontato nessun vano: non c'e' niente da
+    restituire, e le pareti devono restare quelle di prima.
+    """
+    q = quantita_finiture(LOCALI, altezza=2.7, larghezza_porta=0.8,
+                          altezza_porta=2.1, n_porte=0,
+                          altezza_rivestimento=1.2, n_porte_rivestiti=1)
+    assert q["recupero_vani_riv"] == 0.0
+    assert q["pareti"] == pytest.approx(75.6 - 12.0)
+    # ma la fascia la porta la toglie eccome: quella detrazione resta
+    assert q["rivestimenti"] == pytest.approx(12.0 - 0.96)
 
 
 def test_finiture_non_scendono_sotto_zero():

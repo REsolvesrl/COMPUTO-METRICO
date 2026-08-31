@@ -30,6 +30,7 @@ UM_ATTESA = {
     "rivestimenti": "m²",
     "battiscopa": "ml",
     "tinteggiatura": "m²",
+    "rasatura": "m²",
     "muri_demolire": "m²",
     "muri_costruire": "m²",
     "muri_cartongesso": "m²",

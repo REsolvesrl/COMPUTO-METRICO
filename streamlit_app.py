@@ -759,6 +759,12 @@ COLORI_CATEGORIE = {
 # quello che c'è — e i metri sono gli stessi che si riposano. Restano spente
 # la rimozione degli zoccolini, il massetto e la rasatura, che dipendono da
 # cosa si trova in cantiere.
+# ⚠️ La RASATURA non è la tinteggiatura. Prendeva la stessa quantità, e così
+# rasava tutto l'appartamento — soffitti e cartongesso compresi, che rasati
+# non vanno. La quantità proposta è ora il minimo che serve di sicuro: le due
+# facce dei muri nuovi in laterizio, tirati su grezzi. Dove si rasa dell'altro
+# — i muri con la carta da parati, un soffitto rovinato — il numero si scrive
+# a mano, e il disegno non ci mette più bocca.
 VOCI_DA_SUPERFICI = [
     # ⚠️ «pavimento» sono le stanze e basta: balconi, terrazzi e logge
     # stanno in «pavimento_esterno» e vanno nella 3.11, che è un'altra
@@ -771,7 +777,7 @@ VOCI_DA_SUPERFICI = [
     ("3.12", "rivestimenti", True),       # rivestimenti (fascia dei bagni)
     ("3.11", "pavimento_esterno", True),  # pavimentazione di balconi e terrazzi
     ("3.15", "battiscopa", True),         # posa battiscopa
-    ("3.18", "tinteggiatura", False),     # rasatura muri e soffitti
+    ("3.18", "rasatura", False),          # rasatura: le facce dei muri nuovi
     ("3.19", "tinteggiatura", True),      # tinteggiatura muri e soffitti
     # dai muri tracciati sulla planimetria (lunghezza × altezza)
     ("2.2", "muri_demolire", True),       # demolizione murature
@@ -5970,9 +5976,10 @@ with tab_plan:
         else:
             with st.container(key="notalarga_locali"):
                 st.caption("Spunta, locale per locale, che cosa si rifà. "
-                           "**Rivestito** (bagni, fascia della cucina): "
-                           "niente battiscopa, e la fascia piastrellata non "
-                           "si rasa né si tinteggia. Pavimento = superficie "
+                           "**Rivestito** (bagni, fascia della cucina): la "
+                           "fascia piastrellata non si rasa né si tinteggia, "
+                           "e di norma lì il battiscopa non c'è — ma se c'è "
+                           "basta spuntarlo. Pavimento = superficie "
                            "calpestabile; pareti = perimetro × altezza; "
                            "soffitti = superficie calpestabile.")
             zona_per_rif = {(p["uid"], z["id"]): z
@@ -6051,8 +6058,11 @@ with tab_plan:
                     "Rivestito": st.column_config.CheckboxColumn(
                         "Rivestito",
                         help="Locale piastrellato (bagno, fascia cucina): "
-                             "niente battiscopa e la fascia rivestita non "
-                             "si rasa né si tinteggia"),
+                             "la fascia rivestita non si rasa né si "
+                             "tinteggia. Il battiscopa lo comanda la sua "
+                             "spunta: di norma qui non ce n'è, ma con la "
+                             "fascia bassa lo zoccolino ci va — spuntalo e "
+                             "il perimetro rientra nel totale"),
                 }, placeholder="")
 
             locali_calcolo = []
@@ -6256,19 +6266,33 @@ with tab_plan:
                     "dei locali qui sopra — di norma i bagni e la fascia "
                     "della cucina.]")
             if detr_ml or detr_m2:
+                lati_b = q["lati_battiscopa"]
+                intero = abs(lati_b - round(lati_b)) < 1e-9
+                lati_txt = (f"{lati_b:.0f}" if intero
+                            else numero_it(lati_b, 1))
+                nota_lati = ""
+                if abs(lati_b - q["lati_porta"]) > 1e-9:
+                    nota_lati = (f", non {q['lati_porta']}: quelli che danno "
+                                 "in un bagno senza zoccolino non "
+                                 "interrompono niente")
+                recupero = ""
+                if q["recupero_vani_riv"]:
+                    rec = numero_it(q['recupero_vani_riv'], 2)
+                    recupero = (f" + {rec} m² di vani dei locali rivestiti, "
+                                "già dentro la fascia e tolti una volta di "
+                                "troppo")
                 with st.container(key="notalarga_battiscopa"):
                     st.caption(
                         f":gray[Battiscopa lordo {numero_it(q['battiscopa_lordo'], 2)} m "
-                        f"(i locali rivestiti sono già esclusi) − "
-                        f"{numero_it(q['detr_porte_ml'], 2)} m di vani porta "
-                        f"({q['lati_porta']} lati) − "
+                        f"− {numero_it(q['detr_porte_ml'], 2)} m di vani "
+                        f"porta ({lati_txt} lati{nota_lati}) − "
                         f"{numero_it(q['detr_aperture_ml'], 2)} m di porte "
                         f"finestra. "
                         f"Pareti lorde {numero_it(q['pareti_lorde'], 2)} m² − "
                         f"{numero_it(q['detr_rivestimenti'], 2)} m² di fasce "
                         f"rivestite − {numero_it(q['detr_porte_m2'], 2)} m² di "
                         f"vani porta − {numero_it(q['detr_aperture_m2'], 2)} m² "
-                        f"di finestre e porte finestra.]")
+                        f"di finestre e porte finestra{recupero}.]")
 
             grandezze.update({
                 "pavimento": pav_m2,
@@ -6405,6 +6429,21 @@ with tab_plan:
             grandezze["muri_demolire"] = dem_netto
             grandezze["muri_costruire"] = cos_netto
             grandezze["muri_cartongesso"] = car_netto
+            # Un muro nuovo in forati si tira su grezzo e va rasato da tutte
+            # e due le parti: la voce del muro conta la sua superficie una
+            # volta sola, le facce da rasare sono il doppio. Il cartongesso
+            # resta fuori — si stucca ai giunti e si tinteggia, rasato non va.
+            grandezze["rasatura"] = round(2 * cos_netto, 2)
+            if cos_netto:
+                with st.container(key="notalarga_rasatura"):
+                    st.caption(
+                        f":gray[**Rasatura**: "
+                        f"{numero_it(2 * cos_netto, 2)} m² — le due facce "
+                        f"dei muri nuovi in forati "
+                        f"({numero_it(cos_netto, 2)} m² × 2). È il minimo che "
+                        "serve di sicuro; se si rasa anche dell'altro, "
+                        "scrivi tu la quantità nella voce 3.18 e il disegno "
+                        "smette di riscrivertela.]")
 
         # ------------------------- i totali tornano su, accanto al disegno
         # Adesso i numeri ci sono: si scrivono nel segnaposto lasciato sotto

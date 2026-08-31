@@ -229,15 +229,22 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     perimetro × `altezza_rivestimento` dei locali spuntati «rivestito».
 
     Detrazioni applicate:
-    - i locali RIVESTITI (bagni, fasce di cucina) non hanno battiscopa: il
-      loro perimetro non entra nel conteggio;
     - nei locali rivestiti la fascia alta `altezza_rivestimento` non si rasa
       né si tinteggia: si toglie perimetro × altezza_rivestimento;
     - i VANI PORTA non hanno battiscopa e non si tinteggiano. Una porta
       INTERNA affaccia su due locali, quindi interrompe il battiscopa di
       qua e di là e toglie superficie a due pareti: conta per DUE lati.
       Il portoncino d'ingresso (n_porte_esterne) ne ha uno solo, perché
-      l'altra faccia è fuori dall'appartamento.
+      l'altra faccia è fuori dall'appartamento. Ma un lato che dà dentro un
+      bagno SENZA zoccolino non interrompe niente — là il battiscopa non
+      c'è — e per il battiscopa quei lati non si contano.
+
+    Il battiscopa lo comanda la sola spunta `battiscopa`, anche nei locali
+    rivestiti. Di norma un bagno piastrellato non ce l'ha, e infatti la
+    spunta nasce spenta; ma con la fascia a 90 cm lo zoccolino sotto ci va,
+    e prima non c'era modo di dirlo: `rivestito` annullava la spunta in
+    silenzio, e quel perimetro spariva dal totale senza una riga che lo
+    dicesse.
 
     aperture: le altre bucature del muro, [{"n", "larghezza", "altezza",
     "battiscopa"}, ...] — finestre e porte finestra. Stanno su un muro
@@ -280,6 +287,7 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     pavimento = pavimento_esterno = 0.0
     battiscopa_lordo = pareti_lorde = soffitti = 0.0
     detr_rivestimenti = 0.0
+    riv_totali = riv_senza_zoccolino = 0
     for locale in locali:
         m2 = float(locale.get("m2") or 0.0)
         perimetro = float(locale.get("perimetro") or 0.0)
@@ -292,7 +300,11 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
                 pavimento += m2
         if esterno:
             continue          # fuori: niente zoccolino, niente tinteggiatura
-        if locale.get("battiscopa") and not rivestito:
+        if rivestito:
+            riv_totali += 1
+            if not locale.get("battiscopa"):
+                riv_senza_zoccolino += 1
+        if locale.get("battiscopa"):
             battiscopa_lordo += perimetro
         if locale.get("pittura"):
             pareti_lorde += perimetro * h
@@ -300,10 +312,37 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
             if rivestito:
                 detr_rivestimenti += perimetro * h_riv
 
-    detr_porte_ml = larg_p * lati
+    # Dei lati contati sopra, quelli che danno DENTRO un bagno senza
+    # zoccolino non interrompono nessun battiscopa: là non ce n'è. Prima si
+    # toglievano lo stesso, e ogni porta di bagno mangiava una larghezza di
+    # troppo. Quale porta stia in quale bagno non lo sappiamo — le porte si
+    # contano tutte insieme — quindi vale la quota dei rivestiti che lo
+    # zoccolino non ce l'hanno: con i bagni tutti uguali, che è il caso
+    # normale, quella quota è 0 o 1 e il conto torna esatto.
+    porte_riv = min(max(0, int(n_porte_rivestiti or 0)),
+                    max(0, int(n_porte or 0)))
+    quota_senza = (riv_senza_zoccolino / riv_totali) if riv_totali else 0.0
+    lati_batt = max(0.0, lati - porte_riv * quota_senza)
+
+    # La fascia rivestita si toglie tutta intera, larghezza dei vani
+    # compresa: togliere POI anche il vano porta per la sua altezza piena
+    # significa scontare due volte la striscia bassa, e le pareti da
+    # tinteggiare uscivano più piccole del vero di 0,96 m² a bagno.
+    # Si ridà quel pezzo, ma solo quello che è stato davvero tolto due
+    # volte: le porte dei bagni che sono anche fra le porte interne
+    # dichiarate (`porte_riv`), e le finestre solo se qualche finestra è
+    # stata dichiarata — chi conta la finestra del bagno solo qui, e non
+    # fra le finestre di casa, non l'ha mai scontata dalle pareti.
+    rec_porte = porte_riv * larg_p * min(alt_p, h_riv)
+    rec_finestre = min(detr_riv_finestre, detr_aperture_m2)
+    recupero_riv = min(rec_porte + rec_finestre, detr_rivestimenti)
+
+    detr_porte_ml = larg_p * lati_batt
     detr_porte_m2 = larg_p * alt_p * lati
     return {
         "lati_porta": lati,
+        "lati_battiscopa": round(lati_batt, 3),
+        "recupero_vani_riv": round(recupero_riv, 3),
         "pavimento": round(pavimento, 3),
         "pavimento_esterno": round(pavimento_esterno, 3),
         "rivestimenti": round(max(0.0, detr_rivestimenti - detr_riv_porte
@@ -315,7 +354,8 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
                                 - detr_aperture_ml), 3),
         "battiscopa_lordo": round(battiscopa_lordo, 3),
         "pareti": round(max(0.0, pareti_lorde - detr_rivestimenti
-                            - detr_porte_m2 - detr_aperture_m2), 3),
+                            - detr_porte_m2 - detr_aperture_m2
+                            + recupero_riv), 3),
         "pareti_lorde": round(pareti_lorde, 3),
         "soffitti": round(soffitti, 3),
         "detr_porte_ml": round(detr_porte_ml, 3),
