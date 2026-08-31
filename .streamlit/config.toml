@@ -1,5 +1,5 @@
 # Mondo «Campionario» (vedi DESIGN.md): i materiali del campionario edile.
-# Ardesia e ottone vengono dal logo Resolve — qui sono la pietra e il metallo.
+# Ardesia e ottone vengono dal logo RESolve — qui sono la pietra e il metallo.
 [theme]
 base = "dark"
 primaryColor = "#C9A96A"                 # ottone: azioni e accenti

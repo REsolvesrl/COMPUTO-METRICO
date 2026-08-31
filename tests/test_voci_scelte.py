@@ -20,7 +20,7 @@ SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 # Un progetto vecchio: nessun elenco di voci scelte, solo le quantità.
 # Erano quelle a decidere che cosa si vedeva, ed è da lì che si migra.
 PROGETTO_VECCHIO = {
-    "progetto": {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
+    "progetto": {"nome": "Via Roma 12", "committente": "RESolve srl",
                  "oggetto": "Ristrutturazione", "data": "2026-08-09",
                  "aliquota_iva": 10.0, "imprevisti": 10.0},
     "voci": [],

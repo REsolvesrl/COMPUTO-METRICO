@@ -59,7 +59,7 @@ def giro(tmp_path_factory, monkeypatch_module):
     at = AppTest.from_file(str(SORGENTE), default_timeout=300)
     at.run()
     at.session_state["prg_nome"] = "Giro completo"
-    at.session_state["prg_committente"] = "Resolve S.r.l."
+    at.session_state["prg_committente"] = "RESolve srl"
     for chiave, testo in IMPORTI.items():
         at.text_input(key=f"{chiave}_txt").set_value(testo).run()
     for chiave, valore in PERCENTUALI.items():
@@ -126,7 +126,7 @@ def test_il_file_salvato_contiene_il_computo(giro):
 def test_il_file_salvato_contiene_i_dati_del_progetto(giro):
     salvato, _ = giro
     assert salvato["progetto"]["nome"] == "Giro completo"
-    assert salvato["progetto"]["committente"] == "Resolve S.r.l."
+    assert salvato["progetto"]["committente"] == "RESolve srl"
 
 
 @pytest.mark.parametrize("chiave, atteso", sorted(ATTESI.items()))

@@ -19,7 +19,7 @@ from streamlit.testing.v1 import AppTest
 SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 
 PROGETTO = {
-    "progetto": {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
+    "progetto": {"nome": "Via Roma 12", "committente": "RESolve srl",
                  "oggetto": "Ristrutturazione", "data": "2026-08-09",
                  "aliquota_iva": 10.0, "imprevisti": 10.0},
     "voci": [],

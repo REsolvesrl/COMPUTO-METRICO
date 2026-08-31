@@ -47,7 +47,7 @@ CME/
 ├── cme_viewer/                # componente visualizzatore planimetrie
 │   ├── __init__.py            #   lato Python
 │   └── frontend/              #   lato browser (canvas + barra strumenti)
-├── assets/                    # logo Resolve (schermata di accesso)
+├── assets/                    # logo RESolve (schermata di accesso)
 ├── tests/                     # test pytest sui moduli di logica
 ├── archivio_locale.py         # archivio dei progetti in una cartella del PC
 ├── requirements.txt           # librerie necessarie all'app

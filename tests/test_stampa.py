@@ -11,7 +11,7 @@ import pytest
 import materiali
 from stampa import pdf_computo, pdf_materiali, pdf_planimetrie
 
-PROGETTO = {"nome": "Via Roma 12", "committente": "Resolve S.r.l.",
+PROGETTO = {"nome": "Via Roma 12", "committente": "RESolve srl",
             "oggetto": "Ristrutturazione appartamento", "data": "09/08/2026"}
 
 VOCI = [
@@ -45,7 +45,7 @@ def test_produce_un_pdf_vero():
 def test_riporta_i_dati_del_progetto():
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
     assert "Via Roma 12" in testo
-    assert "Resolve S.r.l." in testo
+    assert "RESolve srl" in testo
     assert "Ristrutturazione appartamento" in testo
     assert "09/08/2026" in testo
 
@@ -228,7 +228,7 @@ def test_il_gruppo_firma_c_e_in_tutt_e_due():
         testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI,
                                            con_prezzi=con_prezzi))
         assert "PER ACCETTAZIONE:" in testo, con_prezzi
-        assert "Resolve S.r.l." in testo, con_prezzi
+        assert "RESolve srl" in testo, con_prezzi
         # due righe di penna: una per parte
         assert testo.count("_" * 20) >= 2, con_prezzi
 
@@ -237,7 +237,7 @@ def test_il_posto_dell_impresa_resta_vuoto():
     """Il nome se lo scrive lei: finche' non firma non sappiamo quale sia."""
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
     # l'unico nome stampato e' quello del committente
-    assert testo.count("Resolve S.r.l.") == 2   # cartiglio + firma
+    assert testo.count("RESolve srl") == 2   # cartiglio + firma
 
 
 # ------------------------------------------- allegato 1: i materiali
@@ -318,7 +318,7 @@ def test_allegato_porta_la_clausola_e_le_firme():
     testo = _testo_del_pdf(pdf_materiali(PROGETTO_FIRMA, MATERIALI))
     assert "a cura e spese del Committente" in testo
     assert "PER ACCETTAZIONE:" in testo
-    assert "Resolve S.r.l." in testo
+    assert "RESolve srl" in testo
 
 
 def test_allegato_porta_luogo_e_data():
@@ -501,3 +501,37 @@ def test_la_pianta_riempie_il_foglio_anche_senza_testata():
         altezze.append(riquadro.height)
     assert altezze[1] > altezze[0]          # la seconda non ha la testata
     assert altezze[1] > 0.88 * documento[1].rect.height
+
+
+def test_la_data_sta_in_fondo_accanto_alle_firme():
+    """Non è un dato di copertina: è il giorno dell'accettazione. In
+    cartiglio ci sarebbe due volte, e la seconda smentirebbe la prima."""
+    pdf = pdf_computo(PROGETTO, VOCI, TOTALI)
+    pagina = fitz.open(stream=pdf, filetype="pdf")[0]
+    quota_data = quota_firma = None
+    for blocco in pagina.get_text("dict")["blocks"]:
+        for riga in blocco.get("lines", []):
+            testo = "".join(s["text"] for s in riga["spans"])
+            if PROGETTO["data"] in testo:
+                quota_data = riga["bbox"][1]
+            if "PER ACCETTAZIONE" in testo:
+                quota_firma = riga["bbox"][1]
+    assert quota_data and quota_firma
+    assert quota_data < quota_firma                     # subito sopra
+    assert quota_firma - quota_data < 100               # e vicina
+    assert quota_data > pagina.rect.height / 2          # in fondo, non in testa
+
+
+def test_il_titolo_della_categoria_si_legge_da_lontano():
+    """È il segnaposto con cui si sfoglia un computo di sei pagine: deve
+    battere le voci che annuncia, non perdersi fra loro."""
+    pdf = pdf_computo(PROGETTO, VOCI, TOTALI)
+    pagina = fitz.open(stream=pdf, filetype="pdf")[0]
+    corpi = {}
+    for blocco in pagina.get_text("dict")["blocks"]:
+        for riga in blocco.get("lines", []):
+            for pezzo in riga["spans"]:
+                corpi[pezzo["text"].strip()] = round(pezzo["size"], 1)
+    titolo = corpi.get(VOCI[0]["categoria"].upper())
+    assert titolo and titolo >= 12
+    assert titolo > corpi[VOCI[0]["codice"]]

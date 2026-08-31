@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Un solo utente: il titolare di Resolve S.r.l. (società immobiliare italiana), che usa CME come strumento di lavoro interno per le proprie operazioni di compravendita + ristrutturazione. Nessun collaboratore o cliente esterno usa l'app oggi; la presentabilità verso terzi non è un requisito confermato.
+Un solo utente: il titolare di RESolve srl (società immobiliare italiana), che usa CME come strumento di lavoro interno per le proprie operazioni di compravendita + ristrutturazione. Nessun collaboratore o cliente esterno usa l'app oggi; la presentabilità verso terzi non è un requisito confermato.
 
 ## Product Purpose
 
@@ -45,8 +45,8 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 
 ## Brand Commitments
 
-- Nome prodotto: CME — Computo Metrico Estimativo; società: Resolve S.r.l.
-- Tema attuale: dark navy + oro champagne dal logo Resolve (#1A2744 navy, #C9A96A oro, #ECE7DA crema), uguale al progetto gemello MORA (.streamlit/config.toml). **Confermato come preferenza, non vincolo**: l'utente è aperto a una proposta migliore che la superi.
+- Nome prodotto: CME — Computo Metrico Estimativo; società: RESolve srl
+- Tema attuale: dark navy + oro champagne dal logo RESolve (#1A2744 navy, #C9A96A oro, #ECE7DA crema), uguale al progetto gemello MORA (.streamlit/config.toml). **Confermato come preferenza, non vincolo**: l'utente è aperto a una proposta migliore che la superi.
 
 ## Evidence on Hand
 

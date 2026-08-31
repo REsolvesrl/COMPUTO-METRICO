@@ -716,7 +716,7 @@ def _accesso_consentito():
             st.image(str(LOGO_PATH), width=200)
         st.subheader("Accesso riservato")
         st.caption(
-            "Strumento interno di Resolve S.r.l. "
+            "Strumento interno di RESolve srl "
             "Inserisci la password per continuare."
         )
         pwd = st.text_input("Password", type="password", key="auth_pwd")
@@ -885,7 +885,7 @@ TENDINE_MERITO = {
     "riscaldamento": ("Riscaldamento", tuple(merito.RISCALDAMENTO)),
 }
 
-# Palette del brand Resolve (dark navy + oro), come MORA.
+# Palette del brand RESolve (dark navy + oro), come MORA.
 # Nomi con cui i grafici Plotly chiamano gli stessi due materiali: lì serve
 # un colore vero, non una variabile CSS. Un solo valore, due nomi.
 ORO = OTTONE

@@ -59,6 +59,12 @@ STILE_CATEGORIA = ParagraphStyle(
 STILE_VOCE = ParagraphStyle(
     "voce", fontName="Helvetica", fontSize=8, leading=10.5,
     textColor=ARDESIA)
+# Il titolo che apre ogni tabella (DEMOLIZIONI, RICOSTRUZIONI…): è il
+# segnaposto con cui si sfoglia un computo di sei pagine, e a 7 punti si
+# leggeva meno delle voci che annunciava.
+STILE_TITOLO_CATEGORIA = ParagraphStyle(
+    "titolo_categoria", fontName="Helvetica-Bold", fontSize=13, leading=16,
+    textColor=ARDESIA)
 STILE_INTESTAZIONE = ParagraphStyle(
     "intestazione", fontName="Helvetica-Bold", fontSize=7, leading=9,
     textColor=colors.white)
@@ -94,7 +100,7 @@ NOTA_FINALE = (
     "opere: smontaggio e smaltimento finestre, porte interne, battiscopa, "
     "impianti e riquadratura spallette")
 
-COMMITTENTE_FIRMATARIO = "Resolve S.r.l."
+COMMITTENTE_FIRMATARIO = "RESolve srl"
 
 
 def _pie_di_pagina(canvas, documento):
@@ -115,7 +121,8 @@ def _pie_di_pagina(canvas, documento):
     canvas.restoreState()
 
 
-def _testata(progetto, titolo="Computo metrico estimativo", occhiello=None):
+def _testata(progetto, titolo="Computo metrico estimativo", occhiello=None,
+             con_data=True):
     """Il cartiglio: che documento è, di che lavoro, per chi, di che giorno.
 
     `occhiello` è l'etichetta piccola sopra il titolo — «ALLEGATO 1 AL
@@ -126,8 +133,13 @@ def _testata(progetto, titolo="Computo metrico estimativo", occhiello=None):
     dati = [
         ("Committente", progetto.get("committente")),
         ("Oggetto", progetto.get("oggetto")),
-        ("Data", progetto.get("data")),
     ]
+    # Sui fogli che si firmano la data scende in fondo, accanto alle firme
+    # (`_riga_luogo_data`): là non è più un dato di copertina ma il giorno
+    # dell'accettazione, ed è quello che conta. In cartiglio resterebbe due
+    # volte, e la seconda contraddirebbe la prima appena si ristampa.
+    if con_data:
+        dati.append(("Data", progetto.get("data")))
     righe = [[Paragraph(etichetta.upper(), STILE_ETICHETTA),
               Paragraph(str(valore or "—"), STILE_DATO)]
              for etichetta, valore in dati]
@@ -224,8 +236,8 @@ def _tabella_categoria(categoria, voci_categoria, tinta, con_prezzi=True):
         if i % 2 == 0:
             stile.append(("BACKGROUND", (0, i), (-1, i), RIGA_ALTERNA))
     tabella.setStyle(TableStyle(stile))
-    return [Paragraph(categoria.upper(), STILE_ETICHETTA), Spacer(1, 1.5 * mm),
-            tabella, Spacer(1, 5 * mm)]
+    return [Paragraph(categoria.upper(), STILE_TITOLO_CATEGORIA),
+            Spacer(1, 1.5 * mm), tabella, Spacer(1, 5 * mm)]
 
 
 def _tabella_totali(totali, con_prezzi=True):
@@ -345,7 +357,7 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
                                     or "Progetto senza nome")
 
     tinte = tinte or {}
-    elementi = _testata(progetto)
+    elementi = _testata(progetto, con_data=False)
     gruppi = _raggruppa(voci)
     if not gruppi:
         elementi.append(Paragraph(
@@ -369,6 +381,7 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     # scrivere la cifra, non trovarsele addosso dopo aver firmato.
     elementi.append(Spacer(1, 5 * mm))
     elementi.append(Paragraph(NOTA_FINALE, STILE_NOTA_FINALE))
+    elementi.extend(_riga_luogo_data(progetto))
     elementi.extend(_gruppo_firma())
 
     documento.build(elementi, onFirstPage=_pie_di_pagina,
@@ -477,7 +490,7 @@ def pdf_materiali(progetto, righe):
 
     elementi = _testata(
         progetto, titolo="Elenco materiali acquistati cura Committente",
-        occhiello="Allegato 1 al computo metrico")
+        occhiello="Allegato 1 al computo metrico", con_data=False)
 
     note = note_numerate(righe)
     marcatori = {id(n["riga"]): n["marcatore"] for n in note}

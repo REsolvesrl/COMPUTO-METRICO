@@ -31,7 +31,7 @@ la materia di cui l'app parla.
 | Materia fredda, quiete | Cemento | `#6E7377` |
 | Conferme | Gres verde | `#4E7A5E` |
 
-Ardesia e ottone vengono dal logo Resolve: nel campionario diventano due
+Ardesia e ottone vengono dal logo RESolve: nel campionario diventano due
 materiali fra gli altri, la pietra e il metallo. Il marchio non è appiccicato
 sopra il mondo, ne fa parte.
 
