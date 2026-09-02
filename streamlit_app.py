@@ -64,6 +64,18 @@ import merito
 import stampa
 import tavola
 import storico
+
+# Registro d'uso: conta le lavorazioni svolte con CME, non le aperture del
+# programma (il perche' e le regole stanno in uso.py). L'import e' protetto
+# perche' l'app gira anche in Docker e su Render, dove il registro non serve
+# e il file puo' non esserci: senza questa rete un uso.py mancante fermerebbe
+# l'intera applicazione all'avvio.
+try:
+    from uso import registra as _registra_uso
+except Exception:                                            # noqa: BLE001
+    def _registra_uso(*_a, **_k):
+        pass
+
 from formato import colore_testo_su, euro, numero_da_it, numero_it
 from tabelle import (
     CAPITOLI_EMOJI,
@@ -3994,6 +4006,25 @@ def nome_archivio_corrente():
     return (st.session_state.prg_nome or "").strip() or "Progetto senza nome"
 
 
+def _segna_operazione_valutata(nome):
+    """Conta la lavorazione una volta sola per progetto e per sessione.
+
+    Il registro deve dire quante operazioni immobiliari sono state valutate
+    con CME, non quante volte si e' premuto Salva: salvare quindici volte lo
+    stesso progetto resta una lavorazione sola, e contarla quindici volte
+    renderebbe il conteggio indifendibile. Il nome del progetto finisce nel
+    registro sotto forma di hash, mai in chiaro.
+    """
+    gia_contati = st.session_state.setdefault("_uso_progetti_contati", set())
+    if nome in gia_contati:
+        return
+    gia_contati.add(nome)
+    try:
+        _registra_uso("CME", "operazione_valutata", riferimento=nome)
+    except Exception:                                        # noqa: BLE001
+        pass          # il registro e' un testimone, non deve fermare il lavoro
+
+
 def salva_al_volo():
     """Salva subito in archivio, sovrascrivendo, senza chiedere niente.
 
@@ -4019,6 +4050,7 @@ def salva_al_volo():
                                                    f"salvare: {errore}")
         return
     segna_salvato()
+    _segna_operazione_valutata(nome)
     st.session_state._esito_salva = (
         "ok", f"«{nome}» salvato alle "
               f"{st.session_state.ultimo_salvataggio.strftime('%H:%M')}")
@@ -5088,6 +5120,7 @@ with sotto_computo:
                     deposito.salva_progetto(nome_pulito,
                                             progetto_json_bytes())
                     segna_salvato()
+                    _segna_operazione_valutata(nome_pulito)
                     st.success(f"Progetto «{nome_pulito}» archiviato.")
                 except Exception as errore:
                     st.error(f"Errore nel salvataggio: {errore}")
