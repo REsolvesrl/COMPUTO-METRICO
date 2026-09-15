@@ -30,6 +30,17 @@ let misure = [];             // misure "al volo": SOLO locali, mai inviate
 let labelRects = [];         // rettangoli (schermo) delle etichette disegnate
 let seqN = 0;
 let mostraAree = true;       // aree dei locali + etichette a schermo
+let vertSel = null;          // indice del vertice scelto nell'area selezionata
+
+// Il disegno si modifica QUI, subito, e il server lo sa dopo: fra il gesto e
+// la risposta passa mezzo secondo, e in quel mezzo secondo Streamlit può
+// rimandare i dati di prima. Se li prendessimo per buoni la modifica
+// sparirebbe e ricomparirebbe — il «lampeggio». Finché il server non dice di
+// aver applicato l'ultimo gesto (seq_applicato), la geometria resta la nostra.
+let ultimoSeqInviato = 0, ultimoInvioT = 0;
+let argsRimandati = null;    // dati arrivati mentre si trascinava qualcosa
+let vistaW = 0, vistaH = 0;  // misura della tela all'ultimo dimensionamento
+let vistaImpostata = false;
 
 // Le zone da disegnare adesso: con «AREE» spento restano solo i perimetri
 // commerciali, che non sono locali ma l'ingombro dell'immobile.
@@ -106,7 +117,10 @@ function fmtMetri(pxLen) {
 // ------------------------------------------------------------------- invio
 function send(v) {
   v.seq = Date.now() * 100 + (seqN++ % 100);
+  ultimoSeqInviato = v.seq;
+  ultimoInvioT = Date.now();
   Streamlit.setComponentValue(v);
+  return v.seq;
 }
 function arrotonda(pts) {
   return pts.map(function (p) {
@@ -126,7 +140,15 @@ function sizeCanvas() {
   cv.height = Math.round(contH * dpr);
 }
 
-function fit() {
+// Dà la misura alla tela. Con reimposta=true rimette la vista d'insieme
+// (immagine nuova, tasto «adatta»); altrimenti TIENE zoom e inquadratura.
+//
+// ⚠️ Prima la vista si rimetteva d'insieme sempre: a ogni risposta del
+// server (cioè a ogni gesto) e a ogni ritocco di larghezza della cornice —
+// basta la barra di scorrimento della pagina che compare. Si zoomava su un
+// angolo, si spostava un vertice, e mezzo secondo dopo si era di nuovo a
+// guardare tutta la pianta. Era il difetto più fastidioso della scheda.
+function fit(reimposta) {
   // Senza immagine si usciva subito, PRIMA di dare una misura alla tela:
   // e siccome sizeCanvas() vive solo qui dentro, il canvas restava del
   // formato con cui era nato — 200 px in mezzo a una cornice da 854 —
@@ -135,16 +157,56 @@ function fit() {
   if (!img.naturalWidth) { sizeCanvas(); render(); return; }
   const w = Math.max(200, cont.clientWidth);
   let s = Math.min(w / img.naturalWidth, MAXH / img.naturalHeight);
-  contH = Math.max(MINH, Math.min(MAXH, Math.round(img.naturalHeight * s)));
-  s = Math.min(w / img.naturalWidth, contH / img.naturalHeight);
+  const nuovaH = Math.max(MINH, Math.min(MAXH, Math.round(img.naturalHeight * s)));
+  s = Math.min(w / img.naturalWidth, nuovaH / img.naturalHeight);
   fitScale = s;
-  scale = s;
-  tx = (w - img.naturalWidth * s) / 2;
-  ty = (contH - img.naturalHeight * s) / 2;
-  cont.style.height = contH + "px";
-  sizeCanvas();
-  Streamlit.setFrameHeight(contH);
+  if (reimposta || !vistaImpostata) {
+    scale = s;
+    tx = (w - img.naturalWidth * s) / 2;
+    ty = (nuovaH - img.naturalHeight * s) / 2;
+    vistaImpostata = true;
+  } else if (w !== vistaW || nuovaH !== vistaH) {
+    // stessa scala, e il punto che stava al centro resta al centro
+    const c = scr2img([vistaW / 2, vistaH / 2]);
+    tx = w / 2 - c[0] * scale;
+    ty = nuovaH / 2 - c[1] * scale;
+  }
+  const altezzaCambiata = (nuovaH !== contH) || !vistaW;
+  contH = nuovaH;
+  if (w !== vistaW || altezzaCambiata) {
+    cont.style.height = contH + "px";
+    sizeCanvas();
+  }
+  vistaW = w;
+  vistaH = contH;
+  if (altezzaCambiata) Streamlit.setFrameHeight(contH);
   render();
+  salvaVista();
+}
+
+// La vista si ricorda anche se il riquadro viene ricreato (si passa a
+// un'altra planimetria e si torna, o Streamlit rimonta il componente).
+function chiaveVista() {
+  return curSrc ? "cme_vista:" + curSrc.length + ":" + curSrc.slice(-48) : null;
+}
+function salvaVista() {
+  const k = chiaveVista();
+  if (!k || !img.naturalWidth) return;
+  const c = scr2img([vistaW / 2, vistaH / 2]);
+  try {
+    sessionStorage.setItem(k, JSON.stringify({ z: scale / fitScale, c: c }));
+  } catch (err) { /* archiviazione non disponibile: pazienza */ }
+}
+function ripristinaVista() {
+  const k = chiaveVista();
+  let v = null;
+  try { v = JSON.parse(sessionStorage.getItem(k) || "null"); } catch (err) { v = null; }
+  if (!v || !(v.z > 0) || !v.c) return false;
+  scale = fitScale * v.z;
+  tx = vistaW / 2 - v.c[0] * scale;
+  ty = vistaH / 2 - v.c[1] * scale;
+  render();
+  return true;
 }
 
 function zoomAt(sx, sy, fattore) {
@@ -153,6 +215,12 @@ function zoomAt(sx, sy, fattore) {
   ty = sy - (sy - ty) * (ns / scale);
   scale = ns;
   render();
+  salvaVistaPresto();
+}
+let timerVista = null;
+function salvaVistaPresto() {
+  clearTimeout(timerVista);
+  timerVista = setTimeout(salvaVista, 250);
 }
 
 // ------------------------------------------------------------------ disegno
@@ -446,7 +514,11 @@ function render() {
       ctx.lineTo(pos[0], pos[1]);
       ctx.stroke();
     }
-    const r = drawLabel(pos, p.etichetta, Math.max(10, fontPx - 2), false);
+    // mentre se ne trascina un capo, la misura è quella viva, non l'ultima
+    // arrivata dal server
+    const testo = (drag && drag.w === p && mpp > 0)
+      ? fmtMetri(dist(p.p1, p.p2)) : p.etichetta;
+    const r = drawLabel(pos, testo, Math.max(10, fontPx - 2), false);
     if (r) labelRects.push({ r: r, el: "parete", obj: p });
   }
   for (const m of misure) {
@@ -462,20 +534,56 @@ function render() {
               Math.max(10, fontPx - 2), false);
   }
 
-  // maniglie della zona selezionata
+  // maniglie della zona selezionata: i quadratini sono i vertici (quello
+  // scelto è pieno), i tondini col «+» a metà lato aggiungono un vertice
   if (mode === "modifica" && selZona != null) {
     const z = zone.find(function (q) { return q.id === selZona; });
     if (z) {
-      for (const p of z.punti) {
-        const s = img2scr(p);
-        ctx.fillStyle = "#FFFFFF";
+      for (const m of mezziLati(z)) {
+        ctx.beginPath();
+        ctx.arc(m.s[0], m.s[1], 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.fill();
         ctx.strokeStyle = z.colore;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+        ctx.beginPath();
+        seg(m.s[0] - 3, m.s[1], m.s[0] + 3, m.s[1]);
+        seg(m.s[0], m.s[1] - 3, m.s[0], m.s[1] + 3);
+        ctx.strokeStyle = "#1A2744";
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+      z.punti.forEach(function (p, i) {
+        const s = img2scr(p);
+        const scelto = (i === vertSel);
+        const r = scelto ? 6.5 : 5;
+        ctx.fillStyle = scelto ? z.colore : "#FFFFFF";
+        ctx.strokeStyle = scelto ? "#FFFFFF" : z.colore;
         ctx.lineWidth = 2;
-        ctx.fillRect(s[0] - 5, s[1] - 5, 10, 10);
-        ctx.strokeRect(s[0] - 5, s[1] - 5, 10, 10);
+        ctx.fillRect(s[0] - r, s[1] - r, 2 * r, 2 * r);
+        ctx.strokeRect(s[0] - r, s[1] - r, 2 * r, 2 * r);
+      });
+    }
+  }
+
+  // maniglie del muro selezionato: i due capi si trascinano
+  if (mode === "modifica" && selParete != null) {
+    const w = pareti.find(function (q) { return q.id === selParete; });
+    if (w) {
+      for (const p of [w.p1, w.p2]) {
+        const s = img2scr(p);
+        ctx.beginPath();
+        ctx.arc(s[0], s[1], 6.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fill();
+        ctx.strokeStyle = w.colore || "#C9A96A";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
       }
     }
   }
+  aggiornaSuggerimento();
 
   // cerchietto di chiusura sul primo punto del poligono in corso
   if (mode === "disegna" && drawing.length >= 3) {
@@ -518,6 +626,7 @@ function coloreParete() {
 function setMode(m) {
   mode = m;
   drawing = [];
+  vertSel = null;
   annullaVettore();
   chiudiEditor();
   drag = null;
@@ -538,7 +647,13 @@ function chiudiPoligono() {
   }
   if (pts.length >= 3 && dist(pts[0], pts[pts.length - 1]) * scale < 3) pts.pop();
   drawing = [];
-  if (pts.length >= 3) send({ tipo: "zona_chiusa", punti: arrotonda(pts) });
+  if (pts.length >= 3) {
+    const punti = arrotonda(pts);
+    const seq = send({ tipo: "zona_chiusa", punti: punti });
+    // l'area resta a video mentre il server la registra (etichetta dopo)
+    zone.push({ id: "nuova-" + seq, punti: punti, colore: coloreAttivo,
+                etichetta: "", nome: "" });
+  }
   render();
 }
 
@@ -556,6 +671,66 @@ function hitVertice(z, s) {
   }
   return -1;
 }
+// I punti a metà di ogni lato, dove si aggiunge un vertice. Sui lati troppo
+// corti a schermo non si mettono: starebbero addosso ai vertici e li
+// coprirebbero — basta zoomare e ricompaiono.
+function mezziLati(z) {
+  const out = [];
+  for (let i = 0; i < z.punti.length; i++) {
+    const a = z.punti[i], b = z.punti[(i + 1) % z.punti.length];
+    const sa = img2scr(a), sb = img2scr(b);
+    if (dist(sa, sb) < 30) continue;
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    out.push({ i: i, p: m, s: img2scr(m) });
+  }
+  return out;
+}
+function hitMezzo(z, s) {
+  for (const m of mezziLati(z)) {
+    if (dist(m.s, s) < 8) return m;
+  }
+  return null;
+}
+function hitCapo(w, s) {
+  if (dist(img2scr(w.p1), s) < 11) return "p1";
+  if (dist(img2scr(w.p2), s) < 11) return "p2";
+  return null;
+}
+
+// Toglie un vertice dall'area selezionata: sotto i tre punti non è più
+// un'area, e lì ci si ferma.
+function togliVertice(z, i) {
+  if (!z || i == null || i < 0 || z.punti.length <= 3) return false;
+  z.punti.splice(i, 1);
+  vertSel = null;
+  send({ tipo: "zona_modificata", id: z.id, punti: arrotonda(z.punti) });
+  render();
+  return true;
+}
+
+// Una riga d'aiuto in fondo alla tela, solo in Modifica: le maniglie nuove
+// non si indovinano da sole.
+function aggiornaSuggerimento() {
+  const el = document.getElementById("suggerimento");
+  if (!el) return;
+  let testo = "";
+  if (mode === "modifica") {
+    if (selZona != null) {
+      testo = (vertSel != null)
+        ? "Canc o doppio clic toglie il punto scelto · trascina per spostarlo"
+        : "Trascina i quadratini per spostare i punti · tira un «+» per " +
+          "aggiungerne uno · doppio clic su un punto per toglierlo";
+    } else if (selParete != null) {
+      testo = "Trascina un capo per allungare o accorciare il muro (con " +
+              "Maiusc lo sposti liberamente) · trascina il muro per spostarlo";
+    } else {
+      testo = "Clicca un'area o un muro per modificarlo";
+    }
+  }
+  if (el.textContent !== testo) el.textContent = testo;
+  el.hidden = !testo;
+}
+
 function distContorno(s, pts) {          // distanza (schermo) dal perimetro
   let minima = Infinity;
   for (let i = 0; i < pts.length; i++) {
@@ -648,16 +823,39 @@ function onDown(e) {
     }
 
   } else if (mode === "modifica") {
+    // le maniglie di ciò che è già selezionato vengono prima di tutto
+    if (selParete != null) {
+      const wSel = pareti.find(function (q) { return q.id === selParete; });
+      const capo = wSel && hitCapo(wSel, s);
+      if (capo) {
+        drag = { kind: "wallEnd", w: wSel, capo: capo, moved: false,
+                 orig: { p1: wSel.p1.slice(), p2: wSel.p2.slice() } };
+        return;
+      }
+    }
     if (selZona != null) {
       const zSel = zone.find(function (q) { return q.id === selZona; });
       if (zSel) {
         const vi = hitVertice(zSel, s);
         if (vi >= 0) {
+          vertSel = vi;
           drag = { kind: "vertex", z: zSel, vi: vi, moved: false };
+          render();
+          return;
+        }
+        const m = hitMezzo(zSel, s);
+        if (m) {
+          // il punto nasce a metà lato e segue subito il mouse; anche un
+          // clic secco lo lascia lì, ed è già un punto in più
+          zSel.punti.splice(m.i + 1, 0, m.p.slice());
+          vertSel = m.i + 1;
+          drag = { kind: "vertex", z: zSel, vi: m.i + 1, moved: true };
+          render();
           return;
         }
       }
     }
+    vertSel = null;
     // I MURI HANNO LA PRECEDENZA sulle aree: sono disegnati sopra e sono
     // sottili, quindi vanno presi per primi — altrimenti l'area sottostante
     // se li "mangia" e diventano quasi impossibili da selezionare.
@@ -667,6 +865,10 @@ function onDown(e) {
         selParete = wHit.id;
         selZona = null;
         inviaSelezione();
+      } else {
+        // muro già selezionato: trascinandolo lo si sposta tutto intero
+        drag = { kind: "wallMove", w: wHit, start: p, moved: false,
+                 orig: { p1: wHit.p1.slice(), p2: wHit.p2.slice() } };
       }
       render();
       return;
@@ -719,6 +921,31 @@ function onMove(e) {
       const dy = cursorPos[1] - drag.start[1];
       if (Math.hypot(dx, dy) * scale > 3) drag.moved = true;
       drag.z.punti = drag.orig.map(function (q) { return [q[0] + dx, q[1] + dy]; });
+    } else if (drag.kind === "wallEnd") {
+      // Di norma il capo scorre lungo il muro: si cambia la lunghezza e la
+      // direzione resta quella disegnata. Con Maiusc va dove si vuole.
+      const fisso = drag.orig[drag.capo === "p1" ? "p2" : "p1"];
+      const mobile = drag.orig[drag.capo];
+      const L = dist(fisso, mobile);
+      let nuovo;
+      if (e.shiftKey || L < 1e-6) {
+        nuovo = cursorPos.slice();
+      } else {
+        const ux = (mobile[0] - fisso[0]) / L, uy = (mobile[1] - fisso[1]) / L;
+        const t = Math.max(4 / scale, (cursorPos[0] - fisso[0]) * ux +
+                                      (cursorPos[1] - fisso[1]) * uy);
+        nuovo = [fisso[0] + ux * t, fisso[1] + uy * t];
+      }
+      if (dist(img2scr(nuovo), img2scr(mobile)) > 2) drag.moved = true;
+      drag.w[drag.capo] = nuovo;
+    } else if (drag.kind === "wallMove") {
+      const dx = cursorPos[0] - drag.start[0];
+      const dy = cursorPos[1] - drag.start[1];
+      if (Math.hypot(dx, dy) * scale > 3) drag.moved = true;
+      if (drag.moved) {
+        drag.w.p1 = [drag.orig.p1[0] + dx, drag.orig.p1[1] + dy];
+        drag.w.p2 = [drag.orig.p2[0] + dx, drag.orig.p2[1] + dy];
+      }
     } else if (drag.kind === "vector") {
       vecEnd = cursorPos.slice();
     } else if (drag.kind === "label") {
@@ -732,6 +959,17 @@ function onMove(e) {
     render();
   } else if (mode === "disegna" && drawing.length) {
     render();
+  } else if (mode === "modifica") {
+    // il cursore dice che cosa succede se si preme qui
+    const wSel = pareti.find(function (q) { return q.id === selParete; });
+    const zSel = zone.find(function (q) { return q.id === selZona; });
+    let c = "default";
+    if (wSel && hitCapo(wSel, s)) c = "crosshair";
+    else if (zSel && hitVertice(zSel, s) >= 0) c = "move";
+    else if (zSel && hitMezzo(zSel, s)) c = "copy";
+    else if (wSel && hitParete(s) === wSel) c = "move";
+    else if (hitParete(s) || hitZona(cursorPos)) c = "pointer";
+    if (cv.style.cursor !== c) cv.style.cursor = c;
   }
 }
 
@@ -741,8 +979,14 @@ function onUp() {
   drag = null;
   if (d.kind === "pan") {
     if (mode === "sposta") cv.style.cursor = "grab";
+    salvaVista();
   } else if ((d.kind === "vertex" || d.kind === "move") && d.moved) {
     send({ tipo: "zona_modificata", id: d.z.id, punti: arrotonda(d.z.punti) });
+  } else if ((d.kind === "wallEnd" || d.kind === "wallMove") && d.moved) {
+    d.w.p1 = arrotonda([d.w.p1])[0];
+    d.w.p2 = arrotonda([d.w.p2])[0];
+    if (mpp > 0) d.w.etichetta = fmtMetri(dist(d.w.p1, d.w.p2));
+    send({ tipo: "parete_modificata", id: d.w.id, p1: d.w.p1, p2: d.w.p2 });
   } else if (d.kind === "label" && d.moved) {
     send({ tipo: "etichetta_spostata", elemento: d.el, id: d.tgt.id,
            pos: arrotonda([d.tgt.etichetta_pos])[0] });
@@ -756,6 +1000,12 @@ function onUp() {
     vettoreAperto = true;
   }
   render();
+  // dati arrivati durante il trascinamento: si guardano adesso
+  if (argsRimandati) {
+    const a = argsRimandati;
+    argsRimandati = null;
+    applicaArgs(a);
+  }
 }
 
 function completaVettore() {
@@ -764,7 +1014,12 @@ function completaVettore() {
     const p2 = arrotonda([vecEnd])[0];
     if (dist(img2scr(p1), img2scr(p2)) > 4) {
       if (mode === "scala") send({ tipo: "scala", p1: p1, p2: p2 });
-      else if (mode === "parete") send({ tipo: "parete", p1: p1, p2: p2 });
+      else if (mode === "parete") {
+        const seq = send({ tipo: "parete", p1: p1, p2: p2 });
+        // si vede subito, col colore giusto: il server lo conferma dopo
+        pareti.push({ id: "nuovo-" + seq, p1: p1, p2: p2, tipo: tipoParete,
+                      colore: coloreParete(), etichetta: fmtMetri(dist(p1, p2)) });
+      }
       else if (mode === "misura") misure.push({ p1: p1, p2: p2 });
     }
   }
@@ -814,15 +1069,25 @@ function chiudiEditor() {
   editor = null;
 }
 
+function verticeSotto(s) {
+  if (mode !== "modifica" || selZona == null) return null;
+  const z = zone.find(function (q) { return q.id === selZona; });
+  const i = z ? hitVertice(z, s) : -1;
+  return i >= 0 ? { z: z, i: i } : null;
+}
+
 function onDbl(e) {
   if (mode === "disegna" && drawing.length >= 3) { chiudiPoligono(); return; }
+  const v = verticeSotto(scrOf(e));
+  if (v) { togliVertice(v.z, v.i); return; }
   const q = hitLabel(scrOf(e));
   if (q && q.el === "zona") apriEditor(q.obj, q.r);
 }
 
 function onKey(e) {
   if (e.key === "Escape") {
-    if (vettoreAperto) annullaVettore();   // prima si annulla il segmento
+    if (vertSel != null) vertSel = null;   // prima si lascia il punto scelto
+    else if (vettoreAperto) annullaVettore();   // poi si annulla il segmento
     else if (drawing.length) drawing = [];
     else if (misure.length) misure = [];
     else if (selZona != null || selParete != null) {
@@ -838,11 +1103,21 @@ function onKey(e) {
     drawing.pop();
     render();
   } else if (e.key === "Delete" && mode === "modifica") {
+    const zSel = zone.find(function (q) { return q.id === selZona; });
+    if (zSel && vertSel != null) {
+      // con un punto scelto Canc toglie il punto, non l'area intera
+      togliVertice(zSel, vertSel);
+      return;
+    }
     if (selZona != null) {
-      send({ tipo: "zona_eliminata", id: selZona });
+      const id = selZona;
+      send({ tipo: "zona_eliminata", id: id });
+      zone = zone.filter(function (z) { return z.id !== id; });
       selZona = null;
     } else if (selParete != null) {
-      send({ tipo: "parete_eliminata", id: selParete });
+      const id = selParete;
+      send({ tipo: "parete_eliminata", id: id });
+      pareti = pareti.filter(function (p) { return p.id !== id; });
       selParete = null;
     }
     render();
@@ -851,9 +1126,25 @@ function onKey(e) {
 
 // ------------------------------------------------------------- inizializza
 function onRender(event) {
-  const a = event.detail.args;
-  zone = a.zone || [];
-  pareti = a.pareti || [];
+  applicaArgs(event.detail.args);
+}
+
+function applicaArgs(a) {
+  const nuovaImmagine = (a.src !== curSrc);
+  // Il server ha già applicato l'ultimo gesto? Se no, i suoi dati sono di
+  // prima e la geometria a video (già aggiornata qui) è più giusta della sua.
+  // Il limite di tempo è una cintura: se una risposta non arrivasse mai (un
+  // progetto ricaricato azzera il contatore) dopo pochi secondi vince lui.
+  const inViaggio = ultimoSeqInviato &&
+    Number(a.seq_applicato || 0) < ultimoSeqInviato &&
+    Date.now() - ultimoInvioT < 4000;
+  if (drag && !nuovaImmagine) {
+    // mai cambiare i dati sotto le mani di chi sta trascinando
+    argsRimandati = a;
+  } else if (!inViaggio || nuovaImmagine) {
+    zone = a.zone || [];
+    pareti = a.pareti || [];
+  }
   scalaTemp = a.scala_temp || null;
   coloreAttivo = a.colore_attivo || "#E57373";
   mpp = a.mpp || 0;
@@ -867,10 +1158,13 @@ function onRender(event) {
       !pareti.some(function (p) { return p.id === selParete; })) {
     selParete = null;
   }
+  const zSel = zone.find(function (z) { return z.id === selZona; });
+  if (!zSel || vertSel == null || vertSel >= zSel.punti.length) vertSel = null;
 
-  if (a.src !== curSrc) {
+  if (nuovaImmagine) {
     curSrc = a.src;
     pronto = false;
+    vistaImpostata = false;
     if (a.src) {
       img.src = a.src;        // al termine: img.onload → fit()
     } else {
@@ -884,8 +1178,9 @@ function onRender(event) {
     // La larghezza dello slot cambia fra un giro e l'altro — si apre la
     // scheda, si ridimensiona la finestra — e qui si passava dritti a
     // render(), senza mai ridare una misura alla tela: restava quella con
-    // cui era nata, un francobollo dentro la cornice d'ottone.
-    if (pronto) fit(); else { sizeCanvas(); render(); }
+    // cui era nata, un francobollo dentro la cornice d'ottone. La misura si
+    // ridà, ma zoom e inquadratura restano quelli di chi sta lavorando.
+    if (pronto) fit(false); else { sizeCanvas(); render(); }
   }
 }
 
@@ -897,7 +1192,8 @@ function init() {
 
   img.onload = function () {
     pronto = true;
-    fit();
+    fit(true);
+    ripristinaVista();
   };
 
   document.querySelectorAll(".tb-btn[data-mode]").forEach(function (b) {
@@ -909,7 +1205,9 @@ function init() {
   document.getElementById("b-zout").addEventListener("click", function () {
     zoomAt(cont.clientWidth / 2, contH / 2, 1 / 1.3);
   });
-  document.getElementById("b-fit").addEventListener("click", fit);
+  document.getElementById("b-fit").addEventListener("click", function () {
+    fit(true);
+  });
   // nascondi/mostra le aree: serve per tracciare i muri senza il velo
   // colorato dei locali sotto. È solo visivo, non tocca i dati.
   const bAree = document.getElementById("b-aree");
@@ -935,13 +1233,18 @@ function init() {
   // cosa che viene comodo fare in sopralluogo, non alla scrivania.
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("dblclick", onDbl);
-  cv.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  cv.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    // tasto destro su un punto dell'area selezionata: lo toglie
+    const v = verticeSotto(scrOf(e));
+    if (v) togliVertice(v.z, v.i);
+  });
   cv.addEventListener("pointerleave", function () { cursorPos = null; render(); });
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
   window.addEventListener("pointercancel", onUp);
   window.addEventListener("keydown", onKey);
-  window.addEventListener("resize", function () { if (pronto) fit(); });
+  window.addEventListener("resize", function () { if (pronto) fit(false); });
 
   // La finestra non cambia misura quando è lo SLOT a cambiarla: Streamlit
   // dà all'iframe la larghezza che vuole lui, e la tela restava del
@@ -953,7 +1256,7 @@ function init() {
       // con cui era nata: un francobollo da 200 px in mezzo alla cornice
       // anche quando non c'è ancora niente da disegnare. La misura si dà
       // lo stesso, così lo stato vuoto occupa il posto che gli spetta.
-      if (pronto) fit(); else { sizeCanvas(); render(); }
+      if (pronto) fit(false); else { sizeCanvas(); render(); }
     }).observe(cont);
   }
 

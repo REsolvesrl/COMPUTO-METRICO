@@ -24,6 +24,7 @@ Il componente restituisce eventi come dizionari con un campo `seq` progressivo
    "id": n, "pos": [x, y]}
 - {"tipo": "scala", "p1": [x, y], "p2": [x, y]}
 - {"tipo": "parete", "p1": [x, y], "p2": [x, y]}
+- {"tipo": "parete_modificata", "id": n, "p1": [x, y], "p2": [x, y]}
 - {"tipo": "parete_eliminata", "id": n}
 - {"tipo": "rinomina", "elemento": "zona", "id": n, "nome": "Cucina"}
 """
@@ -47,7 +48,8 @@ def pil_a_src(image, qualita=85):
 
 def image_viewer(src, zone=(), pareti=(), scala_temp=None,
                  colore_attivo="#E57373", mpp=0.0, font_px=14,
-                 tipo_parete="demolire", key=None):
+                 tipo_parete="demolire", seq_applicato=None, on_change=None,
+                 key=None):
     """Mostra la planimetria e restituisce l'ultimo evento (o None).
 
     src: data-URL dell'immagine (usa pil_a_src una sola volta per pianta).
@@ -57,8 +59,16 @@ def image_viewer(src, zone=(), pareti=(), scala_temp=None,
     colore_attivo: colore della zona in corso di disegno (categoria scelta).
     mpp: metri per pixel (0 = scala non impostata) — per le misure "live".
     font_px: dimensione del carattere delle etichette.
+    seq_applicato: `seq` dell'ultimo evento già applicato ai dati. Il
+      disegno lo modifica il browser subito; finché il server non ha
+      raggiunto l'ultimo gesto, i dati che arrivano sono vecchi e il browser
+      tiene i suoi (altrimenti la modifica sparirebbe e ricomparirebbe).
+    on_change: callback senza argomenti, eseguita PRIMA dello script quando
+      arriva un evento; il valore sta in st.session_state[key]. Per passarle
+      qualcosa si usa functools.partial.
     """
     return _component(src=src, zone=list(zone), pareti=list(pareti),
                       scala_temp=scala_temp, colore_attivo=colore_attivo,
                       mpp=float(mpp or 0.0), font_px=int(font_px),
-                      tipo_parete=tipo_parete, key=key, default=None)
+                      tipo_parete=tipo_parete, seq_applicato=seq_applicato,
+                      key=key, default=None, on_change=on_change)

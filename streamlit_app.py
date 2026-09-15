@@ -37,6 +37,7 @@ faulthandler.enable()
 
 import base64
 import copy
+import functools
 import hashlib
 import hmac
 import io
@@ -479,6 +480,14 @@ def css_mondo():
 }}
 .st-key-tela [data-testid="stCustomComponentV1"] iframe {{
     width: 100% !important;
+}}
+/* Durante il giro della pagina Streamlit sbiadisce ciò che sta ricalcolando.
+   Sulla tela era il lampeggio a ogni gesto: il disegno è già aggiornato nel
+   browser, e sbiadirlo diceva il falso. La tela resta sempre piena. */
+.st-key-tela [data-stale="true"],
+.st-key-tela[data-stale="true"] {{
+    opacity: 1 !important;
+    transition: none !important;
 }}
 /* I pannelli dei comandi stanno attorno in cemento, mai in competizione col
    disegno: raggruppano i campi che altrimenti sarebbero una fila indistinta
@@ -3643,13 +3652,50 @@ DA_ANNULLARE = {
     "zona_modificata": "modifica dell'area",
     "zona_eliminata": "eliminazione dell'area",
     "parete": "tracciamento del muro",
+    "parete_modificata": "modifica del muro",
     "parete_eliminata": "eliminazione del muro",
     "rinomina": "rinomina del locale",
 }
 
 
+def al_gesto_sulla_tela(uid):
+    """Callback della tela: applica il gesto PRIMA che lo script riparta.
+
+    ⚠️ Prima l'evento si leggeva nel corpo dello script, dopo aver già
+    disegnato la tela, e poi si chiamava st.rerun(): due giri interi della
+    pagina per ogni tratto di matita, e il primo rimandava al browser il
+    disegno di PRIMA del gesto. La modifica spariva e ricompariva mezzo
+    secondo dopo — il lampeggio. Da callback il gesto è già nei dati quando
+    la tela viene disegnata, e il giro è uno solo.
+    """
+    ev = evento_viewer(st.session_state.get(f"viewer_{uid}"))
+    pianta = next((p for p in st.session_state.get("piante", [])
+                   if p["uid"] == uid), None)
+    if ev and pianta is not None:
+        gestisci_evento(ev, pianta)
+
+
+def cambia_lunghezza_parete(uid, parete_id, chiave):
+    """Callback della casella «Lunghezza (m)» del muro selezionato."""
+    pianta = next((p for p in st.session_state.get("piante", [])
+                   if p["uid"] == uid), None)
+    metri = st.session_state.get(chiave)
+    if pianta is None or not pianta["mpp"] or not metri or metri <= 0:
+        return
+    parete = next((p for p in pianta["pareti"] if p["id"] == parete_id), None)
+    if parete is None:
+        return
+    nuovo_p2 = planimetria.allunga_segmento(parete["p1"], parete["p2"],
+                                            metri / pianta["mpp"])
+    if nuovo_p2 is None:
+        return
+    registra_storia("modifica del muro")
+    parete["p2"] = nuovo_p2
+
+
 def gestisci_evento(ev, pianta):
-    """Applica l'evento del visualizzatore allo stato e riesegue la pagina."""
+    """Applica l'evento del visualizzatore allo stato (niente rerun: gira
+    da callback, e il giro che segue lo fa Streamlit da sé)."""
     tipo = ev.get("tipo")
     if tipo in DA_ANNULLARE:
         registra_storia(DA_ANNULLARE[tipo])
@@ -3686,6 +3732,12 @@ def gestisci_evento(ev, pianta):
                                  "p1": list(ev["p1"]), "p2": list(ev["p2"]),
                                  "tipo": st.session_state.get(
                                      "tipo_parete_codice", "demolire")})
+    elif tipo == "parete_modificata":
+        # un capo trascinato (lunghezza) o il muro spostato intero
+        for parete in pianta["pareti"]:
+            if parete["id"] == ev.get("id"):
+                parete["p1"] = [float(ev["p1"][0]), float(ev["p1"][1])]
+                parete["p2"] = [float(ev["p2"][0]), float(ev["p2"][1])]
     elif tipo == "parete_eliminata":
         pianta["pareti"] = [p for p in pianta["pareti"]
                             if p["id"] != ev.get("id")]
@@ -3700,7 +3752,6 @@ def gestisci_evento(ev, pianta):
         for zona in pianta["zone"]:
             if zona["id"] == ev.get("id"):
                 zona["nome"] = (ev.get("nome") or "").strip() or None
-    st.rerun()
 
 
 def pianta_a_json(pianta):
@@ -4948,7 +4999,10 @@ with sotto_materiali:
         }
         st.download_button(
             "🖨️ Allegato 1 (da firmare)",
-            data=stampa.pdf_materiali(_prg_allegato, righe_materiali),
+            # si costruisce al clic, non a ogni giro della pagina (vedi
+            # «Stampa PDF» più giù)
+            data=functools.partial(stampa.pdf_materiali, _prg_allegato,
+                                   righe_materiali),
             help="L'elenco per capitoli con la clausola e le due firme: è "
                  "il foglio che si allega al computo e si sottoscrive con "
                  "l'impresa. Fornitore, link e stato dell'ordine non ci "
@@ -5584,10 +5638,14 @@ with sotto_computo:
                    "iva_pct": st.session_state.iva, "iva": iva_importo,
                    "totale": totale_ivato}
     _tinte_pdf = {cat: COLORI_CATEGORIE[cat][0] for cat in COLORI_CATEGORIE}
+    # ⚠️ I PDF si costruiscono AL CLIC (data=callable), non a ogni giro:
+    # erano mezzo secondo buono di reportlab — tre documenti — rifatto a
+    # ogni gesto su qualunque scheda, tela compresa, per file che quasi
+    # sempre nessuno scaricava. Era la parte più lenta della pagina.
     col_pdf.download_button(
         "🖨️ Stampa PDF",
-        data=stampa.pdf_computo(progetto, voci_calcolate, _totali_pdf,
-                                tinte=_tinte_pdf),
+        data=functools.partial(stampa.pdf_computo, progetto, voci_calcolate,
+                               _totali_pdf, tinte=_tinte_pdf),
         help="Il computo come documento da consegnare: le voci per "
              "categoria, i totali e le firme.",
         file_name=nome_file("pdf"),
@@ -5607,9 +5665,9 @@ with sotto_computo:
     progetto_richiesta = dict(progetto, data=date.today().strftime("%d/%m/%Y"))
     col_pdf_muto.download_button(
         "📄 PDF senza prezzi",
-        data=stampa.pdf_computo(progetto_richiesta, voci_calcolate,
-                                _totali_pdf, tinte=_tinte_pdf,
-                                con_prezzi=False),
+        data=functools.partial(stampa.pdf_computo, progetto_richiesta,
+                               voci_calcolate, _totali_pdf, tinte=_tinte_pdf,
+                               con_prezzi=False),
         help="Da mandare alle imprese per il preventivo: lavorazioni e "
              "quantità, senza prezzi né importi.",
         file_name=nome_file("pdf").replace(".pdf", "_senza_prezzi.pdf"),
@@ -5808,7 +5866,7 @@ with tab_plan:
             # La tela sul piano da lavoro: è il pezzo vero, e nella scheda
             # deve avere il contrasto più alto: tutto il resto le sta attorno.
             with st.container(key="tela"):
-                valore = image_viewer(
+                image_viewer(
                     pianta["src"],
                     zone=zone_props,
                     pareti=pareti_props,
@@ -5818,6 +5876,9 @@ with tab_plan:
                     font_px=st.session_state.et_font,
                     tipo_parete=st.session_state.get("tipo_parete_codice",
                                                      "demolire"),
+                    seq_applicato=st.session_state.ultimo_seq,
+                    on_change=functools.partial(al_gesto_sulla_tela,
+                                                pianta["uid"]),
                     key=f"viewer_{pianta['uid']}",
                 )
             # Il posto dove finiranno i totali, subito sotto la tela. I numeri
@@ -5829,10 +5890,7 @@ with tab_plan:
             # così la classe che il CSS aggancia c'è di sicuro
             with st.container(key="totali_tela"):
                 riepilogo_vicino = st.empty()
-
-            ev = evento_viewer(valore)
-            if ev:
-                gestisci_evento(ev, pianta)
+            # il gesto sulla tela lo applica al_gesto_sulla_tela, prima del giro
 
             # ------------------------------------ scala in attesa di misura
             if st.session_state.scala_temp:
@@ -5935,8 +5993,27 @@ with tab_plan:
                     registra_storia("cambio di tipo del muro")
                     parete_sel["tipo"] = codice_nuovo
                     st.rerun()
-                b_len.metric("Lunghezza",
-                             etichetta_parete(parete_sel, pianta["mpp"]))
+                if pianta["mpp"]:
+                    # la misura esatta si scrive: il capo di partenza resta
+                    # fermo e l'altro scorre lungo il muro. La chiave porta
+                    # la lunghezza attuale, così dopo un trascinamento sulla
+                    # tela la casella riparte dal valore nuovo.
+                    lung_cur = planimetria.distanza_pixel(
+                        parete_sel["p1"], parete_sel["p2"]) * pianta["mpp"]
+                    chiave_len = (f"plen_{pianta['uid']}_{parete_sel['id']}_"
+                                  f"{round(lung_cur, 3)}")
+                    b_len.number_input(
+                        "Lunghezza (m)", min_value=0.01,
+                        value=round(lung_cur, 2), step=0.05, format="%.2f",
+                        key=chiave_len,
+                        on_change=cambia_lunghezza_parete,
+                        args=(pianta["uid"], parete_sel["id"], chiave_len),
+                        help="Scrivi la misura giusta: il muro si allunga o "
+                             "si accorcia dal capo di arrivo. Sulla tela, in "
+                             "Modifica, puoi anche trascinarne i capi.")
+                else:
+                    b_len.metric("Lunghezza",
+                                 etichetta_parete(parete_sel, pianta["mpp"]))
                 b_del.write("")
                 if b_del.button("🗑 Elimina",
                                 key=f"pdel_{parete_sel['id']}"):

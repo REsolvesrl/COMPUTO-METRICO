@@ -8,8 +8,20 @@
   <!-- ⚠️ Il numero in coda serve a scavalcare la cache del browser: questo
        file è statico e il browser se lo tiene, quindi una modifica al
        disegno può restare invisibile anche dopo aver riavviato l'app.
-       CAMBIARLO A OGNI MODIFICA DI main.js. -->
-  <script src="./main.js?v=2026-08-21-pointer-resize-5"></script>
+       Prima il numero andava cambiato a mano a ogni modifica di main.js, e
+       bastava scordarsene una volta per provare a lungo un disegno vecchio
+       convinti che fosse quello nuovo. Era già successo: il numero diceva
+       21/08 mentre main.js era stato toccato il 22. Ora lo mette la
+       macchina, e cambia a ogni caricamento: basta ricaricare la pagina.
+
+       Si usa document.write, e non un <script> aggiunto da codice, perché
+       main.js si attacca a DOMContentLoaded: aggiunto a mano partirebbe
+       fuori tempo - a volte dopo che l'evento è già passato - e il
+       visualizzatore non si accenderebbe più. Così invece il lettore si
+       ferma qui e lo carica come farebbe con un tag scritto a mano. -->
+  <script>
+    document.write('<script src="./main.js?v=' + Date.now() + '"><\/script>');
+  </script>
   <style>
     html, body { margin: 0; padding: 0; overflow: hidden;
                  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -86,6 +98,24 @@
        dirne il rango, non un terzo corpo di carattere intermedio */
     .tb-riga .tb-btn { width: 26px; padding: 4px 0; }
     .tb-sep { height: 1px; margin: 2px 4px; background: rgba(26, 39, 68, 0.15); }
+    /* Riga d'aiuto in Modifica: in basso al centro, non copre la barra e
+       non prende i clic (pointer-events), così non ruba il disegno sotto. */
+    #suggerimento {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      max-width: calc(100% - 120px);
+      padding: 5px 11px;
+      border-radius: 7px;
+      background: rgba(26, 39, 68, 0.88);
+      color: #ECE7DA;
+      font-size: 12px;
+      line-height: 1.35;
+      text-align: center;
+      pointer-events: none;
+      z-index: 4;
+    }
   </style>
 </head>
 <body>
@@ -95,7 +125,7 @@
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l2.5 2.5" transform="translate(0,0)"/></svg></span><span class="lbl">Sposta</span></button>
       <button class="tb-btn" data-mode="disegna" title="Disegna un'area: clicca gli angoli, chiudi sul primo punto o con doppio clic">
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 6l8-2 6 6-2 9-9 1z"/><circle cx="5" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="13" cy="4" r="1.9" fill="currentColor" stroke="none"/><circle cx="19" cy="10" r="1.9" fill="currentColor" stroke="none"/><circle cx="17" cy="19" r="1.9" fill="currentColor" stroke="none"/><circle cx="8" cy="20" r="1.9" fill="currentColor" stroke="none"/></svg></span><span class="lbl">Area</span></button>
-      <button class="tb-btn" data-mode="modifica" title="Seleziona e modifica: trascina i vertici, Canc elimina">
+      <button class="tb-btn" data-mode="modifica" title="Seleziona e modifica: trascina i punti delle aree (il «+» a metà lato ne aggiunge uno, doppio clic ne toglie uno) e i capi dei muri; Canc elimina">
         <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 3l13 8-5.5 1.8L10 19z" fill="currentColor" stroke="none"/><path d="M14 14l6 6"/></svg></span><span class="lbl">Modifica</span></button>
       <button class="tb-btn" data-mode="misura" title="Misura al volo (temporanea, non salvata): clicca il punto di partenza e poi quello di arrivo (o trascina); Esc annulla">
         <span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M7 8v3M12 8v4M17 8v3"/></svg></span><span class="lbl">Misura</span></button>
@@ -114,6 +144,7 @@
       </div>
     </div>
     <canvas id="cv" tabindex="0"></canvas>
+    <div id="suggerimento" hidden></div>
   </div>
 </body>
 </html>

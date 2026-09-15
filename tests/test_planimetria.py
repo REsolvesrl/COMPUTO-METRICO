@@ -3,6 +3,7 @@
 import pytest
 
 from planimetria import (
+    allunga_segmento,
     area_poligono_pixel,
     area_reale_m2,
     calibra_da_due_punti,
@@ -33,6 +34,18 @@ def test_distanza_pixel():
 def test_metri_per_pixel():
     # 100 pixel valgono 4,50 m → 0,045 m/pixel
     assert metri_per_pixel(100, 4.5) == 0.045
+
+
+def test_allunga_segmento_tiene_fermo_il_primo_capo_e_la_direzione():
+    # muro di 5 px in diagonale 3-4-5, portato a 10 px
+    assert allunga_segmento([10, 20], [13, 24], 10) == [16.0, 28.0]
+    # e accorciato a metà
+    assert allunga_segmento([10, 20], [13, 24], 2.5) == [11.5, 22.0]
+
+
+def test_allunga_segmento_senza_direzione_non_inventa_niente():
+    assert allunga_segmento([5, 5], [5, 5], 10) is None
+    assert allunga_segmento([0, 0], [3, 4], 0) is None
 
 
 def test_metri_per_pixel_lunghezza_nulla():

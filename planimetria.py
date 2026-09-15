@@ -36,6 +36,21 @@ def calibra_da_due_punti(p1, p2, lunghezza_reale_m):
     return metri_per_pixel(distanza_pixel(p1, p2), lunghezza_reale_m)
 
 
+def allunga_segmento(p1, p2, lunghezza_pixel):
+    """Nuovo p2 perché il segmento p1→p2 misuri `lunghezza_pixel`.
+
+    p1 resta fermo e la direzione non cambia: è il muro che si allunga o si
+    accorcia dal capo di arrivo. None se il segmento non ha una direzione
+    (due punti coincidenti) o la lunghezza chiesta non è positiva.
+    """
+    lunghezza = distanza_pixel(p1, p2)
+    if lunghezza <= 0 or lunghezza_pixel <= 0:
+        return None
+    f = lunghezza_pixel / lunghezza
+    return [round(p1[0] + (p2[0] - p1[0]) * f, 1),
+            round(p1[1] + (p2[1] - p1[1]) * f, 1)]
+
+
 def area_poligono_pixel(punti):
     """Area di un poligono in pixel² con la formula di Gauss ("shoelace").
 
