@@ -51,6 +51,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from PIL import Image
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import archivio
 import archivio_locale
@@ -3658,6 +3659,32 @@ DA_ANNULLARE = {
 }
 
 
+def giro_del_solo_frammento():
+    """True se questo giro ricalcola SOLO un frammento (la scheda
+    planimetria), False in un giro completo della pagina."""
+    ctx = get_script_run_ctx()
+    return bool(ctx and ctx.fragment_ids_this_run)
+
+
+def applica_quantita_dal_disegno(quantita, scegli=True):
+    """Scrive nel computo le quantità misurate sul disegno.
+
+    Si scrive la chiave di verità e si butta la casella di testo: a inizio
+    pagina le caselle vengono rilette e il loro testo riscritto nel valore,
+    quindi lasciare «2,62» nella casella rimetterebbe 2,62 sopra il 3,05
+    appena arrivato. Senza casella, la voce rinasce col numero nuovo.
+
+    ⚠️ Solo prima che le caselle del Computo nascano in questo giro: a inizio
+    pagina, o in un giro della sola scheda planimetria.
+    """
+    for codice, valore in quantita.items():
+        st.session_state[f"q_{codice}"] = valore
+        st.session_state.pop(f"q_{codice}_txt", None)
+        # la voce entra nel computo, altrimenti il numero resta invisibile
+        if scegli and codice not in st.session_state.voci_scelte:
+            st.session_state.voci_scelte.append(codice)
+
+
 def al_gesto_sulla_tela(uid):
     """Callback della tela: applica il gesto PRIMA che lo script riparta.
 
@@ -4622,9 +4649,8 @@ if "bp_vendita_pending" in st.session_state:
 # esistono: Streamlit vieta di riscriverli a quel punto. Come sopra, si
 # applicano al giro successivo, prima che i widget nascano.
 if "listino_pending" in st.session_state:
-    for _cod, _quantita in st.session_state.pop("listino_pending").items():
-        st.session_state[f"q_{_cod}"] = _quantita
-        st.session_state.pop(f"q_{_cod}_txt", None)   # rinasce col nuovo
+    applica_quantita_dal_disegno(st.session_state.pop("listino_pending"),
+                                 scegli=False)
 
 # Una quantità che arriva dal DISEGNO porta anche la voce nel computo: il
 # computo mostra solo le voci scelte, e una quantità scritta in una voce che
@@ -4761,6 +4787,9 @@ else:
 # computo. La firma si ricalcola apposta a inizio pagina: costa millesimi di
 # secondo (le immagini non ci entrano) e leggere quella dell'ultimo giro
 # direbbe «sei in pari» un istante dopo che hai cambiato qualcosa.
+# la scheda planimetria, che ricalcola da sola, deve sapere se la testata
+# sta dicendo «salvato»: al primo gesto dopo un salvataggio rifà la pagina
+st.session_state._testata_in_pari = False
 if progetto_e_vuoto():
     _stato = ""
 elif st.session_state.get("ultimo_salvataggio") is None:
@@ -4773,6 +4802,7 @@ elif st.session_state.get("ultimo_salvataggio") is None:
 elif firma_progetto() != st.session_state.get("firma_salvata"):
     _stato = ('<span class="salvataggio sospeso">modifiche non salvate</span>')
 else:
+    st.session_state._testata_in_pari = True
     _stato = ('<span class="salvataggio pari">salvato alle '
               + st.session_state.ultimo_salvataggio.strftime("%H:%M")
               + '</span>')
@@ -4811,8 +4841,16 @@ if _scartate:
         "planimetrie — è stato caricato regolarmente. Ricarica il disegno "
         "mancante dalla scheda **Misura da planimetria**.")
 
+# ⚠️ on_change="rerun": cambiando linguetta la pagina si ricalcola tutta.
+# Serve alla scheda planimetria, che mentre si disegna ricalcola SOLO se
+# stessa (è un frammento, vedi scheda_planimetria): le altre schede restano
+# quelle dell'ultimo giro completo, e senza questo aprendo il Computo si
+# vedrebbero le quantità di prima. Tutte le schede continuano a girare a ogni
+# giro completo — non si usa `.open` per saltarle — perché Streamlit butta via
+# lo stato dei widget che in un giro non disegna.
 tab_computo, tab_plan, tab_bp = st.tabs(
-    ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"])
+    ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"],
+    key="scheda_attiva", on_change="rerun")
 
 
 # ============================================================ SCHEDA COMPUTO
@@ -5695,7 +5733,35 @@ with sotto_computo:
 
 # ========================================================= SCHEDA PLANIMETRIA
 
-with tab_plan:
+# ⚠️ La scheda è un FRAMMENTO: un gesto sulla tela, una spunta, un campo di
+# questa scheda ricalcolano solo lei — circa 50 ms di script invece dei 210
+# dell'intera pagina, e al browser arriva solo questa scheda invece di tutte
+# e tre. Il resto della pagina si ricalcola cambiando linguetta (vedi
+# st.tabs più su) o con un st.rerun() normale, che qui dentro resta
+# un giro completo: lo usano i bottoni, che non sono gesti ripetuti.
+#
+# Le schede non si passano variabili Python: tutto ciò che condividono
+# (quantità del listino, voci scelte, planimetrie) sta in st.session_state,
+# quindi un giro del solo frammento non perde nessun collegamento. Due punti
+# vanno però tenuti d'occhio, e sono gestiti più giù:
+# - il computo agganciato al disegno scrive le quantità senza rifare la pagina
+#   (in un giro completo invece passa ancora da listino_pending + st.rerun);
+# - la testata «salvato alle…» diventa falsa alla prima modifica dopo un
+#   salvataggio: in quel caso, e solo in quello, si rifà la pagina intera.
+@st.fragment
+def scheda_planimetria():
+    # In testata c'era «salvato alle…» e questo gesto l'ha appena reso falso:
+    # si rifà la pagina intera, una volta sola — dal giro dopo la testata dice
+    # «modifiche non salvate» e i gesti tornano a ricalcolare solo la scheda.
+    if (giro_del_solo_frammento()
+            and st.session_state.get("_testata_in_pari")
+            and firma_progetto() != st.session_state.get("firma_salvata")):
+        st.rerun()
+    if giro_del_solo_frammento():
+        # a inizio pagina le categorie si rifanno dalle zone disegnate; in un
+        # giro della sola scheda quel punto non passa, e si rifanno qui
+        st.session_state.categorie = categorie_per_progetto(
+            st.session_state.piante)
     piante = st.session_state.piante
     # il segnaposto dei totali sotto la tela: esiste solo se una tela c'è
     riepilogo_vicino = None
@@ -5988,10 +6054,14 @@ with tab_plan:
                     "Tipo di intervento", opz_nomi,
                     index=opz_codici.index(codice_cur),
                     key=f"pt_{pianta['uid']}_{parete_sel['id']}")
-                codice_nuovo = opz_codici[opz_nomi.index(tipo_nuovo)]
-                if codice_nuovo != codice_cur:
+                # ⚠️ Si chiamava `codice_nuovo`, come la funzione che dà il
+                # codice alle voci extra: a livello di pagina la sovrascriveva,
+                # e un «➕ Al computo» più giù nello stesso giro trovava una
+                # stringa al posto della funzione.
+                tipo_codice = opz_codici[opz_nomi.index(tipo_nuovo)]
+                if tipo_codice != codice_cur:
                     registra_storia("cambio di tipo del muro")
-                    parete_sel["tipo"] = codice_nuovo
+                    parete_sel["tipo"] = tipo_codice
                     st.rerun()
                 if pianta["mpp"]:
                     # la misura esatta si scrive: il capo di partenza resta
@@ -6810,10 +6880,16 @@ with tab_plan:
                                   "misurate.")
 
             if auto:
-                if proposte:
-                    # Le quantità si applicano a inizio del giro successivo:
-                    # qui la scheda Computo è già disegnata e Streamlit vieta
-                    # di riscrivere i widget dopo che sono nati.
+                if proposte and giro_del_solo_frammento():
+                    # Giro della sola scheda: le caselle del Computo non sono
+                    # nate in questo giro, quindi si possono riscrivere
+                    # subito — senza rifare la pagina a ogni gesto. Il Computo
+                    # si ridisegna coi numeri nuovi quando lo si apre.
+                    applica_quantita_dal_disegno(proposte)
+                elif proposte:
+                    # Giro completo: qui la scheda Computo è già disegnata e
+                    # Streamlit vieta di riscrivere i widget dopo che sono
+                    # nati. Le quantità si applicano a inizio del giro dopo.
                     st.session_state.listino_pending = dict(proposte)
                     st.session_state.scelte_pending = list(proposte)
                     st.rerun()
@@ -6862,10 +6938,16 @@ with tab_plan:
                 file_name=nome_file("pdf").replace(".pdf", "_planimetrie.pdf"),
                 mime="application/pdf", width="stretch",
                 key="scarica_pdf_plan")
+        # ⚠️ La firma si rifà qui, non si prende quella del Computo: in un
+        # giro della sola scheda quella è dell'ultimo giro completo, e il
+        # bottone offrirebbe da scaricare il file di PRIMA del disegno.
         bottone_salva_json(
-            c_json_plan, "planimetria",
-            st.session_state.get("_firma_progetto") or firma_progetto(),
+            c_json_plan, "planimetria", firma_progetto(),
             etichetta="💾 Salva progetto (.json) — computo e planimetrie")
+
+
+with tab_plan:
+    scheda_planimetria()
 
 
 # ======================================================= SCHEDA BUSINESS PLAN

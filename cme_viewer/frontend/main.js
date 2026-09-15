@@ -155,12 +155,19 @@ function fit(reimposta) {
   // per tutto il tempo in cui non c'era ancora una planimetria. La misura
   // non dipende dall'immagine: si dà comunque, poi si esce.
   if (!img.naturalWidth) { sizeCanvas(); render(); return; }
+  // ⚠️ Scheda nascosta (si è su Computo o Business plan): la cornice è larga
+  // zero. Prima si prendeva lo stesso la misura minima, 200 px, e la vista
+  // restava tarata su quella: tornando sulla planimetria il disegno era un
+  // francobollo a zoom 0,22. Da nascosti non si misura niente: ci pensa
+  // l'osservatore quando la scheda riappare.
+  if (!cont.clientWidth) return;
   const w = Math.max(200, cont.clientWidth);
   let s = Math.min(w / img.naturalWidth, MAXH / img.naturalHeight);
   const nuovaH = Math.max(MINH, Math.min(MAXH, Math.round(img.naturalHeight * s)));
   s = Math.min(w / img.naturalWidth, nuovaH / img.naturalHeight);
   fitScale = s;
-  if (reimposta || !vistaImpostata) {
+  const primaVolta = !vistaImpostata;
+  if (reimposta || primaVolta) {
     scale = s;
     tx = (w - img.naturalWidth * s) / 2;
     ty = (nuovaH - img.naturalHeight * s) / 2;
@@ -180,6 +187,9 @@ function fit(reimposta) {
   vistaW = w;
   vistaH = contH;
   if (altezzaCambiata) Streamlit.setFrameHeight(contH);
+  // la prima misura vera di questa immagine: se la vista era stata salvata
+  // (riquadro ricreato) si riprende da lì, altrimenti resta quella d'insieme
+  if (primaVolta && !reimposta && ripristinaVista()) return;
   render();
   salvaVista();
 }
@@ -191,7 +201,7 @@ function chiaveVista() {
 }
 function salvaVista() {
   const k = chiaveVista();
-  if (!k || !img.naturalWidth) return;
+  if (!k || !img.naturalWidth || !vistaW) return;
   const c = scr2img([vistaW / 2, vistaH / 2]);
   try {
     sessionStorage.setItem(k, JSON.stringify({ z: scale / fitScale, c: c }));
@@ -199,9 +209,13 @@ function salvaVista() {
 }
 function ripristinaVista() {
   const k = chiaveVista();
+  if (!k || !vistaW) return false;
   let v = null;
   try { v = JSON.parse(sessionStorage.getItem(k) || "null"); } catch (err) { v = null; }
-  if (!v || !(v.z > 0) || !v.c) return false;
+  // Una vista più piccola di quella d'insieme non si riprende: non serve a
+  // nessuno ritrovarsi il disegno rimpicciolito, ed è proprio la traccia che
+  // lascia una misura presa a scheda nascosta.
+  if (!v || !(v.z >= 1) || !v.c) return false;
   scale = fitScale * v.z;
   tx = vistaW / 2 - v.c[0] * scale;
   ty = vistaH / 2 - v.c[1] * scale;
@@ -1192,8 +1206,8 @@ function init() {
 
   img.onload = function () {
     pronto = true;
-    fit(true);
-    ripristinaVista();
+    vistaImpostata = false;
+    fit(false);          // prima misura: vista salvata o d'insieme
   };
 
   document.querySelectorAll(".tb-btn[data-mode]").forEach(function (b) {
@@ -1259,6 +1273,16 @@ function init() {
       if (pronto) fit(false); else { sizeCanvas(); render(); }
     }).observe(cont);
   }
+
+  // ⚠️ E l'osservatore non basta: con la scheda nascosta l'iframe non
+  // disegna, e quando la scheda riappare l'avviso di nuova misura non
+  // arriva — la tela restava larga 200 px dentro una cornice da 1150. Prima
+  // la salvava il fit() che scattava a ogni risposta del server; tolto
+  // quello (azzerava lo zoom), serve un controllo che non dipenda da nessun
+  // evento. Costa un confronto fra due numeri ogni tre decimi di secondo.
+  setInterval(function () {
+    if (pronto && cont.clientWidth && cont.clientWidth !== vistaW) fit(false);
+  }, 300);
 
   Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
   Streamlit.setComponentReady();
