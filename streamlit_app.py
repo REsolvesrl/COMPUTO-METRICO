@@ -1568,6 +1568,11 @@ def categorie_del_computo():
     return categorie_accese() + list(dict.fromkeys(extra))
 
 
+def scambia_apertura(chiave, categoria):
+    """Apre o chiude una categoria del computo o del pool (callback)."""
+    st.session_state[chiave] = st.session_state[chiave] ^ {categoria}
+
+
 def categoria_accesa(categoria):
     """Tetto e facciata valgono solo se accesi; le altre sempre."""
     return (categoria not in listino.CATEGORIE_FACOLTATIVE
@@ -2541,9 +2546,17 @@ def pannello_listino_personale():
 
 
 def scrivi_testo_voce(chiave):
-    """Riporta il testo della casella nella chiave di verità."""
-    st.session_state[chiave] = (
-        st.session_state.get(f"{chiave}_w") or "").strip()
+    """Riporta il testo della casella nella chiave di verità.
+
+    Un testo vuoto toglie la chiave invece di scriverci "": vuol dire «quello
+    del listino» in tutti e due i casi, ma ogni chiave in più in sessione
+    rallenta ogni campo della pagina (vedi il caricamento del progetto).
+    """
+    testo = (st.session_state.get(f"{chiave}_w") or "").strip()
+    if testo:
+        st.session_state[chiave] = testo
+    else:
+        st.session_state.pop(chiave, None)
 
 
 def scrivi_unita_voce(codice):
@@ -3397,15 +3410,13 @@ def bp_pct_da_euro_ag_out():
         _percentuale_da_importo("bp_ag_out", "bp_ag_out_eur", prezzo)
 
 
-@st.cache_data(show_spinner=False, max_entries=4)
 def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None,
                 df_materiali=None):
     """Il file Excel da scaricare.
 
-    Il bottone di scaricamento vuole i byte già pronti, quindi il file veniva
-    ricostruito a OGNI interazione con l'app — 70 millisecondi buttati per un
-    bottone che magari non premi mai. Con la cache si ricostruisce solo quando
-    cambiano davvero le tabelle.
+    Si costruisce al clic (vedi `excel_computo_bytes`), non a ogni giro: con
+    la cache di prima restava comunque da calcolare, a ogni gesto, l'impronta
+    di tutte le tabelle per sapere se il file era già pronto.
 
     I materiali stanno in un foglio LORO, non in coda al computo: non sono
     voci di computo, e sommarli lì sotto rifarebbe con Excel proprio la
@@ -3421,6 +3432,52 @@ def excel_bytes(df_computo, df_riepilogo, df_progetto, df_superfici=None,
             df_superfici.to_excel(writer, sheet_name="Superfici", index=False)
         df_progetto.to_excel(writer, sheet_name="Dati progetto", index=False)
     return buffer.getvalue()
+
+
+def _csv_bytes(df):
+    return df.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+
+
+def excel_computo_bytes(df_calcolato, df_riepilogo, df_progetto,
+                        df_materiali_editor, piante, percentuali):
+    """L'Excel del computo, fogli dei materiali e delle superfici compresi.
+
+    Riceve solo dati, niente stato di sessione: gira al clic, fuori dal giro
+    della pagina. I materiali arrivano come tabella dell'editor e le
+    superfici come planimetrie — convertirli qui invece che a ogni giro è
+    metà del risparmio.
+    """
+    df_materiali = None
+    righe = (materiali_da_df(df_materiali_editor)
+             if df_materiali_editor is not None else [])
+    if righe:
+        df_materiali = pd.DataFrame([{
+            "Capitolo": r.get("capitolo") or "",
+            "Descrizione": r.get("descrizione") or "",
+            "Quantità": r.get("quantita"),
+            "Fornitore": r.get("fornitore") or "",
+            "Link": r.get("link") or "",
+            "Stato": r.get("stato") or "",
+            "Note": r.get("note") or "",
+        } for r in righe])
+
+    righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
+        piante, percentuali, escludi=CATEGORIE_SOLO_COMPUTO)
+    df_superfici = None
+    if righe_sup:
+        df_superfici = pd.DataFrame([{
+            "Pianta": r["pianta"], "Categoria": r["categoria"],
+            "N. zone": r["zone"], "m² reali": r["m2"],
+            "%": r["percento"], "m² commerciali": r["m2_commerciale"],
+        } for r in righe_sup])
+        df_superfici = pd.concat([
+            df_superfici,
+            pd.DataFrame([{"Pianta": "TOTALE", "Categoria": "",
+                           "N. zone": None, "m² reali": tot_sup,
+                           "%": None, "m² commerciali": tot_comm}]),
+        ], ignore_index=True)
+    return excel_bytes(df_calcolato, df_riepilogo, df_progetto,
+                       df_superfici, df_materiali)
 
 
 # -------------------------------------------------------------- planimetria
@@ -4478,8 +4535,16 @@ if "da_caricare" in st.session_state:
         st.session_state[f"p_{_cod}"] = float(
             elemento.get("p", _voce["prezzo"]))
         _testi = testi_salvati.get(_cod) or {}
-        st.session_state[f"d_{_cod}"] = _testi.get("d") or ""
-        st.session_state[f"u_{_cod}"] = _testi.get("u") or ""
+        # ⚠️ Una riscrittura che non c'è NON diventa una chiave vuota. In
+        # Streamlit 1.58 ogni campo disegnato fa una copia dell'intero stato
+        # di sessione: con una "d_" e una "u_" vuote per ognuna delle 94
+        # voci del listino erano 160 chiavi inutili copiate un centinaio di
+        # volte a ogni clic. Chi le legge usa .get(), e None vale "".
+        for _pref, _testo in (("d_", _testi.get("d")), ("u_", _testi.get("u"))):
+            if _testo:
+                st.session_state[f"{_pref}{_cod}"] = _testo
+            else:
+                st.session_state.pop(f"{_pref}{_cod}", None)
         # via i widget della sessione precedente: se restassero, le righe
         # rinascerebbero coi valori del progetto vecchio invece che con questi
         for _w in (f"q_{_cod}_txt", f"p_{_cod}_txt",
@@ -4918,7 +4983,8 @@ if _scartate:
 # quelle dell'ultimo giro completo, e senza questo aprendo il Computo si
 # vedrebbero le quantità di prima. Tutte le schede continuano a girare a ogni
 # giro completo — non si usa `.open` per saltarle — perché Streamlit butta via
-# lo stato dei widget che in un giro non disegna.
+# lo stato dei widget che in un giro non disegna. L'unica eccezione è la tela
+# della planimetria, che non ha stato da perdere e pesa quanto l'immagine.
 tab_computo, tab_plan, tab_bp = st.tabs(
     ["📝 Computo metrico", "📐 Misura da planimetria", "📊 Business plan"],
     key="scheda_attiva", on_change="rerun")
@@ -5398,10 +5464,13 @@ with sotto_computo:
             if colore_md != "gray":
                 _eti_cat = f":{colore_md}[{_eti_cat}]"
             with st.container(key=f"card_{indice}"):
-                if st.button(_eti_cat,
-                             key=f"apri_{indice}", width="stretch"):
-                    st.session_state.cat_aperte ^= {cat}   # apre o chiude
-                    st.rerun()
+                # ⚠️ on_click e non `if st.button: …; st.rerun()`: così il
+                # clic è UN giro solo. Col rerun esplicito erano due — il
+                # primo si fermava a metà pagina, il secondo la rifaceva
+                # tutta — e aprire una categoria costava un terzo di più.
+                st.button(_eti_cat, key=f"apri_{indice}", width="stretch",
+                          on_click=scambia_apertura,
+                          args=("cat_aperte", cat))
                 if aperta and voci_cat:
                     (h_cod, h_voce, h_um, h_qta, h_prezzo, h_parz,
                      h_x) = st.columns(
@@ -5523,10 +5592,10 @@ with sotto_computo:
                 _eti_pool = f"{'▾' if aperta_pool else '▸'} **{cat}**"
                 if colore_md != "gray":
                     _eti_pool = f":{colore_md}[{_eti_pool}]"
-                if st.button(f"{_eti_pool} :gray[· {len(disponibili)}]",
-                             key=f"pool_{indice}", width="stretch"):
-                    st.session_state.pool_aperte ^= {cat}
-                    st.rerun()
+                st.button(f"{_eti_pool} :gray[· {len(disponibili)}]",
+                          key=f"pool_{indice}", width="stretch",
+                          on_click=scambia_apertura,
+                          args=("pool_aperte", cat))
                 if aperta_pool:
                     for voce in disponibili:
                         codice_voce = voce["codice"]
@@ -5726,39 +5795,13 @@ with sotto_computo:
                    progetto["aliquota_iva"]],
     })
 
-    # Il foglio dei materiali: l'elenco dell'allegato con accanto quello che
-    # sull'allegato non ci va — fornitore, link e stato dell'ordine. È la
-    # lista della spesa da portarsi dietro, e in Excel il link resta
-    # cliccabile.
-    _righe_materiali = materiali_correnti()
-    df_materiali_excel = None
-    if _righe_materiali:
-        df_materiali_excel = pd.DataFrame([{
-            "Capitolo": r.get("capitolo") or "",
-            "Descrizione": r.get("descrizione") or "",
-            "Quantità": r.get("quantita"),
-            "Fornitore": r.get("fornitore") or "",
-            "Link": r.get("link") or "",
-            "Stato": r.get("stato") or "",
-            "Note": r.get("note") or "",
-        } for r in _righe_materiali])
-
-    righe_sup, tot_sup, tot_comm, _ = planimetria.riepilogo_superfici(
-        st.session_state.piante, mappa_percentuali(),
-        escludi=CATEGORIE_SOLO_COMPUTO)
-    df_superfici_excel = None
-    if righe_sup:
-        df_superfici_excel = pd.DataFrame([{
-            "Pianta": r["pianta"], "Categoria": r["categoria"],
-            "N. zone": r["zone"], "m² reali": r["m2"],
-            "%": r["percento"], "m² commerciali": r["m2_commerciale"],
-        } for r in righe_sup])
-        df_superfici_excel = pd.concat([
-            df_superfici_excel,
-            pd.DataFrame([{"Pianta": "TOTALE", "Categoria": "",
-                           "N. zone": None, "m² reali": tot_sup,
-                           "%": None, "m² commerciali": tot_comm}]),
-        ], ignore_index=True)
+    # Il foglio dei materiali (l'elenco dell'allegato con fornitore, link e
+    # stato dell'ordine) e quello delle superfici si compongono al clic,
+    # dentro `excel_computo_bytes`: qui si passa solo quello che serve.
+    # La tabella viva dei materiali è quella di QUESTO giro, perché la
+    # linguetta dei materiali è scritta prima del computo.
+    _df_materiali_editor = st.session_state.get(
+        "df_materiali_live", st.session_state.get("df_materiali"))
 
     # La firma costa millesimi di secondo; il file intero costa secondi e
     # attraversa il collegamento col browser. Qui gira solo la firma, che
@@ -5812,9 +5855,11 @@ with sotto_computo:
     )
     col_xlsx.download_button(
         "📊 Esporta Excel (.xlsx)",
-        data=excel_bytes(df_calcolato, df_riepilogo_excel,
-                         df_progetto_excel, df_superfici_excel,
-                         df_materiali_excel),
+        data=functools.partial(excel_computo_bytes, df_calcolato,
+                               df_riepilogo_excel, df_progetto_excel,
+                               _df_materiali_editor,
+                               list(st.session_state.piante),
+                               mappa_percentuali()),
         help="Fogli: Computo, Riepilogo, Materiali, Superfici e Dati "
              "progetto.",
         file_name=nome_file("xlsx"),
@@ -5823,8 +5868,7 @@ with sotto_computo:
     )
     col_csv.download_button(
         "📄 Esporta CSV",
-        data=df_calcolato.to_csv(index=False, sep=";", decimal=",")
-                         .encode("utf-8-sig"),
+        data=functools.partial(_csv_bytes, df_calcolato),
         file_name=nome_file("csv"),
         mime="text/csv",
     )
@@ -6031,21 +6075,30 @@ def scheda_planimetria():
             # La tela sul piano da lavoro: è il pezzo vero, e nella scheda
             # deve avere il contrasto più alto: tutto il resto le sta attorno.
             with st.container(key="tela"):
-                image_viewer(
-                    pianta["src"],
-                    zone=zone_props,
-                    pareti=pareti_props,
-                    scala_temp=st.session_state.scala_temp,
-                    colore_attivo=colore_attivo,
-                    mpp=pianta["mpp"] or 0.0,
-                    font_px=st.session_state.et_font,
-                    tipo_parete=st.session_state.get("tipo_parete_codice",
-                                                     "demolire"),
-                    seq_applicato=st.session_state.ultimo_seq,
-                    on_change=functools.partial(al_gesto_sulla_tela,
-                                                pianta["uid"]),
-                    key=f"viewer_{pianta['uid']}",
-                )
+                # ⚠️ La tela si manda al browser SOLO con la scheda aperta.
+                # Porta con sé la planimetria intera (su ENI 782 KB di testo),
+                # e prima viaggiava a ogni clic su qualunque scheda: aprire una
+                # categoria del computo costava 0,9 s, senza la tela 0,27.
+                # Perderne lo stato da chiusa non costa niente: riaprendo la
+                # scheda la tela rinasce dai dati del server, e i gesti hanno
+                # numeri presi dall'orologio, quindi non si confondono con
+                # quelli di prima (vedi evento_viewer).
+                if tab_plan.open:
+                    image_viewer(
+                        pianta["src"],
+                        zone=zone_props,
+                        pareti=pareti_props,
+                        scala_temp=st.session_state.scala_temp,
+                        colore_attivo=colore_attivo,
+                        mpp=pianta["mpp"] or 0.0,
+                        font_px=st.session_state.et_font,
+                        tipo_parete=st.session_state.get("tipo_parete_codice",
+                                                         "demolire"),
+                        seq_applicato=st.session_state.ultimo_seq,
+                        on_change=functools.partial(al_gesto_sulla_tela,
+                                                    pianta["uid"]),
+                        key=f"viewer_{pianta['uid']}",
+                    )
             # Il posto dove finiranno i totali, subito sotto la tela. I numeri
             # si calcolano molto più giù, dopo le spunte dei locali: senza
             # questo segnaposto bisognava scorrere fino in fondo e tornare su
