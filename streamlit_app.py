@@ -61,6 +61,7 @@ import fattibilita
 import fattura
 import listino
 import listino_personale
+import modello_computo
 import materiali
 import merito
 import stampa
@@ -4181,7 +4182,10 @@ def azzera_progetto():
     callback: fatto dopo che la spunta è stata disegnata, Streamlit solleva
     «cannot be modified after the widget is instantiated» e l'app si pianta.
     """
-    st.session_state.da_caricare = {}
+    # Un progetto nuovo non è un foglio bianco: parte dalle voci, dai testi e
+    # dai prezzi di Migliarina (vedi modello_computo). Passa dal caricamento
+    # normale, come un progetto salvato qualsiasi.
+    st.session_state.da_caricare = modello_computo.progetto_nuovo()
     st.session_state.conf_nuovo_progetto = False
 
 
@@ -5097,7 +5101,9 @@ with sotto_computo:
             st.markdown(
                 "Svuota **computo, planimetrie, business plan e spese**.\n\n"
                 "Le planimetrie perdono la scala calibrata e le zone "
-                "disegnate a mano: l'annulla non le riporta indietro.")
+                "disegnate a mano: l'annulla non le riporta indietro.\n\n"
+                "Il computo nuovo parte dalle voci di Migliarina, con i "
+                "loro testi e prezzi e le quantità a zero.")
             st.button("🗑️ Sì, svuota tutto", width="stretch",
                       key="nuovo_dopo_ripresa", on_click=azzera_progetto)
 
@@ -5239,6 +5245,8 @@ with sotto_computo:
         # singolo file in archivio — che invece la conferma ce l'aveva.
         st.divider()
         st.markdown("**🗑️ Nuovo progetto**")
+        st.caption("Il computo nuovo parte dalle voci di Migliarina, con i "
+                   "loro testi e prezzi e le quantità a zero.")
         n_conf, n_btn = st.columns([3, 1], vertical_alignment="bottom")
         conferma_nuovo = n_conf.checkbox(
             "Ho capito: svuota computo, planimetrie, business plan e spese",
