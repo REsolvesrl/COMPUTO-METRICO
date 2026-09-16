@@ -6297,7 +6297,19 @@ def scheda_planimetria():
                        "perimetro commerciale**: per la superficie vendibile "
                        "traccia un'area della categoria **Superficie "
                        "commerciale** attorno all'immobile.")
-        if not righe_sup:
+        # Le superfici interne stanno in tabella anche loro, ma NON nel
+        # conteggio: la superficie commerciale è il perimetro «Superficie
+        # commerciale» più le pertinenze (balconi, scale, garage…), mentre le
+        # interne sono il calpestabile che alimenta il computo. Elencarle
+        # tutte e due con l'uso accanto evita di scambiare l'una per l'altra
+        # — senza la riga delle interne, i perimetri contati sembravano
+        # essere loro (progetto ENI, 16/09/2026).
+        righe_interne, _, _, _ = planimetria.riepilogo_superfici(
+            [dict(p, zone=[z for z in p["zone"]
+                           if z["categoria"] in CATEGORIE_SOLO_COMPUTO])
+             for p in piante],
+            mappa_percentuali())
+        if not righe_sup and not righe_interne:
             st.info("Disegna le aree con ✏️ sulla planimetria: qui compare il "
                     "riepilogo per categoria con le percentuali applicate.")
         else:
@@ -6308,8 +6320,23 @@ def scheda_planimetria():
                 "m² reali": numero_it(r["m2"], 2),
                 "%": numero_it(r["percento"], 0) + " %",
                 "m² commerciali": numero_it(r["m2_commerciale"], 2),
-            } for r in righe_sup])
+                "Serve a": "Superficie commerciale",
+            } for r in righe_sup] + [{
+                "Pianta": r["pianta"],
+                "Categoria": r["categoria"],
+                "Zone": r["zone"],
+                "m² reali": numero_it(r["m2"], 2),
+                "%": "—",
+                "m² commerciali": "non conta",
+                "Serve a": "Computo (calpestabile)",
+            } for r in righe_interne])
             st.dataframe(df_sup_vista, hide_index=True)
+            if righe_interne:
+                st.caption(
+                    "La **superficie commerciale** è il perimetro «Superficie "
+                    "commerciale» più le pertinenze con la loro percentuale. "
+                    "La **superficie interna** è il calpestabile: resta fuori "
+                    "da questo conteggio e va al computo metrico.")
             m1, m2 = st.columns(2)
             m1.metric("Superficie reale totale",
                       f"{numero_it(tot_sup, 2)} m²")
