@@ -773,6 +773,8 @@ COLORI_CATEGORIE = {
     "Elettricista": ("#F0A840", "orange"),
     "Serramenti": ("#9575CD", "violet"),
     "Aree esterne": ("#B0BEC5", "gray"),
+    "Tetto": ("#B8735A", "red"),          # cotto dei coppi
+    "Facciata": ("#D9C7A7", "gray"),      # intonaco a calce
 }
 
 # Voci del listino ricavabili dalle superfici misurate sulla planimetria:
@@ -1563,7 +1565,40 @@ def categorie_del_computo():
     """
     extra = [v["categoria"] for v in st.session_state.voci_extra.values()
              if v["categoria"] not in listino.CATEGORIE]
-    return list(listino.CATEGORIE) + list(dict.fromkeys(extra))
+    return categorie_accese() + list(dict.fromkeys(extra))
+
+
+def categoria_accesa(categoria):
+    """Tetto e facciata valgono solo se accesi; le altre sempre."""
+    return (categoria not in listino.CATEGORIE_FACOLTATIVE
+            or categoria in st.session_state.lavori_facoltativi)
+
+
+def categorie_accese():
+    """Le categorie del listino in uso in questo progetto."""
+    return [c for c in listino.CATEGORIE if categoria_accesa(c)]
+
+
+def cambia_lavoro_facoltativo(categoria):
+    """Accende o spegne tetto o facciata. È la callback del suo interruttore.
+
+    Spegnere non toglie niente: le voci restano scelte, con quantità e
+    prezzi, e smettono solo di contare. Riaccendendo si ritrovano com'erano.
+    Accendere una categoria che non ha ancora voci nel computo ci porta le
+    sue voci del listino, tranne quelle scartate: una categoria accesa e
+    vuota non direbbe niente a nessuno.
+    """
+    accese = st.session_state.lavori_facoltativi
+    if not st.session_state.get(f"facoltativa_{categoria}_w"):
+        if categoria in accese:
+            accese.remove(categoria)
+        return
+    if categoria not in accese:
+        accese.append(categoria)
+    if not scelte_della_categoria(categoria):
+        for voce in listino.voci_della_categoria(categoria):
+            if not e_scartata(voce["codice"]):
+                porta_nel_computo(voce["codice"])
 
 
 def nome_file(estensione):
@@ -1777,8 +1812,15 @@ def mostra_dettaglio_finiture(q, altezza, h_riv, larg_porta, alt_porta,
 
 
 def scelte():
-    """I codici delle voci di listino portate nel computo."""
-    return list(st.session_state.voci_scelte)
+    """I codici delle voci portate nel computo, senza quelle dei lavori spenti.
+
+    È da qui che passano righe a video, totali, stampa, export e business
+    plan: filtrare qui vuol dire che una facciata spenta non costa niente in
+    nessuno di quei posti. `voci_scelte` invece le tiene, per riaccenderle.
+    """
+    return [c for c in st.session_state.voci_scelte
+            if (v := voce_del_computo(c)) is None
+            or categoria_accesa(v["categoria"])]
 
 
 def e_scelta(codice):
@@ -1809,7 +1851,8 @@ def prendi_pacchetto_standard():
     """
     for _voce in listino.VOCI:
         _codice = _voce["codice"]
-        if not e_scelta(_codice) and not e_scartata(_codice):
+        if (categoria_accesa(_voce["categoria"])
+                and not e_scelta(_codice) and not e_scartata(_codice)):
             porta_nel_computo(_codice)
 
 
@@ -2035,7 +2078,7 @@ def css_schede_computo():
     padding-bottom: 0.2rem;
 }}
 .st-key-apri_{indice} button::before {{
-    content: "{indice:02d}";
+    content: "{serie_della_categoria(cat):02d}";
     background: {colore};
     color: {colore_testo_su(colore)};
 }}
@@ -2602,9 +2645,9 @@ def riga_voce_computo(voce):
             # no: la categoria è del catalogo, e vale per tutti i cantieri.
             st.divider()
             st.selectbox(
-                "Sposta nella categoria", listino.CATEGORIE,
-                index=(listino.CATEGORIE.index(voce["categoria"])
-                       if voce["categoria"] in listino.CATEGORIE else 0),
+                "Sposta nella categoria", categorie_accese(),
+                index=(categorie_accese().index(voce["categoria"])
+                       if voce["categoria"] in categorie_accese() else 0),
                 key=f"spostacat_{codice}")
             st.button("↔️ Sposta", key=f"sposta_{codice}",
                       on_click=sposta_voce_extra, args=(codice,),
@@ -3856,6 +3899,8 @@ def _payload_progetto():
         # le quantità scritte a mano restano a mano anche riaprendo: sono
         # una decisione, non un caso
         "voci_a_mano": list(st.session_state.voci_a_mano),
+        # tetto e facciata: se su questo cantiere si fanno
+        "lavori_facoltativi": list(st.session_state.lavori_facoltativi),
         # l'allegato dei materiali: elenco suo, fuori dal computo, e infatti
         # fuori anche da "voci"
         "materiali": materiali_da_df(st.session_state.get(
@@ -4289,6 +4334,8 @@ st.session_state.setdefault("pool_aperte", set())
 # le voci tolte dal pool di questo progetto: il listino resta intero, qui si
 # tiene solo l'elenco di quelle che su QUESTO cantiere non c'entrano
 st.session_state.setdefault("voci_scartate", [])
+# tetto e facciata accesi in questo progetto: di norma nessuno
+st.session_state.setdefault("lavori_facoltativi", [])
 # le voci la cui quantità è stata scritta a mano: il disegno le lascia stare
 st.session_state.setdefault("voci_a_mano", [])
 # i materiali a cura del committente: elenco a parte, non voci del computo.
@@ -4473,6 +4520,11 @@ if "da_caricare" in st.session_state:
         c for c in (dati.get("voci_scartate") or [])
         if c not in st.session_state.voci_scelte]
     st.session_state.voci_a_mano = list(dati.get("voci_a_mano") or [])
+    st.session_state.lavori_facoltativi = [
+        c for c in (dati.get("lavori_facoltativi") or [])
+        if c in listino.CATEGORIE_FACOLTATIVE]
+    for _cat in listino.CATEGORIE_FACOLTATIVE:
+        st.session_state.pop(f"facoltativa_{_cat}_w", None)
     if dati.get("voci_scelte") is None:
         # Progetto vecchio: non c'era un elenco, e le voci scritte a mano
         # erano nel computo per definizione. Con l'elenco, invece, comanda
@@ -5305,6 +5357,19 @@ with sotto_computo:
     with col_sx:
         barra_annulla_computo()
         pannello_listino_personale()
+        # Tetto e facciata non ci sono in ogni cantiere: si accendono qui.
+        # Spenti, le loro schede spariscono e non contano nei totali.
+        f_txt, *f_int = st.columns([1.6] + [1] * len(
+            listino.CATEGORIE_FACOLTATIVE), vertical_alignment="center")
+        f_txt.caption("Lavori che non ci sono in ogni cantiere:")
+        for _col, _cat in zip(f_int, listino.CATEGORIE_FACOLTATIVE):
+            _col.toggle(
+                _cat, key=f"facoltativa_{_cat}_w",
+                value=_cat in st.session_state.lavori_facoltativi,
+                on_change=cambia_lavoro_facoltativo, args=(_cat,),
+                help=f"Acceso: la categoria {_cat} entra nel computo, nei "
+                     "totali e in stampa. Spento: sparisce, ma voci, "
+                     "quantità e prezzi restano da parte.")
         # --------------------------------------------- il computo effettivo
         # Le categorie ci sono sempre — sono l'ossatura del documento — ma
         # dentro c'è solo quello che è stato scelto. Un cantiere non è
@@ -5372,7 +5437,7 @@ with sotto_computo:
                            "si propone da sé — **1**, il prezzo è già "
                            "l'importo — e la puoi cambiare.")
                 n1, n2 = st.columns([1, 2])
-                n1.selectbox("Categoria", listino.CATEGORIE, key="nuova_cat",
+                n1.selectbox("Categoria", categorie_accese(), key="nuova_cat",
                              on_change=azzera_unita_nuova)
                 n2.text_input("Descrizione", key="nuova_desc",
                               placeholder="Es. Allestimento del cantiere")
@@ -5520,11 +5585,12 @@ with sotto_computo:
         if totale == 0:
             st.caption("Inserisci le quantità nelle categorie per vedere "
                        "la distribuzione dei costi.")
-        righe_dot = [(f"{i}. {cat}",
+        # Il numero è la serie dei codici, non la posizione: con il tetto
+        # spento la facciata resta la 9, come le sue voci 9.x.
+        righe_dot = [(f"{serie_della_categoria(cat)}. {cat}",
                       COLORI_CATEGORIE.get(cat, (OTTONE, "orange"))[0],
                       totale_categoria_listino(cat))
-                     for i, cat in enumerate(categorie_del_computo(),
-                                             start=1)]
+                     for cat in categorie_del_computo()]
         # pastiglie quadrate, non pallini: sono campioni di materiale, e
         # richiamano la tinta piena in testa a ogni categoria
         html_dot = "".join(

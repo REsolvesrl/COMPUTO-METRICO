@@ -3,7 +3,8 @@
 Voci pronte all'uso con prezzi medi indicativi (fonte: prassi corrente di
 mercato per ristrutturazioni complete di appartamenti), organizzate nelle
 categorie tipiche di un computo: demolizioni → ricostruzioni e ripristini →
-impianti → serramenti → aree esterne.
+impianti → serramenti → aree esterne. In coda tetto e facciata, presi dai
+computi del cantiere ENI: sono lavori che non tutti i cantieri hanno.
 
 I prezzi sono SEMPRE modificabili dopo l'inserimento nel computo: sono un
 punto di partenza, non un prezzario ufficiale. Le "note" riportano le regole
@@ -18,7 +19,15 @@ CATEGORIE = [
     "Elettricista",
     "Serramenti",
     "Aree esterne",
+    "Tetto",
+    "Facciata",
 ]
+
+# Lavori che non ci sono in ogni cantiere: in un progetto restano spenti
+# finché non li accendi, e da spenti non compaiono né nel computo né nei
+# totali né in stampa. Stanno in coda al listino perché i codici delle altre
+# categorie (1.x … 7.x) non si spostino: sono scritti nei progetti salvati.
+CATEGORIE_FACOLTATIVE = ["Tetto", "Facciata"]
 
 VOCI = [
     # -------------------------------------------------- 0 · Pratiche e oneri
@@ -323,6 +332,195 @@ VOCI = [
     {"codice": "7.2", "categoria": "Aree esterne", "um": "m²", "prezzo": 15.0,
      "descrizione": "Ripristino balconi",
      "nota": "Controlla dalle foto: infiorescenze, distacchi, frontalini."},
+
+    # ------------------------------------------------------- 7 · Tetto
+    {"codice": "8.1", "categoria": "Tetto", "um": "m²",
+     "prezzo": 22.0,
+     "descrizione": "Formazione di ponteggio con tubolari metallici da terra "
+                    "ad un metro di altezza sopra la gronda, completo per ogni"
+                    " impalcato di tavole fermapiede , correnti cancelletti "
+                    "laterali teli antipolvere , parasassi scale, botola, "
+                    "impianto di messa a terra, luci di ingombro, cartelli "
+                    "segnaletici sia di pericolo che antinfortunistici, "
+                    "ancoraggio ed ogni onere per dare il tutto in sicurezza e"
+                    " a norma escluso l’onere dell’occupazione del suolo "
+                    "pubblico. Per tutta la durata stimata del cantiere.",
+     "nota": "Metri quadri di ponteggio: sviluppo delle facciate per l'altezza"
+             " fino a un metro sopra la gronda. Scrivi le dimensioni in "
+             "descrizione. L'occupazione di suolo pubblico è a parte (1.11)."},
+    {"codice": "8.2", "categoria": "Tetto", "um": "a corpo",
+     "prezzo": 1000.0,
+     "descrizione": "Smontaggio di eventuali docce, canale e scossaline "
+                    "ammalorate o non più idonee, compreso il calo in basso, "
+                    "il carico ed il successivo smaltimento presso la pubblica"
+                    " discarica."},
+    {"codice": "8.3", "categoria": "Tetto", "um": "m²",
+     "prezzo": 32.0,
+     "descrizione": "Disfacimento del manto di copertura in laterizi, compreso"
+                    " abbassamento dei materiali al piano di carico "
+                    "dell'automezzo ed il successivo smaltimento presso la "
+                    "pubblica discarica."},
+    {"codice": "8.4", "categoria": "Tetto", "um": "m²",
+     "prezzo": 25.0,
+     "descrizione": "Sostituzione dell’orditura secondaria orditura (terzere, "
+                    "con sezione superiore o uguale a 200 cmq) ove compromessa"
+                    " in opera, compresi gli oneri per la rimozione e lo "
+                    "smaltimento della struttura esistente. Ed eventuali "
+                    "rinforzi con la fornitura e la messa in opera di piccoli "
+                    "profilati in acciaio in corrispondenza dell’eventuale "
+                    "orditura primaria ammalorata.",
+     "nota": "Si sostituisce solo dove è compromessa: di solito si stima il "
+             "35% della copertura."},
+    {"codice": "8.5", "categoria": "Tetto", "um": "m²",
+     "prezzo": 6.0,
+     "descrizione": "Solo posa di membrana impermeabilizzante per la "
+                    "formazione della barriera al vapore, costituita da un "
+                    "tessuto composito rinforzato 005 (feltro di vetro con "
+                    "poliestere) guaina traspirante."},
+    {"codice": "8.6", "categoria": "Tetto", "um": "m²",
+     "prezzo": 35.0,
+     "descrizione": "Solo posa in opera di materiali per isolamento termico "
+                    "(lana di vetro o di roccia, polistirolo, poliuretano, "
+                    "materiali similari) sia in rotoli che in lastre di "
+                    "dimensione adeguata che abbia comunque la trasmittanza "
+                    "come richiesta dalla normativa vigente U (W/m2K) di 0.28."
+                    " Compreso il carico, lo scarico, il trasporto e deposito "
+                    "in copertura del fabbricato ed ogni onere/accessorio per "
+                    "dare l’opera finita a regola d’arte."},
+    {"codice": "8.7", "categoria": "Tetto", "um": "m²",
+     "prezzo": 38.0,
+     "descrizione": "eventuale - Fornitura e posa in opera di tavolato in "
+                    "legno per copertura inclinata, realizzato con tavole in "
+                    "legno di abete piallate, spessore minimo 20–25 mm, posate"
+                    " accostate su struttura portante esistente costituita da "
+                    "travetti in legno. L’intervento comprende il fissaggio "
+                    "mediante chiodatura o viti idonee alla struttura "
+                    "sottostante, eventuali tagli, adattamenti, sfridi, "
+                    "allineamenti e la formazione di piano continuo di "
+                    "supporto per la successiva posa degli strati di copertura"
+                    " (barriera/freno al vapore e pannelli isolanti)."},
+    {"codice": "8.8", "categoria": "Tetto", "um": "m²",
+     "prezzo": 58.0,
+     "descrizione": "Fornitura e posa di manto di copertura in embrici e coppi"
+                    " nuovi, compreso la muratura della prima fila di gronda e"
+                    " delle mantelline, pezzi di colmo, eventuali para passeri"
+                    " e qualunque cosa per dare l’opera finita a regola d'arte"},
+    {"codice": "8.9", "categoria": "Tetto", "um": "ml",
+     "prezzo": 90.0,
+     "descrizione": "Fornitura e messa in opera di canale di gronda in "
+                    "alluminio sviluppo fino a 40/45 cm compreso gli ancoraggi"
+                    " e ogni onere per dare l’opera finita a regola d’arte e "
+                    "ricollocazione dei pluviali precedentemente rimossi."},
+    {"codice": "8.10", "categoria": "Tetto", "um": "ml",
+     "prezzo": 50.0,
+     "descrizione": "Fornitura e messa in opera di scossaline in alluminio "
+                    "compreso gli ancoraggi ed ogni onere per dare l’opera "
+                    "finita a regola d’arte."},
+    {"codice": "8.11", "categoria": "Tetto", "um": "a corpo",
+     "prezzo": 0.0,
+     "descrizione": "Installazione antenna centralizzata compreso filaggio "
+                    "cavi fino al piano terra.",
+     "nota": "Nel computo del tetto di ENI il prezzo non c'era: da chiedere "
+             "all'impresa."},
+    {"codice": "8.12", "categoria": "Tetto", "um": "a corpo",
+     "prezzo": 4000.0,
+     "descrizione": "Rinforzi sia murari per il sostentamento delle travi "
+                    "principali ed il fissaggio delle stesse tra di loro (dove"
+                    " necessita) tramite staffature e chiodature di acciaio"},
+    {"codice": "8.13", "categoria": "Tetto", "um": "m²",
+     "prezzo": 0.0,
+     "descrizione": "Formazione di piano di calpestio in tavolato che andrà "
+                    "recuperato a fine opere per la messa in sicurezza del "
+                    "pavimento del sottotetto per le lavorazioni di smontaggio"
+                    " e sistemazioni travi per la copertura.",
+     "nota": "Nel computo del tetto di ENI il prezzo non c'era: da chiedere "
+             "all'impresa. Il tavolato si recupera a fine lavori."},
+
+    # ---------------------------------------------------- 8 · Facciata
+    {"codice": "9.1", "categoria": "Facciata", "um": "a corpo",
+     "prezzo": 2500.0,
+     "descrizione": "Allestimento cantiere",
+     "nota": "Se l'allestimento c'è già nel computo degli interni, non "
+             "contarlo due volte."},
+    {"codice": "9.2", "categoria": "Facciata", "um": "ml",
+     "prezzo": 10.0,
+     "descrizione": "Smontaggio di pluviali, canale e scossaline compreso il "
+                    "calo in basso, il carico ed il successivo smaltimento "
+                    "presso la pubblica discarica."},
+    {"codice": "9.3", "categoria": "Facciata", "um": "m²",
+     "prezzo": 25.0,
+     "descrizione": "Asportazione tramite spicconatura con mezzo meccanico "
+                    "leggero di tutto l'intonaco ammalorato di tutte le "
+                    "facciate fatiscenti compreso gronde e sotto terrazzi o "
+                    "distaccato sarà rimosso fino al vivo della muratura di "
+                    "pietra, mattoni o mista. Distacco di cavi in facciata di "
+                    "utenze ecc e successiva protezione. Successivo lavaggio "
+                    "del paramento ed allargamento delle eventuali cavillature"
+                    " mediante l'impiego di un impianto erogante acqua "
+                    "nebulizzata in pressione. Comprensivo di abbassamento "
+                    "delle macerie al piano di carico e trasporto alle PP.DD.",
+     "nota": "Di solito il 20% della superficie di facciata (su 1.050 m² sono "
+             "210 m²)."},
+    {"codice": "9.4", "categoria": "Facciata", "um": "m²",
+     "prezzo": 15.0,
+     "descrizione": "Scarificazione della superficie ove necessario."},
+    {"codice": "9.5", "categoria": "Facciata", "um": "m²",
+     "prezzo": 35.0,
+     "descrizione": "Ricostruzione e intonacatura di elementi di facciata "
+                    "precedentemente asportati con malta a base calce "
+                    "fibrorinzorzata, con rete strutturale in fibra di vetro "
+                    "(in alternativa rete zincata). La dove è consentito dalle"
+                    " normative vigenti, si deve prevedere anche il "
+                    "posizionamento sottotraccia dei cavi utenze presenti in "
+                    "facciata che risultano antiestetici.",
+     "nota": "Di solito il 20% della superficie di facciata, come "
+             "l'asportazione (9.3)."},
+    {"codice": "9.6", "categoria": "Facciata", "um": "m²",
+     "prezzo": 38.0,
+     "descrizione": "Rasatura fibrorinforzata a base calce per "
+                    "regolarizzazione di tutte le superfici della facciata. Al"
+                    " fine di migliorare la resistenza alle tensioni "
+                    "superficiali che potrebbero provocare nel tempo la "
+                    "formazione di fessurazioni, si procederà anche con la "
+                    "fornitura e la posa di una rete di supporto su tutta la "
+                    "superficie. La rete deve essere inserita tra 1° e 2° mano"
+                    " del prodotto rasante.",
+     "nota": "In alternativa al cappotto (9.7), che la rasatura la comprende "
+             "già."},
+    {"codice": "9.7", "categoria": "Facciata", "um": "m²",
+     "prezzo": 60.0,
+     "descrizione": "eventuale - Realizzazione e fornitura di isolamento "
+                    "termico a cappotto con lastre di EPS di qualsiasi "
+                    "dimensione e spessore, compreso il carico, lo scarico, il"
+                    " trasporto e deposito a qualsiasi piano del fabbricato. "
+                    "Sono compresi inoltre gli oneri relativi a: incollaggio "
+                    "e/o tassellatura e sagomatura dei pannelli, rasatura, "
+                    "stesura di fissativo, applicazione del rasante a base di "
+                    "calce idraulica naturale steso con spatola d'acciaio, "
+                    "compresa la posa di rete d'armatura e di ogni altro onere"
+                    " necessario per dare l'opera finita a perfetta regola "
+                    "d'arte.",
+     "nota": "Comprende già la rasatura: con il cappotto la 9.6 non serve."},
+    {"codice": "9.8", "categoria": "Facciata", "um": "m²",
+     "prezzo": 22.0,
+     "descrizione": "Pitturazione a due mani previa stesura di prime, con "
+                    "tempera silossanica. Il colore è da concordare con DD.LL."
+                    " previa campionatura.",
+     "nota": "In alternativa all'intonachino (9.9): 18 € basic o 25 € "
+             "intonachino con colore premium."},
+    {"codice": "9.9", "categoria": "Facciata", "um": "m²",
+     "prezzo": 25.0,
+     "descrizione": "Pitturazione con intonachino premiscelato",
+     "nota": "In alternativa alla tempera silossanica (9.8): 18 € basic o 25 €"
+             " intonachino con colore premium."},
+    {"codice": "9.10", "categoria": "Facciata", "um": "ml",
+     "prezzo": 50.0,
+     "descrizione": "Fornitura e messa in opera di pluviali in alluminio "
+                    "compreso gli ancoraggi ed ogni onere per dare l’opera "
+                    "finita a regola d’arte."},
+    {"codice": "9.11", "categoria": "Facciata", "um": "a corpo",
+     "prezzo": 1500.0,
+     "descrizione": "Installazione scala esterna"},
 ]
 
 

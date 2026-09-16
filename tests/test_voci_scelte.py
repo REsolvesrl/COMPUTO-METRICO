@@ -73,7 +73,10 @@ def test_il_pool_offre_tutte_le_voci(app):
     """Nessuna voce presa: il pool le ha tutte, una per bottone."""
     import listino
     prendibili = _prendibili(app)
-    assert len(prendibili) == len(listino.VOCI)
+    # tetto e facciata no: in un progetto nuovo sono spenti
+    assert len(prendibili) == len([
+        v for v in listino.VOCI
+        if v["categoria"] not in listino.CATEGORIE_FACOLTATIVE])
 
 
 def test_senza_voci_scelte_non_ci_sono_righe_da_compilare(app):
@@ -102,8 +105,10 @@ def test_il_pacchetto_standard_porta_tutto_il_listino():
     import listino
     at = _avvia()
     at.button(key="pacchetto_standard").click().run()
+    # tetto e facciata no: sono spenti, e una categoria spenta non si pesca
     assert set(at.session_state["voci_scelte"]) == {
-        v["codice"] for v in listino.VOCI}
+        v["codice"] for v in listino.VOCI
+        if v["categoria"] not in listino.CATEGORIE_FACOLTATIVE}
     assert not at.exception, [e.value for e in at.exception]
 
 

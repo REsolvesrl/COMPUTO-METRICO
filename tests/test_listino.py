@@ -10,7 +10,18 @@ def test_categorie_attese():
         "Elettricista",
         "Serramenti",
         "Aree esterne",
+        "Tetto",
+        "Facciata",
     ]
+
+
+def test_tetto_e_facciata_sono_facoltativi_e_in_coda():
+    """In coda perché i codici delle altre categorie non si spostino: sono
+    scritti nei progetti salvati."""
+    assert listino.CATEGORIE_FACOLTATIVE == ["Tetto", "Facciata"]
+    assert listino.CATEGORIE[-2:] == listino.CATEGORIE_FACOLTATIVE
+    assert listino.voce_per_codice("8.1")["categoria"] == "Tetto"
+    assert listino.voce_per_codice("9.1")["categoria"] == "Facciata"
 
 
 def test_ogni_voce_e_completa():
@@ -23,7 +34,10 @@ def test_ogni_voce_e_completa():
         assert voce["um"] in {"ml", "m²", "m³", "kg", "t", "cad", "h",
                               "a corpo", "punto", "punto luce",
                               "punto acqua", "utenza"}, voce
-        assert voce["prezzo"] > 0, voce
+        # Un prezzo a zero è ammesso solo se la nota dice perché: due voci
+        # del tetto di ENI non l'avevano, e inventarlo sarebbe peggio.
+        assert voce["prezzo"] > 0 or "prezzo non c'era" in voce.get(
+            "nota", ""), voce
 
 
 def test_codici_unici():
