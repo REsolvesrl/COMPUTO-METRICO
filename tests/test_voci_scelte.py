@@ -97,6 +97,26 @@ def test_una_voce_presa_sparisce_dal_pool():
     assert "prendi_2.2" not in _prendibili(at)
 
 
+def test_il_pacchetto_standard_porta_tutto_il_listino():
+    """Un clic invece di settanta, per chi parte già con tutto il catalogo."""
+    import listino
+    at = _avvia()
+    at.button(key="pacchetto_standard").click().run()
+    assert set(at.session_state["voci_scelte"]) == {
+        v["codice"] for v in listino.VOCI}
+    assert not at.exception, [e.value for e in at.exception]
+
+
+def test_il_pacchetto_standard_non_tocca_le_voci_gia_decise():
+    """Una voce già scelta o già scartata è una decisione presa: resta lì."""
+    at = _avvia()
+    at.button(key="prendi_2.2").click().run()
+    at.button(key="cestina_2.3").click().run()
+    at.button(key="pacchetto_standard").click().run()
+    assert at.session_state["voci_scelte"][0] == "2.2"   # non spostata in coda
+    assert "2.3" in at.session_state["voci_scartate"]     # non ripescata
+
+
 def test_la_voce_presa_si_compila_nella_sua_categoria():
     at = _avvia()
     at.button(key="prendi_2.2").click().run()

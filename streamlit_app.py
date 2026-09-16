@@ -1797,6 +1797,21 @@ def porta_nel_computo(codice):
     return True
 
 
+def prendi_pacchetto_standard():
+    """Porta nel computo, in un colpo solo, tutto il listino non ancora deciso.
+
+    «Non ancora deciso» perché non tocca le voci già scelte (restano dove
+    sono, nel loro ordine) né quelle scartate apposta su QUESTO cantiere —
+    uno scarto è una decisione presa, e un pacchetto preso in blocco non
+    deve disfarla in silenzio. Per un progetto nuovo, dove non è stata
+    ancora presa nessuna decisione, equivale a prendere il listino intero.
+    """
+    for _voce in listino.VOCI:
+        _codice = _voce["codice"]
+        if not e_scelta(_codice) and not e_scartata(_codice):
+            porta_nel_computo(_codice)
+
+
 def togli_dal_computo(codice):
     """Toglie la voce dal computo. Quantità, prezzo e testi restano dove
     sono: se la si ripesca dal pool, si ritrova come l'avevi lasciata."""
@@ -5386,6 +5401,16 @@ with sotto_computo:
             # Un paragrafo normale, vestito da titolo dal CSS, sta al posto
             # suo: le dimensioni le decide chi legge, non l'anchor link.
             st.markdown("🧰 **Pool voci** · scegli cosa portare nel computo")
+            # Per chi preferisce partire già con tutto il catalogo e togliere
+            # poi quello che su questo cantiere non serve, invece di pescare
+            # le voci una a una: un solo clic invece di settanta.
+            st.button(
+                "📥 Prendi tutte le voci del listino",
+                key="pacchetto_standard",
+                on_click=prendi_pacchetto_standard,
+                help="Porta nel computo tutte le voci del listino non "
+                     "ancora scelte né scartate su questo progetto — non "
+                     "tocca quelle che hai già deciso.")
             # La ricerca è una casella sola e senza etichetta: si vede che è
             # una ricerca dalla lente e dal testo dentro. Cerca su tutte le
             # categorie insieme, anche quelle chiuse — è l'unico modo di
