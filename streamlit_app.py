@@ -43,6 +43,7 @@ import hmac
 import io
 import json
 import os
+import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -1356,6 +1357,13 @@ def unita_della_voce(voce, um):
     elenco = unita_per_categoria(voce.get("categoria"))
     return elenco if um in elenco else [um] + elenco
 
+# Le chiavi che appartengono a UNA voce del computo: quantità e prezzo
+# («q_3.10», «p_3.10»), i testi riscritti («d_», «u_»), e le caselle che li
+# mostrano («q_3.10_txt», «qn_3.10_w», «spostacat_3.10»). Servono a farle
+# sparire tutte insieme quando si apre un altro progetto.
+RIGA_DI_VOCE = re.compile(r"^(q|p|d|u|qn|spostacat)_\d+\.\d+(_txt|_w)?$")
+
+
 def serie_della_categoria(categoria):
     """Il numero di serie di una categoria: quello stampato sulla pastiglia.
 
@@ -2602,8 +2610,15 @@ def campo_quantita(colonna, codice, um):
     # Stessa cautela di campo_numero_it: se il valore di verità è cambiato
     # da fuori (una quantità arrivata dal disegno, un progetto riaperto) la
     # casella va riscritta, altrimenti mostra il numero di prima.
+    # ⚠️ «or la casella non c'è»: senza questa metà, una casella appena
+    # buttata via (apertura di un altro progetto) non veniva riscritta
+    # quando il numero era lo stesso di prima, e Streamlit la faceva
+    # rinascere dal suo minimo — cioè ZERO al posto della quantità. È il
+    # difetto per cui, aprendo un progetto dopo l'altro, «Assistenza
+    # muraria 1» compariva a 0.
     atteso = float(st.session_state.get(f"q_{codice}") or 0.0)
-    if st.session_state.get(f"_reso_qn_{codice}") != atteso:
+    if (f"qn_{codice}_w" not in st.session_state
+            or st.session_state.get(f"_reso_qn_{codice}") != atteso):
         st.session_state[f"_reso_qn_{codice}"] = atteso
         st.session_state[f"qn_{codice}_w"] = atteso
     colonna.number_input(
@@ -4500,7 +4515,36 @@ st.session_state.setdefault("auto_computo", True)
 
 # Un caricamento (o azzeramento) va applicato PRIMA di creare i widget.
 if "da_caricare" in st.session_state:
-    dati = st.session_state.pop("da_caricare")
+    # ⚠️ NON si toglie subito da `da_caricare`: si toglie in fondo, a
+    # caricamento finito. Un giro può fermarsi a metà — Streamlit interrompe
+    # lo script appena arriva un'altra interazione, e un errore lo ferma
+    # uguale — e togliendolo all'inizio quel mezzo caricamento restava per
+    # sempre: il computo del progetto nuovo con il business plan di quello
+    # di prima, e nessun modo di accorgersene. Lasciandolo, il giro
+    # successivo ricarica da capo: caricare due volte lo stesso progetto
+    # non fa danno, caricarne mezzo sì.
+    dati = st.session_state["da_caricare"]
+    # E prima di scrivere il progetto nuovo si BUTTA VIA tutto quello che è
+    # rimasto attaccato a quello di prima: le caselle (q_…_txt, qn_…_w), i
+    # testi riscritti (d_/u_) e i segnalibri «_reso_» che dicono con quale
+    # numero è nata ogni casella. Lasciarne anche uno solo vuol dire vedere
+    # nel computo appena aperto un numero dell'altro progetto — o uno zero
+    # al posto della quantità, perché la casella non viene riscritta.
+    # ⚠️ A mano non si può fare: i codici delle voci scritte a mano sono
+    # quelli dell'altro progetto, e qui non si sanno nemmeno.
+    for _chiave in [c for c in st.session_state
+                    if RIGA_DI_VOCE.match(c) or c.startswith("_reso_")]:
+        st.session_state.pop(_chiave, None)
+    # E il resto di quello che apparteneva all'altro progetto: i file già
+    # pronti da scaricare (erano i SUOI: il PDF delle planimetrie di un
+    # progetto scaricato mentre a video ce n'è un altro), lo stato del
+    # salvataggio (parlava del suo), la copia di scorta del business plan e
+    # i valori rimasti in attesa di essere applicati.
+    for _chiave in ("_json_pronto", "_json_pronto_firma", "_pdf_planimetrie",
+                    "ultimo_salvataggio", "firma_salvata", "_bp_copia",
+                    "bp_vendita_pending", "listino_pending", "prezzi_pending",
+                    "scelte_pending"):
+        st.session_state.pop(_chiave, None)
     progetto = dati.get("progetto", {})
     st.session_state.prg_nome = progetto.get("nome", "")
     st.session_state.prg_committente = progetto.get("committente", "")
@@ -4772,6 +4816,8 @@ if "da_caricare" in st.session_state:
         dati.get("mca_statistica") or "media")
     st.session_state.versione_bp += 1
     bp_ricalcola_euro()
+    # Fatto: da qui in poi il progetto in tavola è tutto e solo questo.
+    st.session_state.pop("da_caricare", None)
 
 # Il bottone «usa come prezzo di vendita» (MCA) scrive qui: va applicato
 # PRIMA che il widget bp_vendita venga creato.
