@@ -293,7 +293,7 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
                          * float(larghezza_finestra or 0.0)
                          * min(float(altezza_finestra or 0.0), h_riv))
 
-    detr_aperture_ml = detr_aperture_m2 = 0.0
+    detr_aperture_ml = detr_aperture_m2 = detr_finestre_m2 = 0.0
     for apertura in aperture:
         n = max(0, int(apertura.get("n") or 0))
         larghezza = float(apertura.get("larghezza") or 0.0)
@@ -301,6 +301,10 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
         detr_aperture_m2 += n * larghezza * altezza_ap
         if apertura.get("battiscopa"):
             detr_aperture_ml += n * larghezza
+        else:
+            # le finestre vere: quelle col davanzale, che il battiscopa
+            # non lo interrompono (le porte finestra arrivano a terra)
+            detr_finestre_m2 += n * larghezza * altezza_ap
 
     pavimento = pavimento_esterno = 0.0
     battiscopa_lordo = pareti_lorde = soffitti = 0.0
@@ -371,7 +375,12 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     # stata dichiarata — chi conta la finestra del bagno solo qui, e non
     # fra le finestre di casa, non l'ha mai scontata dalle pareti.
     rec_porte = porte_riv * larg_p * min(alt_p, h_riv)
-    rec_finestre = min(detr_riv_finestre, detr_aperture_m2)
+    # ⚠️ Contro le sole FINESTRE, non contro tutte le aperture. Col totale
+    # delle aperture una porta finestra del soggiorno bastava a «restituire»
+    # alle pareti la finestra del bagno anche quando fra le finestre di
+    # casa non era stata contata — e quindi dalle pareti non era mai stata
+    # tolta: pareti più grandi del vero.
+    rec_finestre = min(detr_riv_finestre, detr_finestre_m2)
     recupero_riv = min(rec_porte + rec_finestre, detr_rivestimenti)
 
     detr_porte_ml = larg_p * lati_batt

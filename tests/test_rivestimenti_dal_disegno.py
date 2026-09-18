@@ -241,3 +241,21 @@ def test_la_scelta_a_mano_si_salva_col_progetto():
     assert at.session_state["voci_a_mano"] == ["3.10"]
     at.run()
     assert at.session_state["q_3.10"] == 12.0
+
+
+# ------------------ la didascalia delle pareti torna col numero grande
+
+def test_la_didascalia_delle_pareti_dice_quanto_si_e_tolto_davvero():
+    """Il bagno di 3 × 3 m alto 3: 36 m² lordi. Si tolgono 14,40 di fascia
+    e 1 m² di finestra, e si ridà la striscia della finestra dentro la
+    fascia (1 m²): 21,60 netti, cioè 14,40 tolti. La didascalia diceva
+    15,40 — vani più fascia, senza quello che viene restituito — e non
+    tornava con il numero che aveva sopra."""
+    progetto = _progetto(rivestito=True)
+    progetto["finiture"].update({"fin_n": 1, "fin_larg": 1.0, "fin_alt": 1.0,
+                                 "riv_finestre_n": 1, "riv_porte_n": 0,
+                                 "porta_n": 0, "pf_n": 0})
+    at = _apri(progetto)
+    pareti = next(m for m in at.metric if m.label.startswith("Pareti"))
+    assert pareti.value == "21,60 m²"
+    assert pareti.proto.delta == "−14,40 m² vani e rivestimenti"

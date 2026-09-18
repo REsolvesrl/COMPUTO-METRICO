@@ -780,6 +780,36 @@ def test_la_finestra_del_bagno_si_toglie_dai_rivestimenti():
     assert q["rivestimenti"] == 10.44
 
 
+def test_la_finestra_del_bagno_contata_fra_le_finestre_si_ridà_alle_pareti():
+    """Tolta due volte — come finestra e come fascia — va ridata una volta.
+
+    81 m² lordi (27 m × 3), meno 10,80 di fascia del bagno, meno la
+    finestra (1 m²), più la striscia della finestra dentro la fascia (1 m²).
+    """
+    q = quantita_finiture(
+        LOCALI_MISTI, 3.0, altezza_rivestimento=1.20,
+        aperture=[{"n": 1, "larghezza": 1.0, "altezza": 1.0,
+                   "battiscopa": False}],
+        n_finestre_rivestiti=1, larghezza_finestra=1.0, altezza_finestra=1.0)
+    assert q["recupero_vani_riv"] == 1.0
+    assert q["pareti"] == pytest.approx(81.0 - 10.8 - 1.0 + 1.0)
+
+
+def test_la_porta_finestra_non_restituisce_la_finestra_del_bagno():
+    """La finestra del bagno contata SOLO fra i rivestiti, e una porta
+    finestra in soggiorno: dalle pareti la finestra del bagno non era mai
+    stata tolta, e la porta finestra non deve bastare a ridarla."""
+    q = quantita_finiture(
+        LOCALI_MISTI, 3.0, altezza_rivestimento=1.20,
+        aperture=[{"n": 0, "larghezza": 1.0, "altezza": 1.0,
+                   "battiscopa": False},
+                  {"n": 1, "larghezza": 1.2, "altezza": 2.5,
+                   "battiscopa": True}],
+        n_finestre_rivestiti=1, larghezza_finestra=1.0, altezza_finestra=1.0)
+    assert q["recupero_vani_riv"] == 0.0
+    assert q["pareti"] == pytest.approx(81.0 - 10.8 - 3.0)
+
+
 def test_i_rivestimenti_non_vanno_sotto_zero():
     """Dieci porte in un bagno sono un errore di battitura, non un credito."""
     q = quantita_finiture(LOCALI_MISTI, 3.0, altezza_rivestimento=1.20,
