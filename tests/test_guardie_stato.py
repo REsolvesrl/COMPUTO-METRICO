@@ -97,33 +97,71 @@ def test_le_callback_convertono_prima_di_leggere_il_progetto():
 
 # ---------------------------------------------------------------- schema 3
 
-def test_ogni_casella_si_azzera_quando_si_apre_un_progetto():
-    """Il testo della sessione precedente non deve sopravvivere all'apertura.
+def _caselle_non_riscritte(testo):
+    """Le caselle a chiave fissa che l'apertura di un progetto non riscrive.
 
-    Le caselle conservano il proprio contenuto anche quando si carica un
-    altro progetto: se non si buttano, la rilettura a inizio pagina le
-    riscrive sopra ai valori appena caricati. È il difetto per cui un
-    progetto salvato con 145.000 € di acquisto, riaperto, tornava a zero.
+    Una «_w» (numero, spunta, interruttore, tendina) va ASSEGNATA nel blocco
+    di caricamento; una «_txt» degli importi può anche solo sparire, perché
+    `campo_numero_it` la riscrive da sé a ogni disegno.
     """
     import re
-    testo = SORGENTE.read_text(encoding="utf-8-sig")
     usate = set(re.findall(r'key=f?"([A-Za-z0-9_]+_(?:w|txt))"', testo))
 
     inizio = testo.find('if "da_caricare" in st.session_state:')
     fine = testo.find("\nst.session_state.categorie", inizio)
+    assert inizio >= 0 and fine > inizio, "blocco da_caricare non trovato"
     blocco = testo[inizio:fine]
-    assert inizio > 0 and fine > inizio, "blocco da_caricare non trovato"
 
-    pulite = set(re.findall(r'"([A-Za-z0-9_]+_(?:w|txt))"', blocco))
-    # le caselle degli importi si ripuliscono in blocco, per registro
+    assegnate = set(re.findall(
+        r'st\.session_state\["([A-Za-z0-9_]+_w)"\]\s*=', blocco))
+    assegnate |= set(re.findall(
+        r'st\.session_state\.([A-Za-z0-9_]+_w)\s*=', blocco))
+    for gruppo in re.findall(
+            r'for _k in \(([^)]*)\):\s*\n\s*'
+            r'st\.session_state\[_k \+ "_w"\] =', blocco):
+        assegnate |= {n + "_w"
+                      for n in re.findall(r'"([a-z0-9_]+)"', gruppo)}
+
+    pulite_txt = set(re.findall(r'"([A-Za-z0-9_]+_txt)"', blocco))
     if "for _chiave in CAMPI_NUMERO_IT" in blocco:
-        pulite |= {c + "_txt"
-                   for c in re.findall(r'^\s{4}"([a-z_]+)": \(\d', testo,
-                                       re.M)}
-    mancanti = sorted(k for k in usate if k not in pulite)
+        pulite_txt |= {c + "_txt"
+                       for c in re.findall(r'^\s{4}"([a-z_]+)": \(\d', testo,
+                                           re.M)}
+    return sorted(
+        [k for k in usate if k.endswith("_w") and k not in assegnate]
+        + [k for k in usate if k.endswith("_txt") and k not in pulite_txt])
+
+
+def test_ogni_casella_si_riscrive_quando_si_apre_un_progetto():
+    """Il valore della sessione precedente non deve sopravvivere all'apertura.
+
+    Prima la regola era «buttarle via», ed era la metà giusta: il testo di
+    una casella non buttata riscriveva i valori appena caricati (il
+    progetto salvato con 145.000 € di acquisto che, riaperto, tornava a
+    zero). Ma buttare non basta. È la stessa trappola dello schema 1, per
+    tutte le caselle e non solo per quelle di testo: una casella buttata
+    rinasce dal suo `value=` sul server, il BROWSER si tiene quello che
+    aveva a video e al primo clic lo rimanda indietro. Migliarina, aperto
+    dopo ENI, si è ripreso così le detrazioni e i lavori facoltativi di
+    ENI, ed è stato salvato così. Scritto nello stato, il valore arriva al
+    browser come un ordine, e lui si adegua.
+    """
+    mancanti = _caselle_non_riscritte(SORGENTE.read_text(encoding="utf-8-sig"))
     assert not mancanti, (
-        "Caselle che sopravvivono all'apertura di un progetto e ne "
-        "riscriveranno i valori: " + ", ".join(mancanti))
+        "Caselle che l'apertura di un progetto non riscrive: il browser ci "
+        "rimanderà i valori del progetto di prima — " + ", ".join(mancanti))
+
+
+def test_la_guardia_delle_caselle_riconosce_la_casella_solo_buttata():
+    """Una guardia serve solo se sa accorgersi del caso che vieta."""
+    finto = (
+        'st.number_input("x", key="fin_n_w")\n'
+        'st.number_input("y", key="porta_n_w")\n'
+        'if "da_caricare" in st.session_state:\n'
+        '    st.session_state.pop("fin_n_w", None)\n'
+        '    st.session_state.porta_n_w = 3\n'
+        '\nst.session_state.categorie = []\n')
+    assert _caselle_non_riscritte(finto) == ["fin_n_w"]
 
 
 def test_la_guardia_riconosce_il_difetto_che_deve_impedire():

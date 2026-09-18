@@ -214,6 +214,61 @@ def test_il_pdf_dell_altro_progetto_non_resta_da_scaricare():
     assert "_json_pronto" not in at.session_state
 
 
+# ------------------------------------- quello che il browser si ricorda
+# Il difetto che AppTest da solo non vede: nel browser vero ogni casella si
+# tiene il valore che aveva a video e lo rimanda al server al clic dopo. Se
+# all'apertura di un progetto il server si limita a «buttare» la casella, il
+# browser non lo sa, e al primo gesto riscrive il progetto nuovo con i
+# numeri del vecchio — le detrazioni di ENI dentro Migliarina, salvate così.
+# L'unica difesa è scrivere il valore nello stato della casella: allora
+# parte verso il browser con l'ordine di adottarlo (`set_value`). Qui si
+# pretende quell'ordine da OGNI casella disegnata nel giro dell'apertura,
+# tranne quelle che non portano dati del progetto.
+
+NON_SONO_DEL_PROGETTO = (
+    "cerca_voce", "conf_", "nuova_", "nuovo_", "pdf_plan_orizzontale",
+    "prog_online_sel", "nome_salva_online", "tipo_parete", "cat_attiva",
+    "spostacat_", "scheda_attiva",
+    # le caselle di una planimetria portano nella chiave il suo numero, che
+    # all'apertura è nuovo: il browser non ha niente di vecchio da rimandare
+    "ren_", "pul_", "pg_", "pgx_")
+
+
+def _con_disegno(base, finiture, rivestito):
+    """Un progetto col bagno disegnato: servono le planimetrie perché le
+    caselle delle detrazioni compaiano."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_rivestimenti_dal_disegno import _progetto
+    disegno = _progetto(rivestito=rivestito)
+    return dict(base, piante=disegno["piante"], finiture=finiture,
+                altezza_locali=3.0)
+
+
+def test_ogni_casella_del_progetto_aperto_arriva_al_browser_come_ordine():
+    villa = _con_disegno(VILLA, {"fin_n": 0, "riv_finestre_n": 0,
+                                 "porta_n": 0}, rivestito=True)
+    casa = _con_disegno(CASA, {"fin_n": 9, "riv_finestre_n": 2,
+                               "porta_n": 5}, rivestito=True)
+    at = _apri(_avvia(), villa)
+    at.session_state["da_caricare"] = casa
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    caselle = (at.get("number_input") + at.get("checkbox") + at.get("toggle")
+               + at.get("text_area") + at.get("selectbox")
+               + at.get("text_input") + at.get("slider"))
+    non_forzate = sorted(
+        w.key for w in caselle
+        if w.key and hasattr(w.proto, "set_value")
+        and not w.key.startswith(NON_SONO_DEL_PROGETTO)
+        and not w.proto.set_value)
+    assert non_forzate == []
+    # e dentro ci sono i numeri della casa, non quelli della villa
+    assert at.number_input(key="fin_n_w").value == 9
+    assert at.number_input(key="riv_finestre_n_w").value == 2
+    assert at.toggle(key="facoltativa_Tetto_w").value is False
+
+
 # ------------------------------------- il caricamento è tutto o niente
 
 def test_un_progetto_rovinato_non_si_carica_a_meta():

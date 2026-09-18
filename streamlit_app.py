@@ -2689,16 +2689,27 @@ def riga_voce_computo(voce):
     # di calore canalizzata a soffitto…») e in una riga sola se ne leggeva
     # il primo terzo. Qui vanno a capo, su due righe; l'altezza la stringe
     # il CSS, perché Streamlit da sé non scende sotto i 68 px.
+    # ⚠️⚠️ Descrizione e unità si scrivono nello STATO della casella, non
+    # con `value=`/`index=`, come le quantità e i prezzi (campo_numero_it).
+    # Con `value=` il browser si tiene il testo che aveva: aprendo un altro
+    # progetto la voce 3.10 mostrava ancora la descrizione del primo, e al
+    # clic dopo il browser la rimandava indietro e la scriveva nel secondo.
+    # Da qui anche il resto: una descrizione svuotata torna quella del
+    # listino, invece di restare una casella bianca.
+    if st.session_state.get(f"d_{codice}_w") != descrizione:
+        st.session_state[f"d_{codice}_w"] = descrizione
     c_desc.text_area(
-        f"Descrizione {codice}", value=descrizione, key=f"d_{codice}_w",
+        f"Descrizione {codice}", key=f"d_{codice}_w",
         label_visibility="collapsed", height=68,
         on_change=scrivi_testo_voce, args=(f"d_{codice}",))
     # L'unità è una tendina, non una casella libera: le unità di un computo
     # sono sei o sette, e scriverle a mano vuol dire ritrovarsi «mq», «m2» e
     # «m²» sulla stessa stampa. In testa c'è quella di casa della categoria.
     scelte_um = unita_della_voce(voce, um)
+    if st.session_state.get(f"u_{codice}_w") != um:
+        st.session_state[f"u_{codice}_w"] = um
     c_um.selectbox(
-        f"Unità {codice}", scelte_um, index=scelte_um.index(um),
+        f"Unità {codice}", scelte_um,
         key=f"u_{codice}_w", label_visibility="collapsed",
         on_change=scrivi_unita_voce, args=(codice,))
     campo_quantita(c_qta, codice, um)
@@ -4632,8 +4643,6 @@ if "da_caricare" in st.session_state:
     st.session_state.lavori_facoltativi = [
         c for c in (dati.get("lavori_facoltativi") or [])
         if c in listino.CATEGORIE_FACOLTATIVE]
-    for _cat in listino.CATEGORIE_FACOLTATIVE:
-        st.session_state.pop(f"facoltativa_{_cat}_w", None)
     if dati.get("voci_scelte") is None:
         # Progetto vecchio: non c'era un elenco, e le voci scritte a mano
         # erano nel computo per definizione. Con l'elenco, invece, comanda
@@ -4657,7 +4666,6 @@ if "da_caricare" in st.session_state:
     # per un filtro scelto su un altro lavoro. È lo stesso motivo per cui
     # si ripuliscono le caselle qui sopra, ed è la guardia in
     # test_guardie_stato.py ad averlo preteso.
-    st.session_state.pop("mat_filtro_w", None)
     st.session_state.versione_mat = st.session_state.get(
         "versione_mat", 0) + 1
     try:
@@ -4707,13 +4715,6 @@ if "da_caricare" in st.session_state:
     # sopra. Aprire un progetto salvato con 145.000 € di acquisto dentro una
     # sessione vuota lo riportava a zero, e i numeri sembravano non essersi
     # mai salvati.
-    for _k in ("porta_larg_w", "porta_alt_w", "porta_n_w", "porta_n_est_w",
-               "riv_alt_w", "riv_porte_n_w", "riv_finestre_n_w",
-               "fin_n_w", "fin_larg_w", "fin_alt_w", "pf_n_w",
-               "pf_larg_w", "pf_alt_w", "apert_dem_n_w", "apert_cos_n_w",
-               "apert_car_n_w", "apert_larg_w", "apert_alt_w",
-               "auto_computo_w", "iva_w"):
-        st.session_state.pop(_k, None)
     for _chiave in CAMPI_NUMERO_IT:
         st.session_state.pop(f"{_chiave}_txt", None)
     # e i segnalibri dei campi che si compilano da soli: il progetto nuovo
@@ -4745,10 +4746,6 @@ if "da_caricare" in st.session_state:
     st.session_state.pop("cat_attiva", None)
     st.session_state.pop("tipo_parete", None)
     st.session_state.pop("scala_metri", None)
-    # i comandi delle etichette devono ripartire dai valori del progetto
-    # appena aperto, non da quelli rimasti nei widget della sessione
-    for _k in ("et_font_w", "et_nome_w", "et_m2_w", "et_perim_w", "et_pct_w"):
-        st.session_state.pop(_k, None)
     # business plan
     bp_salvato = dati.get("business_plan") or {}
     for _chiave, _valore in IMPOSTAZIONI_BP.items():
@@ -4816,6 +4813,32 @@ if "da_caricare" in st.session_state:
         dati.get("mca_statistica") or "media")
     st.session_state.versione_bp += 1
     bp_ricalcola_euro()
+    # ⚠️⚠️ Le caselle del progetto si RISCRIVONO col valore appena caricato:
+    # buttarle via NON basta. Una casella buttata rinasce dal suo `value=`
+    # sul server, ma il browser si tiene quello che aveva a video e al primo
+    # clic lo rimanda indietro — e l'app lo prende per un gesto
+    # dell'utente. Così Migliarina, aperto dopo ENI, si è ripreso le
+    # detrazioni di ENI (porte e finestre a 0) e i suoi lavori facoltativi,
+    # ed è stato salvato così. Scritto nello stato, invece, il valore
+    # arriva al browser come un ordine, e lui si adegua.
+    for _k in ("porta_larg", "porta_alt", "porta_n", "porta_n_est",
+               "riv_alt", "riv_porte_n", "riv_finestre_n",
+               "fin_n", "fin_larg", "fin_alt", "pf_n", "pf_larg", "pf_alt",
+               "apert_dem_n", "apert_cos_n", "apert_car_n",
+               "apert_larg", "apert_alt", "auto_computo", "iva",
+               "et_font", "et_nome", "et_m2", "et_pct", "et_perim"):
+        st.session_state[_k + "_w"] = st.session_state[_k]
+    st.session_state.alt_locali_widget = float(st.session_state.alt_locali)
+    for _cat in listino.CATEGORIE_FACOLTATIVE:
+        st.session_state[f"facoltativa_{_cat}_w"] = (
+            _cat in st.session_state.lavori_facoltativi)
+    # la vista dei materiali riparte da tutto: un filtro scelto su un altro
+    # lavoro mostrerebbe il progetto appena aperto a metà
+    st.session_state.mat_filtro_w = FILTRO_TUTTI
+    # e le voci proposte dal disegno ripartono da quelle di norma: la scelta
+    # non si salva col progetto, e quella fatta sull'altro non c'entra
+    for _cod, _grandezza, _acceso in VOCI_DA_SUPERFICI:
+        st.session_state[f"supvoce_{_cod}"] = _acceso
     # Fatto: da qui in poi il progetto in tavola è tutto e solo questo.
     st.session_state.pop("da_caricare", None)
 
@@ -6825,8 +6848,14 @@ def scheda_planimetria():
             soffitti_m2 = q["soffitti"]
 
             detr_ml = q["detr_porte_ml"] + q["detr_aperture_ml"]
-            detr_m2 = (q["detr_porte_m2"] + q["detr_aperture_m2"]
-                       + q["detr_rivestimenti"])
+            # ⚠️ Quanto si è tolto DAVVERO: il lordo meno il netto. Sommando
+            # vani e fascia si dimenticava quello che il calcolo restituisce
+            # (la striscia di porte e finestre dei bagni, che altrimenti si
+            # toglierebbe due volte), e la didascalia non tornava col numero
+            # che stava sopra: portando le finestre dei bagni da 0 a 2 le
+            # pareti crescevano di 2,52 m² e «vani e rivestimenti» restava
+            # fermo a 55,22.
+            detr_m2 = round(q["pareti_lorde"] - q["pareti"], 2)
             t1, t2, t3, t4 = st.columns(4)
             t1.metric("Pavimento (interni)", f"{numero_it(pav_m2, 2)} m²")
             t2.metric("Battiscopa", f"{numero_it(batt_m, 2)} m",

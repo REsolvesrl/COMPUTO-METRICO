@@ -14,3 +14,11 @@ font = "sans serif"
 # non lo premi: si finisce per guardare una versione vecchia convinti di
 # provare quella nuova, e a inseguire difetti già corretti.
 runOnSave = true
+
+[global]
+# All'apertura di un progetto le sue caselle si riscrivono nello stato di
+# sessione (vedi il caricamento in streamlit_app.py): è l'unico modo di far
+# adottare al browser i valori nuovi. Streamlit lo segnala con un avviso
+# lungo nella finestra nera, che è innocuo ma sembra un errore — e quella
+# finestra è il posto dove si guarda quando qualcosa non va.
+disableWidgetStateDuplicationWarning = true
