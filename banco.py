@@ -27,6 +27,7 @@ from datetime import date, datetime
 import pandas as pd
 
 import archivio_locale
+from banco_disegno import DisegnoMixin, ErroreDisegno
 import calcoli
 import cantiere
 import listino
@@ -82,7 +83,7 @@ ETICHETTE_PREDEFINITE = {"font": 14, "nome": True, "m2": True,
                          "percento": True, "perimetro": True}
 
 
-class ErroreBanco(Exception):
+class ErroreBanco(ErroreDisegno):
     """Un gesto che non si può fare, con la frase da dire a chi l'ha fatto."""
 
 
@@ -354,7 +355,7 @@ def json_bytes(dati):
 # ------------------------------------------------------------------ banco
 
 
-class Banco:
+class Banco(DisegnoMixin):
     """Il progetto aperto. Uno per motore, come una sessione di Streamlit."""
 
     def __init__(self):
@@ -368,6 +369,7 @@ class Banco:
         self.ripreso = None
         self.piante_scartate = []
         self._uso_contati = set()
+        self.carica_disegno()
         self.carica_giro()
 
     # ------------------------------------------------------ progetto intero
@@ -378,6 +380,7 @@ class Banco:
         self.storia_computo = []
         self.ultimo_salvataggio = None
         self.firma_salvata = None
+        self.carica_disegno()
         self.carica_giro()
         self.giro()
 

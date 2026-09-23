@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import os
 import threading
-from datetime import datetime
 from pathlib import Path
 
 # ⚠️ **Il cantiere non tocca il lavoro vero, e non perché qualcuno si
@@ -34,6 +33,8 @@ _PROVA = Path.home() / "CME" / "prova"
 os.environ.setdefault("CME_ARCHIVIO", str(_PROVA / "progetti"))
 os.environ.setdefault("USO_DIR", str(_PROVA / "uso"))
 
+import base64  # noqa: E402
+import io  # noqa: E402
 import json  # noqa: E402
 
 import plotly  # noqa: E402
@@ -45,6 +46,7 @@ from pydantic import BaseModel  # noqa: E402
 import archivio_locale  # noqa: E402
 import esporta  # noqa: E402
 from banco import Banco, ErroreBanco  # noqa: E402
+from banco_disegno import ErroreDisegno  # noqa: E402
 from server import vista as viste  # noqa: E402
 
 RADICE = Path(__file__).resolve().parent.parent
@@ -116,7 +118,74 @@ def _elimina_listino(b):
     return "Listino personale cancellato"
 
 
+def _annulla_disegno(b):
+    fatto = b.annulla_disegno()
+    return f"Annullato: {fatto} ↩️" if fatto else None
+
+
+def _zona_al_computo(b):
+    b.zona_al_computo()
+    return "Aggiunta al computo ✔"
+
+
+def _usa_pulizia(b):
+    b.usa_pulizia()
+    return "Planimetria pulita ✔"
+
+
+def _rileva(b):
+    return f"Trovate {b.rileva_stanze()} stanze ✔"
+
+
+def _superficie_al_computo(b):
+    b.superficie_commerciale_al_computo()
+    return "Superficie commerciale aggiunta al computo ✔"
+
+
+def _scrivi_dal_disegno(b):
+    n = b.scrivi_quantita_dal_disegno()
+    return f"{n} voci aggiornate nel computo ✔" if n else None
+
+
+GESTI_DISEGNO = {
+    "scegli_pianta": lambda b, indice: b.scegli_pianta(indice),
+    "togli_pianta": lambda b, indice: b.togli_pianta(indice),
+    "rinomina_pianta": lambda b, nome: b.rinomina_pianta(nome),
+    "categoria_nuove": lambda b, nome: b.scegli_categoria_nuove(nome),
+    "tipo_parete": lambda b, codice: b.scegli_tipo_parete(codice),
+    "evento_tela": lambda b, evento: b.evento_tela(evento),
+    "annulla_disegno": _annulla_disegno,
+    "imposta_scala": lambda b, metri: b.imposta_scala(metri),
+    "annulla_scala": lambda b: b.annulla_scala(),
+    "nome_zona": lambda b, nome: b.nome_zona(nome),
+    "categoria_zona": lambda b, categoria: b.categoria_zona(categoria),
+    "zona_al_computo": _zona_al_computo,
+    "elimina_zona": lambda b: b.elimina_zona(),
+    "tipo_parete_sel": lambda b, codice: b.tipo_parete_sel(codice),
+    "lunghezza_parete": lambda b, metri: b.lunghezza_parete(metri),
+    "elimina_parete": lambda b: b.elimina_parete(),
+    "prova_pulizia": lambda b, forza: b.prova_pulizia(forza),
+    "usa_pulizia": _usa_pulizia,
+    "scarta_pulizia": lambda b: b.scarta_pulizia(),
+    "ripristina_originale": lambda b: b.ripristina_originale(),
+    "rileva_stanze": _rileva,
+    "annulla_rilevamento": lambda b: b.annulla_rilevamento(),
+    "etichette": lambda b, campo, valore: b.imposta_etichette(campo, valore),
+    "riporta_etichette": lambda b: b.riporta_etichette(),
+    "superficie_al_computo": _superficie_al_computo,
+    "altezza": lambda b, metri: b.imposta_altezza(metri),
+    "spunta_locale": lambda b, pianta, zona, campo, valore:
+        b.spunta_locale(pianta, zona, campo, valore),
+    "finitura": lambda b, campo, valore: b.imposta_finitura(campo, valore),
+    "aggancia": lambda b, acceso: b.aggancia_al_disegno(acceso),
+    "voce_dal_disegno": lambda b, codice, acceso:
+        b.spunta_voce_dal_disegno(codice, acceso),
+    "scrivi_dal_disegno": _scrivi_dal_disegno,
+}
+
+
 GESTI = {
+    **GESTI_DISEGNO,
     "salva": _salva,
     "apri": lambda b, nome: b.apri(nome),
     "apri_versione": _apri_versione,
@@ -195,7 +264,7 @@ def gesto(corpo: Gesto) -> dict:
             testo = funzione(BANCO, **corpo.argomenti)
             if testo:
                 esito = {"tipo": "ok", "testo": testo}
-        except ErroreBanco as errore:
+        except ErroreDisegno as errore:
             esito = {"tipo": "errore", "testo": str(errore)}
         except TypeError as errore:
             raise HTTPException(400, f"Gesto «{corpo.nome}»: {errore}")
@@ -216,6 +285,61 @@ async def apri_file(file: UploadFile) -> dict:
     with CHIAVE:
         BANCO.carica(dati)
         return {"vista": _vista(), "esito": None}
+
+
+@app.post("/api/planimetrie")
+async def carica_planimetria(file: UploadFile) -> dict:
+    """Una planimetria nuova: PNG, JPG o PDF (una per pagina)."""
+    contenuto = await file.read()
+    with CHIAVE:
+        esito = None
+        try:
+            BANCO.aggiungi_planimetrie(contenuto, file.filename or "pianta")
+        except ErroreDisegno as errore:
+            esito = {"tipo": "errore", "testo": str(errore)}
+        BANCO.giro()
+        return {"vista": _vista(), "esito": esito}
+
+
+def _jpeg(img, qualita=85):
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=qualita)
+    return buffer.getvalue()
+
+
+@app.get("/api/piante/{indice}/immagine")
+def immagine_pianta(indice: int):
+    """L'immagine della pianta. L'indirizzo porta l'impronta dell'immagine,
+    quindi il browser la può tenere: se cambia (pulizia), cambia indirizzo."""
+    with CHIAVE:
+        try:
+            b64 = BANCO.dati["piante"][indice]["immagine"]
+        except IndexError:
+            raise HTTPException(404, "Planimetria inesistente")
+    return Response(base64.b64decode(b64), media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=31536000, immutable"})
+
+
+@app.get("/api/piante/{indice}/miniatura")
+def miniatura_pianta(indice: int):
+    with CHIAVE:
+        try:
+            img = BANCO.immagine(indice).copy()
+        except IndexError:
+            raise HTTPException(404, "Planimetria inesistente")
+    img.thumbnail((240, 240))
+    return Response(_jpeg(img), media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=31536000, immutable"})
+
+
+@app.get("/api/anteprima_pulizia")
+def anteprima_pulizia():
+    with CHIAVE:
+        a = BANCO.anteprima_pulizia
+        if not a:
+            raise HTTPException(404, "Nessuna anteprima")
+        return Response(_jpeg(a["img"]), media_type="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
 
 
 def _file(contenuto, nome, tipo):
@@ -246,6 +370,11 @@ def scarica(che_cosa: str):
         if che_cosa == "csv":
             return _file(esporta.csv_computo(b), b.nome_file("csv"),
                          "text/csv")
+        if che_cosa in ("pdf_planimetrie", "pdf_planimetrie_orizzontale"):
+            return _file(b.pdf_planimetrie(
+                orizzontale=che_cosa.endswith("orizzontale")),
+                b.nome_file("pdf").replace(".pdf", "_planimetrie.pdf"),
+                "application/pdf")
         if che_cosa == "allegato_materiali":
             return _file(esporta.pdf_allegato_materiali(b),
                          b.nome_file("pdf").replace(
@@ -262,6 +391,14 @@ def plotly_js() -> FileResponse:
     versione per forza, e nessuna copia da tenere allineata a mano."""
     return FileResponse(PLOTLY_JS, media_type="text/javascript")
 
+
+# Il visualizzatore delle planimetrie è quello del programma vecchio, così
+# com'è: cme_viewer/frontend parla il protocollo dei componenti Streamlit
+# (postMessage), e la pagina nuova lo parla uguale. Nessuna copia da tenere
+# allineata: ogni correzione fatta là vale anche qui.
+TELA = RADICE / "cme_viewer" / "frontend"
+if TELA.is_dir():
+    app.mount("/tela", StaticFiles(directory=TELA, html=True), name="tela")
 
 if WEB.is_dir():
     app.mount("/statico", StaticFiles(directory=WEB), name="statico")

@@ -577,3 +577,37 @@ table.tabella td.num, table.tabella th.num { text-align: right;
 
 /* le schede in costruzione */
 .in-costruzione .cme-vuoto h3 { color: var(--ottone); }
+
+/* ======================================================== LA PLANIMETRIA */
+
+/* La tela è il pezzo vero appoggiato sul piano da lavoro: fondo rialzato e
+   contorno d'ottone, il contrasto più alto della scheda. */
+.tela {
+  background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  padding: .5rem; margin-bottom: .85rem;
+}
+.tela-cornice { display: block; width: 100%; border: 0; }
+/* sotto la tela i campioni sono sei in fila: la cifra scende di taglia */
+.totali-tela .metrica { padding: .5rem .55rem .55rem; }
+.totali-tela .metrica .valore { font-size: 1.45rem; }
+.totali-tela .metrica .nome { font-size: .64rem; letter-spacing: .08em; }
+/* le schede «→ superficie» dei muri stanno in fila anche senza detrazione */
+.muri .metrica { min-height: 114px; }
+/* I pannelli dei comandi stanno attorno in cemento, mai in competizione
+   col disegno. */
+.pannello-cemento {
+  border: 1px solid color-mix(in srgb, var(--cemento) 55%, transparent);
+  background: color-mix(in srgb, var(--cemento) 9%, transparent);
+  padding: .75rem .9rem .35rem; margin-bottom: .75rem;
+}
+.pannello-cemento .campo { margin-bottom: .6rem; }
+.legenda { font-size: 16px; margin: 1rem 0; }
+.legenda .dot, .dot {
+  display: inline-block; width: 12px; height: 12px; margin-right: 5px;
+  vertical-align: -1px;
+}
+.cursore { display: flex; align-items: center; gap: 12px; }
+.cursore input[type="range"] { flex: 1; accent-color: var(--ottone); }
+.cursore b { min-width: 3ch; text-align: right; color: var(--ottone); }
+.col-piante { min-width: 110px; }

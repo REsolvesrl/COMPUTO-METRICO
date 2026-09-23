@@ -11,6 +11,7 @@ import { computed, createApp, defineComponent, onMounted, ref, watch } from "vue
 import { Avviso, CampioneVuoto } from "./componenti.js";
 import { SchedaComputo } from "./computo.js";
 import { SchedaMateriali } from "./materiali.js";
+import { SchedaPlanimetria } from "./planimetria.js";
 import { caricaVista, gesto, stato } from "./rete.js";
 
 const SCHEDE = [
@@ -70,7 +71,7 @@ const Testata = defineComponent({
 });
 
 const App = defineComponent({
-  components: { Testata, SchedaComputo, SchedaMateriali, InCostruzione, Avviso },
+  components: { Testata, SchedaComputo, SchedaMateriali, SchedaPlanimetria, InCostruzione, Avviso },
   setup() {
     const scheda = ricorda("cme_scheda", "computo");
     const sotto = {
@@ -104,6 +105,7 @@ const App = defineComponent({
     </nav>
     <SchedaComputo v-if="scheda === 'computo' && sotto.computo.value === 'il_computo'" />
     <SchedaMateriali v-else-if="scheda === 'computo'" />
+    <SchedaPlanimetria v-else-if="scheda === 'planimetria'" />
     <InCostruzione v-else :nome="nomeSotto" />
   </template>
   <Avviso v-else-if="stato.errore" tipo="errore">{{ stato.errore }}</Avviso>

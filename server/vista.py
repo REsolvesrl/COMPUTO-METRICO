@@ -20,6 +20,7 @@ from banco import Banco, serie_della_categoria, unita_della_voce, \
     unita_per_categoria
 from costanti import COLORI_CATEGORIE, OTTONE, UM_A_CORPO, UM_A_PASSI
 from formato import colore_testo_su
+from server.vista_disegno import vista_planimetria
 from tabelle import EMOJI_CAPITOLO, EMOJI_STATO
 
 RADICE = Path(__file__).resolve().parent.parent
@@ -201,4 +202,5 @@ def vista(b: Banco):
         "archivio": archivio(b),
         "computo": computo(b),
         "materiali": vista_materiali(b),
+        "planimetria": vista_planimetria(b),
     }

@@ -113,3 +113,25 @@ def test_i_materiali_tornano_normalizzati(client):
     righe = r["vista"]["materiali"]["righe"]
     assert [m["descrizione"] for m in righe] == ["Lavabo"]
     assert righe[0]["stato"] == "Da ordinare"
+
+
+def test_una_planimetria_si_carica_e_si_vede(client):
+    import io
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new("RGB", (300, 200), "white").save(buffer, format="PNG")
+    r = client.post("/api/planimetrie",
+                    files={"file": ("terra.png", buffer.getvalue(), "image/png")})
+    pl = r.json()["vista"]["planimetria"]
+    assert [p["nome"] for p in pl["piante"]] == ["terra"]
+    assert client.get(pl["tela"]["src"]).headers["content-type"] == "image/jpeg"
+    assert client.get("/api/piante/0/miniatura").status_code == 200
+    assert client.get("/api/piante/7/immagine").status_code == 404
+    r = client.get("/api/scarica/pdf_planimetrie")
+    assert r.content[:4] == b"%PDF"
+
+
+def test_la_tela_e_quella_del_programma_vecchio(client):
+    r = client.get("/tela/index.html")
+    assert r.status_code == 200 and "streamlit-component-lib.js" in r.text
+    assert client.get("/tela/main.js").status_code == 200
