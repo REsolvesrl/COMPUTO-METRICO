@@ -238,12 +238,15 @@ def vista_planimetria(b):
                        if z["categoria"] in CATEGORIE_SOLO_COMPUTO])
          for p in piante], perc)
     # La superficie REALE è quella che si calpesta: le stanze interne più
-    # le pertinenze, ognuna per intero. Il perimetro commerciale ne resta
-    # fuori: è un contorno che le racchiude già, e sommarlo le conterebbe
-    # due volte. (Nel vecchio era il contrario — perimetro più pertinenze —
-    # e l'utente l'ha corretta il 23/09/2026.)
-    _, reale, _, _ = geo.riepilogo_superfici(piante, perc,
-                                             escludi=CATEGORIE_INVOLUCRO)
+    # le pertinenze calpestabili, ognuna per intero. Restano fuori il
+    # perimetro commerciale (è un contorno che le racchiude già, e sommarlo
+    # le conterebbe due volte) e i giardini, MAI calpestabili in questo
+    # conto, qualunque sia il nome della loro categoria. (Nel vecchio era
+    # perimetro più pertinenze: l'utente l'ha corretta il 23/09/2026.)
+    giardini = [c["nome"] for c in categorie
+                if "giardino" in c["nome"].lower()]
+    _, reale, _, _ = geo.riepilogo_superfici(
+        piante, perc, escludi=tuple(CATEGORIE_INVOLUCRO) + tuple(giardini))
     ha_interne = any(z["categoria"] in CATEGORIE_SOLO_COMPUTO
                      for p in piante for z in p["zone"])
     ha_perimetro = any(z["categoria"] in CATEGORIE_INVOLUCRO

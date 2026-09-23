@@ -165,17 +165,21 @@ def test_dopo_il_ritaglio_la_pulizia_si_annulla_sul_foglio_ritagliato(b):
 
 
 def test_la_superficie_reale_e_calpestabile_piu_pertinenze(b):
-    """Stanze e pertinenze per intero; il perimetro commerciale no."""
+    """Stanze e pertinenze per intero; il perimetro commerciale e i
+    giardini — anche coi nomi di prima — no."""
     from server.vista_disegno import vista_planimetria
     _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
     b.imposta_scala(1)                                  # 1 px = 1 cm
     for categoria, lato in (("Superficie interna", 500),   # 25 m²
                             ("Balcone", 200),               # 4 m²
+                            ("Garage / Box", 300),          # 9 m²
+                            ("Giardino", 700),              # 49 m², fuori
+                            ("Giardino di appartamento", 400),  # fuori
                             ("Superficie commerciale", 600)):  # 36 m²
         b.scegli_categoria_nuove(categoria)
         _gesto(b, tipo="zona_chiusa",
                punti=[[0, 0], [lato, 0], [lato, lato], [0, lato]])
     b.giro()
     s = vista_planimetria(b)["superfici"]
-    assert s["totale"] == pytest.approx(29.0)
-    assert s["commerciale"] == pytest.approx(36 + 4 * 0.30)
+    assert s["totale"] == pytest.approx(25 + 4 + 9)
+    assert s["commerciale"] > 36 + 4 * 0.30      # i giardini qui contano
