@@ -8,7 +8,7 @@
 // ripetono solo dove la pagina nuova fa diversamente.
 import { computed, defineComponent, reactive, ref } from "vue";
 import { Avviso, CampoNumero, CampoPassi, CampoTesto, Grafico, Interruttore,
-         Pannello, Popover, Tabella, Tendina } from "./componenti.js";
+         Pannello, Popover, Scorre, Tabella, Tendina } from "./componenti.js";
 import { dataIt, euro, numeroIt } from "./formato.js";
 import { apriFile, gesto, scarica, stato } from "./rete.js";
 
@@ -188,7 +188,7 @@ const RigaVoce = defineComponent({
 
 // ----------------------------------------------------- scheda categoria
 const SchedaCategoria = defineComponent({
-  components: { RigaVoce },
+  components: { RigaVoce, Scorre },
   props: { cat: Object, categorie: Array },
   setup(props) {
     const aperta = computed(() => aperte.computo.has(props.cat.nome));
@@ -208,7 +208,7 @@ const SchedaCategoria = defineComponent({
       <span class="nome-cat" :class="classeNome">{{ aperta ? '▾' : '▸' }} {{ cat.nome }}</span>
       <span class="totale-cat">{{ euro(cat.totale) }}</span>
     </button>
-    <div v-if="aperta" class="righe-voci">
+    <Scorre><div v-if="aperta" class="righe-voci">
       <template v-if="cat.voci.length">
         <div class="riga-voce intestazione">
           <span>Cod.</span><span>Voce</span><span>U.M.</span><span>Quantità</span><span>Prezzo €</span>
@@ -218,7 +218,7 @@ const SchedaCategoria = defineComponent({
       </template>
       <p v-else class="didascalia grigio" style="padding:.3rem 0">Nessuna voce in questa categoria.
         Prendile dal pool in fondo alla pagina.</p>
-    </div>
+    </div></Scorre>
   </section>`,
 });
 
@@ -272,6 +272,7 @@ const AggiungiVoce = defineComponent({
 
 // ------------------------------------------------------------ il pool
 const Pool = defineComponent({
+  components: { Scorre },
   setup() {
     const c = computed(() => stato.vista.computo);
     const termine = ref("");
@@ -310,7 +311,7 @@ const Pool = defineComponent({
         <span :class="colore(cat.md)">{{ aperta(cat.nome) ? '▾' : '▸' }} {{ cat.nome }}</span>
         <span class="grigio"> · {{ cat.disponibili.length }}</span>
       </button>
-      <template v-if="aperta(cat.nome)">
+      <Scorre><div v-if="aperta(cat.nome)">
         <div v-for="voce in cat.disponibili" :key="voce.codice" class="voce-pool">
           <button class="prendi" title="Porta la voce nel computo"
                   @click="gesto('porta', {codice: voce.codice}, {zitto: true})">＋</button>
@@ -320,7 +321,7 @@ const Pool = defineComponent({
           <button class="cestina" title="Togli la voce dal pool di questo progetto (si rimette dal fondo)"
                   @click="gesto('scarta', {codice: voce.codice}, {zitto: true})">🗑</button>
         </div>
-      </template>
+      </div></Scorre>
     </template>
     <div v-if="c.scartate" class="colonne centro resta" style="margin:8px 0">
       <p class="didascalia grigio" style="flex:4;margin:0">🗑 {{ c.scartate }}

@@ -125,3 +125,40 @@ def test_togliere_una_pianta_non_lascia_la_selezione_fuori_misura(b):
 def test_il_pdf_delle_planimetrie_si_stampa(b):
     assert b.pdf_planimetrie()[:4] == b"%PDF"
     assert b.pdf_planimetrie(orizzontale=True)[:4] == b"%PDF"
+
+
+def test_il_ritaglio_sposta_il_disegno_e_non_cambia_le_misure(b):
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
+    b.imposta_scala(1)
+    b.scegli_categoria_nuove("Superficie interna")
+    _gesto(b, tipo="zona_chiusa",
+           punti=[[200, 100], [500, 100], [500, 400], [200, 400]])
+    _gesto(b, tipo="parete", p1=[200, 100], p2=[500, 100])
+    prima = b.grandezze()
+    b.ritaglia(150, 50, 700, 550)
+    pianta = b.dati["piante"][0]
+    assert b.immagine(0).size == (550, 500)
+    assert pianta["zone"][0]["punti"][0] == [50.0, 50.0]
+    assert pianta["pareti"][0]["p2"] == [350.0, 50.0]
+    assert pianta["mpp"] == pytest.approx(0.01)
+    assert b.grandezze() == prima
+    b.annulla_ritaglio()
+    assert b.immagine(0).size == (800, 600)
+    assert pianta["zone"][0]["punti"][0] == [200.0, 100.0]
+
+
+def test_un_ritaglio_troppo_piccolo_o_di_tutto_il_foglio_non_si_fa(b):
+    with pytest.raises(ErroreDisegno):
+        b.ritaglia(0, 0, 20, 20)
+    with pytest.raises(ErroreDisegno):
+        b.ritaglia(0, 0, 800, 600)
+    with pytest.raises(ErroreDisegno):
+        b.annulla_ritaglio()
+
+
+def test_dopo_il_ritaglio_la_pulizia_si_annulla_sul_foglio_ritagliato(b):
+    b.prova_pulizia(1.0)
+    b.usa_pulizia()
+    b.ritaglia(100, 100, 500, 400)
+    b.ripristina_originale()
+    assert b.immagine(0).size == (400, 300)

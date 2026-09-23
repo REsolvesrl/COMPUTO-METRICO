@@ -14,6 +14,7 @@ from pathlib import Path
 
 import archivio_locale
 import grafici
+from server.tema_grafici import con_tema
 import listino
 import materiali
 from banco import Banco, serie_della_categoria, unita_della_voce, \
@@ -28,8 +29,9 @@ RADICE = Path(__file__).resolve().parent.parent
 
 
 def _figura(fig):
-    """Una figura Plotly come la vuole Plotly.js nel browser."""
-    return json.loads(fig.to_json())
+    """Una figura Plotly come la vuole Plotly.js nel browser, col tema che
+    le metteva Streamlit (vedi tema_grafici.py)."""
+    return json.loads(con_tema(fig).to_json())
 
 
 def versione_codice():

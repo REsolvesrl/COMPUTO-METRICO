@@ -48,6 +48,101 @@ const Tela = defineComponent({
                      :style="{height: altezza + 'px'}" title="Planimetria"></iframe>`,
 });
 
+// ------------------------------------------------------------ il ritaglio
+// Il foglio intero, con un riquadro da trascinare: dentro lo sposta, dagli
+// angoli lo allarga o lo stringe, fuori ne traccia uno nuovo. Quello che
+// resta fuori è in ombra: è la parte che verrà tagliata via. Le misure
+// viaggiano in pixel del disegno, le stesse di zone e muri.
+const Ritaglio = defineComponent({
+  props: { src: String, larghezza: Number, altezza: Number, annullabili: Number },
+  setup(props) {
+    const cornice = ref(null);
+    const r = ref({ x0: 0, y0: 0, x1: props.larghezza, y1: props.altezza });
+    watch(() => [props.src, props.larghezza, props.altezza], () => {
+      r.value = { x0: 0, y0: 0, x1: props.larghezza, y1: props.altezza };
+    });
+    const intero = computed(() => r.value.x0 <= 0 && r.value.y0 <= 0
+      && r.value.x1 >= props.larghezza && r.value.y1 >= props.altezza);
+    const pct = (v, tot) => `${(v / tot) * 100}%`;
+    const stile = computed(() => ({
+      left: pct(Math.min(r.value.x0, r.value.x1), props.larghezza),
+      top: pct(Math.min(r.value.y0, r.value.y1), props.altezza),
+      width: pct(Math.abs(r.value.x1 - r.value.x0), props.larghezza),
+      height: pct(Math.abs(r.value.y1 - r.value.y0), props.altezza),
+    }));
+    let presa = null;
+    function punto(ev) {
+      const b = cornice.value.getBoundingClientRect();
+      return [Math.max(0, Math.min(props.larghezza, (ev.clientX - b.left) / b.width * props.larghezza)),
+              Math.max(0, Math.min(props.altezza, (ev.clientY - b.top) / b.height * props.altezza))];
+    }
+    function giu(ev, modo) {
+      ev.preventDefault();
+      const [x, y] = punto(ev);
+      presa = { modo, x, y, da: { ...r.value } };
+      if (modo === "nuovo") r.value = { x0: x, y0: y, x1: x, y1: y };
+      window.addEventListener("pointermove", muovi);
+      window.addEventListener("pointerup", su, { once: true });
+    }
+    function muovi(ev) {
+      if (!presa) return;
+      const [x, y] = punto(ev);
+      const d = presa.da, dx = x - presa.x, dy = y - presa.y;
+      if (presa.modo === "nuovo") r.value = { ...r.value, x1: x, y1: y };
+      else if (presa.modo === "sposta") {
+        const w = d.x1 - d.x0, h = d.y1 - d.y0;
+        const x0 = Math.max(0, Math.min(props.larghezza - w, d.x0 + dx));
+        const y0 = Math.max(0, Math.min(props.altezza - h, d.y0 + dy));
+        r.value = { x0, y0, x1: x0 + w, y1: y0 + h };
+      } else {
+        const n = { ...d };
+        if (presa.modo.includes("o")) n.x0 = x;   // ovest
+        if (presa.modo.includes("e")) n.x1 = x;   // est
+        if (presa.modo.includes("n")) n.y0 = y;
+        if (presa.modo.includes("s")) n.y1 = y;
+        r.value = n;
+      }
+    }
+    function su() {
+      window.removeEventListener("pointermove", muovi);
+      presa = null;
+      const v = r.value;
+      r.value = { x0: Math.min(v.x0, v.x1), y0: Math.min(v.y0, v.y1),
+                  x1: Math.max(v.x0, v.x1), y1: Math.max(v.y0, v.y1) };
+    }
+    onBeforeUnmount(() => window.removeEventListener("pointermove", muovi));
+    function ritaglia() {
+      const v = r.value;
+      gesto("ritaglia", { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1 }, { zitto: true });
+    }
+    function tutto() { r.value = { x0: 0, y0: 0, x1: props.larghezza, y1: props.altezza }; }
+    const misura = computed(() => `${Math.round(Math.abs(r.value.x1 - r.value.x0))} × `
+      + `${Math.round(Math.abs(r.value.y1 - r.value.y0))} px`);
+    return { cornice, stile, giu, ritaglia, tutto, intero, misura, gesto };
+  },
+  template: `
+  <div>
+    <p class="didascalia">Toglie i margini del foglio — il cartiglio, i bordi, le scritte fuori dal disegno —
+      così la tela lavora solo sulla pianta. Trascina il riquadro: dentro lo sposti, dagli angoli lo allarghi,
+      fuori ne tracci uno nuovo. <b>La scala resta valida</b>, e zone, muri ed etichette già disegnati si spostano
+      col foglio.</p>
+    <div class="ritaglio" ref="cornice" @pointerdown.self="giu($event, 'nuovo')">
+      <img :src="src" alt="" draggable="false" @pointerdown="giu($event, 'nuovo')">
+      <div class="riquadro" :style="stile" @pointerdown.stop="giu($event, 'sposta')">
+        <span v-for="a in ['no', 'ne', 'so', 'se']" :key="a" class="angolo" :class="a"
+              @pointerdown.stop="giu($event, a)"></span>
+      </div>
+    </div>
+    <div class="colonne centro resta" style="margin-top:12px">
+      <button class="bottone primario" style="flex:1" :disabled="intero" @click="ritaglia">✂️ Ritaglia ({{ misura }})</button>
+      <button class="bottone" style="flex:1" :disabled="intero" @click="tutto">Tutto il foglio</button>
+      <button v-if="annullabili" class="bottone" style="flex:1" @click="gesto('annulla_ritaglio', {}, {zitto: true})">
+        ↩️ Annulla il ritaglio</button>
+      <span v-else style="flex:1"></span>
+    </div>
+  </div>`,
+});
+
 // il cursore (st.slider)
 const Cursore = defineComponent({
   props: { valore: Number, minimo: Number, massimo: Number, passo: Number,
@@ -71,7 +166,7 @@ const Cursore = defineComponent({
 
 // ------------------------------------------------------------ la scheda
 export const SchedaPlanimetria = defineComponent({
-  components: { Tela, Cursore, Avviso, CampioneVuoto, CampoNumero, CampoPassi, CampoTesto,
+  components: { Tela, Cursore, Ritaglio, Avviso, CampioneVuoto, CampoNumero, CampoPassi, CampoTesto,
                 Interruttore, Metrica, Pannello, Tabella, Tendina },
   setup() {
     const p = computed(() => stato.vista.planimetria);
@@ -215,6 +310,11 @@ export const SchedaPlanimetria = defineComponent({
             <button class="bottone" style="flex:1" @click="g('elimina_parete')">🗑 Elimina</button>
           </div>
         </template>
+
+        <Pannello titolo="✂️ Ritaglia la planimetria (togli i margini del foglio)">
+          <Ritaglio :src="p.tela.src" :larghezza="p.ritaglio.larghezza" :altezza="p.ritaglio.altezza"
+                    :annullabili="p.ritaglio.annullabili" />
+        </Pannello>
 
         <Pannello titolo="🧹 Pulisci la planimetria (togli le scritte)">
           <p class="didascalia">Cancella nomi dei locali, quote e simboli ridipingendoli con il fondo del foglio: i

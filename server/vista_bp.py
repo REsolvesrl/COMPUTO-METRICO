@@ -11,6 +11,7 @@ import json
 
 import fattibilita
 import grafici
+from server.tema_grafici import con_tema
 import merito
 import storico
 import cantiere as cantiere_mod
@@ -22,7 +23,7 @@ from tabelle import EMOJI_CATEGORIA
 
 
 def _figura(fig):
-    return json.loads(fig.to_json())
+    return json.loads(con_tema(fig).to_json())
 
 
 def _quota_cantiere(righe):

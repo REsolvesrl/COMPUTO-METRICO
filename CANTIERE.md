@@ -141,8 +141,9 @@ arrivano qui con un merge. Chi cambia una costante là la cambia anche in
 | ✅ | ↩️ Annulla del disegno, con l'avviso quando si porta via la scala |
 | 🟡 | la scala: il segmento e la misura reale |
 | 🟡 | zona selezionata: nome, categoria, ➕ al computo, elimina; muro selezionato: tipo, lunghezza, elimina |
+| ✅ | ✂️ Ritaglia la planimetria (nuovo): toglie i margini del foglio, il disegno segue, si annulla |
 | 🟡 | 🧹 Pulisci la planimetria: prova, anteprima affiancata, usa, scarta, ripristina l'originale |
-| 🟡 | 🪄 Rileva stanze (beta) e annulla l'ultimo rilevamento |
+| ✅ | 🪄 Rileva stanze (beta) e annulla l'ultimo rilevamento |
 | ✅ | legenda delle categorie; 🔤 etichette (carattere, cosa mostrare, riporta fuori) |
 | ✅ | 🧮 Superfici commerciali: tabella, avvisi, totali, riporta nel computo |
 | ✅ | 📏 locale per locale: altezza, spunte dei locali, porte e rivestimenti, finestre e porte finestra, le sei quantità, 🔍 il conto in chiaro |
@@ -162,15 +163,33 @@ arrivano qui con un merge. Chi cambia una costante là la cambia anche in
 | ✅ | 🏷️ MCA: comparabili con la griglia, soggetto a lavori finiti, coefficienti, taglio, sconto, salto ristrutturato/da ristrutturare, stima, dispersione, media o mediana |
 | 🟡 | 📥 usa come prezzo di vendita |
 
+### Le misure della planimetria sono quelle del vecchio
+
+[`tests/test_planimetria_come_il_vecchio.py`](tests/test_planimetria_come_il_vecchio.py)
+fa girare il vecchio e confronta, campione per campione, tutte le misure
+della scheda — i sei campioni sotto la tela, i totali delle superfici,
+pavimento, battiscopa, pareti, soffitti, pavimento esterno, rivestimenti
+con le loro detrazioni, i muri con le aperture — le voci proposte al
+computo, e le tabelle del conto in chiaro. Sui progetti veri e su tre
+varianti che accendono ogni detrazione: porte interne ed esterne,
+finestre e porte finestra; locali rivestiti con porte e finestre nella
+fascia; aperture nei muri da demolire, costruire e in cartongesso.
+
 ## Dove il nuovo fa diversamente, apposta
 
 - **Si salva col tasto**, come nel vecchio — non a ogni modifica come in
   CATASTO: ogni salvataggio mette da parte una versione e se ne tengono tre.
 - Il **.json si scarica con un clic**: niente più «📦 Prepara il file», che
   serviva solo perché Streamlit rimandava i megabyte a ogni giro.
-- Le **tabelle** (materiali, spese, SAL, MCA) hanno «＋ riga», «Copia»,
-  «Cancella» sempre in vista; un blocco copiato da Excel si incolla in una
-  cella e si distribuisce sulle altre.
+- Le **tabelle** (materiali, spese, SAL, MCA) sono vestite come quelle di
+  Streamlit, col suo carattere, e hanno la barra degli strumenti a icone
+  sempre in vista: aggiungi, copia, cancella, scarica CSV, schermo intero.
+  Un blocco copiato da Excel si incolla in una cella e si distribuisce
+  sulle altre. Mancano, rispetto al vecchio, la ricerca dentro la tabella e
+  il pulsante che nasconde le colonne.
+- Il **ritaglio della planimetria** è nuovo: il vecchio non ce l'ha più
+  (quello del 10 luglio era uno zoom, ed è diventato la rotellina).
+- Le **tendine** del computo e i riquadri si aprono scorrendo.
 - **Niente avviso «premi Invio»** sui prezzi del business plan: serviva
   perché Streamlit non applicava il numero finché non lo si confermava;
   qui il numero parte appena si esce dalla casella.

@@ -106,6 +106,7 @@ class DisegnoMixin:
         self.tipo_parete = "demolire"
         self.anteprima_pulizia = None
         self.originali = {}          # indice della pianta → immagine di prima
+        self.ritagli = {}            # indice della pianta → ritagli da annullare
         self.scala_persa = False
         self._immagini = {}          # cache: impronta → PIL
 
@@ -168,6 +169,7 @@ class DisegnoMixin:
         self._pianta(i)
         self.dati["piante"].pop(int(i))
         self.originali = {}
+        self.ritagli = {}
         self.pianta_idx = max(0, min(self.pianta_idx,
                                      len(self.dati["piante"]) - 1))
         self.sel_zona = self.sel_parete = self.scala_temp = None
@@ -396,6 +398,70 @@ class DisegnoMixin:
         if self.pianta_idx not in self.originali:
             raise ErroreDisegno("Questa planimetria non è stata pulita.")
         self._pianta()["immagine"] = self.originali.pop(self.pianta_idx)
+        self.anteprima_pulizia = None
+
+    # ------------------------------------------------------------ ritaglio
+
+    def _sposta_disegno(self, pianta, dx, dy):
+        """Zone, muri ed etichette seguono il foglio quando lo si ritaglia."""
+        def sposta(p):
+            return [float(p[0]) + dx, float(p[1]) + dy]
+        for zona in pianta["zone"]:
+            zona["punti"] = [sposta(p) for p in zona["punti"]]
+            if zona.get("etichetta_pos"):
+                zona["etichetta_pos"] = sposta(zona["etichetta_pos"])
+        for parete in pianta["pareti"]:
+            parete["p1"], parete["p2"] = sposta(parete["p1"]), sposta(parete["p2"])
+            if parete.get("etichetta_pos"):
+                parete["etichetta_pos"] = sposta(parete["etichetta_pos"])
+
+    def ritaglia(self, x0, y0, x1, y1):
+        """Taglia via i margini del foglio (cartiglio, bordi, quote fuori).
+
+        Si ritaglia l'immagine e basta: i pixel restano della stessa misura,
+        quindi la scala resta valida; zone, muri ed etichette già disegnati
+        si spostano col foglio. Si può annullare, un ritaglio alla volta.
+        """
+        pianta = self._pianta()
+        i = self.pianta_idx
+        img = self.immagine(i)
+        x0, x1 = sorted((int(round(float(x0))), int(round(float(x1)))))
+        y0, y1 = sorted((int(round(float(y0))), int(round(float(y1)))))
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(img.width, x1), min(img.height, y1)
+        if x1 - x0 < 50 or y1 - y0 < 50:
+            raise ErroreDisegno("Il riquadro è troppo piccolo: almeno 50 × 50 "
+                                "pixel del disegno.")
+        if (x0, y0, x1, y1) == (0, 0, img.width, img.height):
+            raise ErroreDisegno("Il riquadro prende tutto il foglio: non c'è "
+                                "niente da ritagliare.")
+        self.ritagli.setdefault(i, []).append(
+            {"immagine": pianta["immagine"], "dx": x0, "dy": y0,
+             "originale": self.originali.get(i)})
+        pianta["immagine"] = immagine_b64(img.crop((x0, y0, x1, y1)))
+        # l'originale della pulizia si ritaglia uguale, o ripristinarlo
+        # rimetterebbe un foglio intero sotto un disegno spostato
+        if i in self.originali:
+            vecchia = Image.open(io.BytesIO(base64.b64decode(
+                self.originali[i]))).convert("RGB")
+            self.originali[i] = immagine_b64(vecchia.crop((x0, y0, x1, y1)))
+        self._sposta_disegno(pianta, -x0, -y0)
+        self.scala_temp = None
+        self.anteprima_pulizia = None
+
+    def annulla_ritaglio(self):
+        passi = self.ritagli.get(self.pianta_idx)
+        if not passi:
+            raise ErroreDisegno("Questa planimetria non è stata ritagliata.")
+        passo = passi.pop()
+        pianta = self._pianta()
+        pianta["immagine"] = passo["immagine"]
+        if passo["originale"] is not None:
+            self.originali[self.pianta_idx] = passo["originale"]
+        else:
+            self.originali.pop(self.pianta_idx, None)
+        self._sposta_disegno(pianta, passo["dx"], passo["dy"])
+        self.scala_temp = None
         self.anteprima_pulizia = None
 
     def rileva_stanze(self):

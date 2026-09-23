@@ -235,22 +235,23 @@ input[type="checkbox"] { accent-color: var(--ottone); width: 1rem;
 
 /* ---------------------------------------------------- riquadri a scatto */
 /* st.expander */
-details.pannello {
+.pannello {
   border: 1px solid var(--bordo-debole); border-radius: var(--raggio);
   margin-bottom: 16px;
 }
-details.pannello > summary {
-  list-style: none; cursor: pointer; padding: 4px 12px; min-height: 38px;
+.pannello-testa {
+  font: inherit; color: var(--travertino); background: transparent;
+  border: 0; width: 100%; text-align: left; cursor: pointer;
+  padding: 4px 12px; min-height: 38px; border-radius: var(--raggio);
   display: flex; align-items: center; gap: .6rem;
 }
-details.pannello > summary::-webkit-details-marker { display: none; }
-details.pannello > summary::before {
-  content: "›"; font-size: 1.1rem; line-height: 1; width: 1rem;
-  display: inline-block; transition: transform .15s;
+.pannello-testa:hover { color: var(--ottone); }
+.pannello-testa .segno {
+  font-size: 1.1rem; line-height: 1; width: 1rem; display: inline-block;
+  transition: transform .25s ease;
 }
-details.pannello[open] > summary::before { transform: rotate(90deg); }
-details.pannello > summary:hover { color: var(--ottone); }
-details.pannello > .corpo { padding: 8px 16px 16px; }
+.pannello.aperto > .pannello-testa .segno { transform: rotate(90deg); }
+.pannello .corpo { padding: 8px 16px 16px; }
 
 /* st.info / warning / error / success */
 .avviso {
@@ -292,9 +293,20 @@ details.pannello > .corpo { padding: 8px 16px 16px; }
   color: var(--travertino); font-weight: 700; font-size: 36px;
   line-height: 1.15; padding-bottom: 4px; overflow-wrap: anywhere;
 }
-.metrica .delta { font-size: .78rem; color: var(--md-grigio); }
-.metrica .delta.su { color: var(--md-verde); }
-.metrica .delta.giu { color: var(--md-rosso); }
+/* La detrazione sotto il numero: la pastiglia di st.metric, con la sua
+   freccia. Grigia quando è un'informazione (delta_color="off"), verde o
+   rossa quando dice se va bene o male. */
+.metrica .delta {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;
+  font-size: .78rem; line-height: 1.5; padding: 0 8px 0 6px;
+  border-radius: 999px; color: rgba(236, 231, 218, .75);
+  background: rgba(236, 231, 218, .1);
+}
+.metrica .delta .freccia { font-size: .85em; }
+.metrica .delta.su { color: var(--md-verde); background: rgba(92, 228, 136, .15); }
+.metrica .delta.giu { color: var(--md-rosso); background: rgba(255, 108, 108, .15); }
+/* in una fila di campioni, tutti alti uguali */
+.colonne:has(> .metrica), .colonne:has(> div > .metrica) { align-items: stretch; }
 
 /* il campione più pieno della pagina: il numero che si paga */
 .totale-oro {
@@ -483,7 +495,7 @@ details.pannello > .corpo { padding: 8px 16px 16px; }
 .voce-pool .cestina:hover { color: var(--cotto); }
 
 /* L'aggiunta di una voce tua sta in una scheda sua, neutra */
-.scheda-aggiungi details.pannello { margin: 0.9rem 0 0; }
+.scheda-aggiungi .pannello { margin: 0.9rem 0 0; }
 
 /* Il riepilogo costi, la colonna di destra */
 .riepilogo h4 { margin-top: 0; }
@@ -508,53 +520,87 @@ details.pannello > .corpo { padding: 8px 16px 16px; }
 }
 
 /* ---------------------------------------------- le tabelle modificabili */
-/* Al posto di st.data_editor: una tabella vera, con le caselle dentro.
-   La barra degli strumenti sta SEMPRE in vista, come l'aveva voluta il
-   vecchio per le sue (era invisibile finché non ci passavi sopra). */
-.griglia-scatola { position: relative; margin-bottom: 16px; }
-.griglia-barra {
-  display: flex; gap: 2px; justify-content: flex-end; margin-bottom: 6px;
+/* Al posto di st.data_editor, e vestite come lui: celle in ardesia chiara,
+   righe da 35 px, fili verticali fra le colonne, colonne larghe quanto il
+   contenuto, il carattere delle tabelle di Streamlit (Source Sans), e le
+   tendine che mostrano la freccia solo passandoci sopra. La barra degli
+   strumenti sta sempre in vista, come l'aveva voluta il vecchio. */
+@font-face {
+  font-family: "Source Sans";
+  src: url("/statico/vendor/SourceSans-VF.woff2") format("woff2");
+  font-weight: 200 900; font-style: normal; font-display: swap;
 }
-.griglia-barra button {
-  font: inherit; font-size: 13px; min-width: 34px; height: 34px;
-  padding: 0 10px; cursor: pointer; border-radius: 0;
-  background: var(--ardesia-chiara); color: var(--travertino);
+.griglia-scatola { position: relative; margin-bottom: 16px; }
+.griglia-barra { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.griglia-barra .attrezzi {
+  display: flex; gap: 2px; padding: 4px; background: var(--ardesia-chiara);
   border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
 }
+.griglia-barra button {
+  width: 34px; height: 34px; padding: 7px; cursor: pointer; border: 0;
+  border-radius: 0; background: transparent; color: var(--travertino);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.griglia-barra button svg { width: 20px; height: 20px; fill: currentColor; }
 .griglia-barra button:hover:not(:disabled) {
   background: var(--ottone); color: var(--ardesia);
 }
-.griglia-barra button:disabled { opacity: .4; cursor: not-allowed; }
-.griglia-scorre { overflow-x: auto; border: 1px solid var(--bordo-debole);
-                  border-radius: var(--raggio); }
+.griglia-barra button:disabled { opacity: .35; cursor: not-allowed; }
+.griglia-scorre { overflow-x: auto; border: 1px solid rgba(236, 231, 218, .1); }
 table.griglia {
-  border-collapse: collapse; width: 100%; font-size: 14px;
+  border-collapse: collapse; width: 100%; table-layout: fixed;
+  font-family: "Source Sans", "Segoe UI", sans-serif; font-size: 14px;
+  background: var(--ardesia-chiara);
 }
 table.griglia th {
   text-align: left; font-weight: 400; color: rgba(236, 231, 218, .6);
-  padding: 6px 8px; border-bottom: 1px solid var(--bordo-debole);
-  white-space: nowrap; background: rgba(36, 51, 82, .6);
+  height: 35px; padding: 0 8px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; background: #202e4b;
+  border-right: 1px solid rgba(236, 231, 218, .1);
+  border-bottom: 1px solid rgba(236, 231, 218, .1);
+}
+table.griglia th .icona-colonna {
+  display: inline-block; width: 14px; margin-right: 6px; font-size: 11px;
+  color: rgba(236, 231, 218, .45); text-align: center;
 }
 table.griglia td {
-  border-bottom: 1px solid rgba(236, 231, 218, .08); padding: 0;
-  height: 35px;
+  height: 35px; padding: 0; overflow: hidden; white-space: nowrap;
+  border-right: 1px solid rgba(236, 231, 218, .1);
+  border-bottom: 1px solid rgba(236, 231, 218, .1);
 }
-table.griglia td.sola-lettura { padding: 0 8px; white-space: nowrap; }
+table.griglia td.sola-lettura { padding: 0 8px; text-overflow: ellipsis; }
 table.griglia td.num, table.griglia th.num { text-align: right; }
+table.griglia tr:hover td { background: rgba(236, 231, 218, .03); }
 table.griglia tr.selezionata td { background: rgba(201, 169, 106, .12); }
-table.griglia tr.nuova td { background: rgba(236, 231, 218, .03); }
 table.griglia .cella {
-  font: inherit; font-size: 14px; color: var(--travertino); width: 100%;
-  height: 34px; background: transparent; border: 1px solid transparent;
-  padding: 0 8px; border-radius: 0;
+  font: inherit; color: var(--travertino); width: 100%; height: 34px;
+  background: transparent; border: 1px solid transparent; padding: 0 8px;
+  border-radius: 0; text-overflow: ellipsis;
 }
 table.griglia .cella:focus { border-color: var(--ottone); outline: none;
-                             background: var(--ardesia-chiara); }
-table.griglia select.cella { cursor: pointer; }
+                             background: var(--ardesia); }
+/* la tendina si riconosce solo quando serve, come nel vecchio */
+table.griglia select.cella {
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+table.griglia td:hover select.cella, table.griglia select.cella:focus {
+  appearance: auto; -webkit-appearance: auto;
+}
 table.griglia select.cella option { background: var(--ardesia-chiara); }
 table.griglia input[type="checkbox"] { margin: 0 8px; }
-table.griglia .scelta-riga { width: 30px; text-align: center; }
+/* la colonna che seleziona le righe: la spunta compare passandoci sopra */
+table.griglia .scelta-riga { text-align: center; }
+table.griglia td.scelta-riga input { opacity: 0; margin: 0; }
+table.griglia tr:hover td.scelta-riga input,
+table.griglia tr.selezionata td.scelta-riga input,
+table.griglia td.scelta-riga input:focus-visible { opacity: 1; }
 table.griglia a { padding: 0 8px; }
+/* schermo intero */
+.griglia-scatola.a-tutto-schermo {
+  position: fixed; inset: 16px; z-index: 60; margin: 0; padding: 12px;
+  background: var(--ardesia); overflow: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .6);
+}
 
 /* tabelle di sola lettura (st.dataframe) */
 table.tabella {
@@ -563,11 +609,12 @@ table.tabella {
 }
 table.tabella th {
   text-align: left; font-weight: 400; color: rgba(236, 231, 218, .6);
-  padding: 6px 8px; border-bottom: 1px solid var(--bordo-debole);
+  padding: 5px 8px; border-bottom: 1px solid var(--bordo-debole);
   background: rgba(36, 51, 82, .6); white-space: nowrap;
 }
-table.tabella td { padding: 6px 8px;
+table.tabella td { padding: 3px 8px; line-height: 1.45;
                    border-bottom: 1px solid rgba(236, 231, 218, .08); }
+table.tabella td input[type="checkbox"] { vertical-align: middle; margin: 0; }
 table.tabella td.num, table.tabella th.num { text-align: right;
                                              white-space: nowrap; }
 .tabella-scorre { overflow-x: auto; }
@@ -592,16 +639,17 @@ table.tabella td.num, table.tabella th.num { text-align: right;
 .totali-tela .metrica { padding: .5rem .55rem .55rem; }
 .totali-tela .metrica .valore { font-size: 1.45rem; }
 .totali-tela .metrica .nome { font-size: .64rem; letter-spacing: .08em; }
-/* le schede «→ superficie» dei muri stanno in fila anche senza detrazione */
-.muri .metrica { min-height: 114px; }
 /* I pannelli dei comandi stanno attorno in cemento, mai in competizione
    col disegno. */
 .pannello-cemento {
   border: 1px solid color-mix(in srgb, var(--cemento) 55%, transparent);
   background: color-mix(in srgb, var(--cemento) 9%, transparent);
-  padding: .75rem .9rem .35rem; margin-bottom: .75rem;
+  padding: .6rem .9rem .25rem; margin-bottom: .75rem;
 }
-.pannello-cemento .campo { margin-bottom: .6rem; }
+.pannello-cemento > p { margin-bottom: .5rem; }
+.pannello-cemento .campo { margin-bottom: .4rem; }
+/* le etichette lunghe vanno a capo: le caselle restano sulla stessa riga */
+.pannello-cemento .colonne { align-items: flex-end; }
 .legenda { font-size: 16px; margin: 1rem 0; }
 .legenda .dot, .dot {
   display: inline-block; width: 12px; height: 12px; margin-right: 5px;
@@ -685,3 +733,30 @@ table.riepilogo-spese tr.totale td {
   border-top: 2px solid var(--ottone);
 }
 table.riepilogo-spese tr.totale td:first-child { color: var(--ottone); letter-spacing: .03em; }
+
+/* ------------------------------------------------ le tendine che si aprono */
+/* Si aprono e si chiudono scorrendo, non di scatto: l'altezza la misura la
+   pagina (vedi Scorre in componenti.js), qui c'è solo il ritmo. */
+.scorre-attivo { overflow: hidden; transition: height .28s cubic-bezier(.2, .7, .3, 1),
+                 opacity .22s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .scorre-attivo { transition: none; }
+}
+
+/* il ritaglio: il foglio intero, e fuori dal riquadro l'ombra di quello
+   che verrà tagliato via */
+.ritaglio { position: relative; overflow: hidden; user-select: none;
+            touch-action: none; cursor: crosshair; line-height: 0; }
+.ritaglio img { width: 100%; display: block; pointer-events: auto; }
+.ritaglio .riquadro {
+  position: absolute; cursor: move; border: 2px solid var(--ottone);
+  box-shadow: 0 0 0 9999px rgba(10, 16, 30, .62);
+}
+.ritaglio .angolo {
+  position: absolute; width: 14px; height: 14px; background: var(--ottone);
+  border: 2px solid var(--ardesia);
+}
+.ritaglio .angolo.no { left: -8px; top: -8px; cursor: nwse-resize; }
+.ritaglio .angolo.ne { right: -8px; top: -8px; cursor: nesw-resize; }
+.ritaglio .angolo.so { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.ritaglio .angolo.se { right: -8px; bottom: -8px; cursor: nwse-resize; }

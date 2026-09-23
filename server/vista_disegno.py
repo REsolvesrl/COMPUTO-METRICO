@@ -222,6 +222,9 @@ def vista_planimetria(b):
         "rimossi": a["rimossi"] if a else 0,
         "forza": a["forza"] if a else 1.0,
         "originale": i in b.originali}
+    img = b.immagine(i)
+    fuori["ritaglio"] = {"larghezza": img.width, "altezza": img.height,
+                         "annullabili": len(b.ritagli.get(i, []))}
     r = b.ultimo_rilevamento
     fuori["rilevamento"] = len(r["ids"]) if r and r["indice"] == i else 0
 

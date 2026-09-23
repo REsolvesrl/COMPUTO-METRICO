@@ -169,6 +169,8 @@ GESTI_DISEGNO = {
     "scarta_pulizia": lambda b: b.scarta_pulizia(),
     "ripristina_originale": lambda b: b.ripristina_originale(),
     "rileva_stanze": _rileva,
+    "ritaglia": lambda b, x0, y0, x1, y1: b.ritaglia(x0, y0, x1, y1),
+    "annulla_ritaglio": lambda b: b.annulla_ritaglio(),
     "annulla_rilevamento": lambda b: b.annulla_rilevamento(),
     "etichette": lambda b, campo, valore: b.imposta_etichette(campo, valore),
     "riporta_etichette": lambda b: b.riporta_etichette(),
