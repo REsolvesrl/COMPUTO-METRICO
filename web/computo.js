@@ -8,7 +8,7 @@
 // ripetono solo dove la pagina nuova fa diversamente.
 import { computed, defineComponent, reactive, ref } from "vue";
 import { Avviso, CampoNumero, CampoPassi, CampoTesto, Grafico, Interruttore,
-         Pannello, Popover, Scorre, Tabella, Tendina } from "./componenti.js";
+         Pannello, Popover, Scelta, Scorre, Tabella, Tendina } from "./componenti.js";
 import { dataIt, euro, numeroIt } from "./formato.js";
 import { apriFile, gesto, scarica, stato } from "./rete.js";
 
@@ -141,7 +141,7 @@ const DatiProgetto = defineComponent({
 
 // ------------------------------------------------------------ una riga
 const RigaVoce = defineComponent({
-  components: { CampoNumero, CampoPassi, Popover, Tendina },
+  components: { CampoNumero, CampoPassi, Popover, Scelta, Tendina },
   props: { voce: Object, categorie: Array },
   setup(props) {
     const nuovaCategoria = ref(props.voce.categoria);
@@ -173,10 +173,8 @@ const RigaVoce = defineComponent({
     </Popover>
     <textarea class="casella" rows="1" :value="voce.descrizione" :aria-label="'Descrizione ' + voce.codice"
               @change="g('descrizione', {testo: $event.target.value})"></textarea>
-    <select class="casella" :value="voce.um" :aria-label="'Unità ' + voce.codice"
-            @change="g('unita', {um: $event.target.value})">
-      <option v-for="u in voce.unita" :key="u" :value="u">{{ u }}</option>
-    </select>
+    <Scelta classe="casella" :valore="voce.um" :opzioni="voce.unita" :etichetta="'Unità ' + voce.codice"
+            @cambia="g('unita', {um: $event})" />
     <CampoPassi v-if="voce.a_passi" :valore="voce.quantita" @cambia="g('quantita', {valore: $event})" />
     <CampoNumero v-else :valore="voce.quantita" :decimali="2" @cambia="g('quantita', {valore: $event})" />
     <CampoNumero :valore="voce.prezzo" :decimali="2" @cambia="g('prezzo', {valore: $event})" />

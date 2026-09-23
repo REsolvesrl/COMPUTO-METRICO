@@ -26,8 +26,11 @@ from server import vista
 SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 PROVA_VERA = Path.home() / "CME" / "prova" / "progetti"
 
+# ⚠️ «Superficie reale totale» NON c'è: nel nuovo è voluta diversa (le
+# stanze più le pertinenze, senza il perimetro commerciale), e la prova
+# sta in test_banco_disegno.py.
 FISSE = {"Superficie commerciale", "Pavimento", "Battiscopa", "Tinteggiatura",
-         "Muri da demolire", "Muri da costruire", "Superficie reale totale",
+         "Muri da demolire", "Muri da costruire",
          "Superficie commerciale totale", "Pavimento (interni)", "Soffitti",
          "Pavimento esterno (balconi, terrazzi)", "→ superficie"}
 PREFISSI = ("Pareti (h ", "Rivestimenti (fascia h ", "🔴 ", "🟡 ", "🟢 ")
@@ -63,7 +66,6 @@ def _dal_nuovo(dati):
         m.append((x["nome"], f"{n2(x['valore'])} {x['um']}", ""))
     s = p.get("superfici")
     if s and s["righe"]:
-        m.append(("Superficie reale totale", f"{n2(s['totale'])} m²", ""))
         m.append(("Superficie commerciale totale",
                   f"{n2(s['commerciale'])} m²", ""))
     q = p.get("quantita")

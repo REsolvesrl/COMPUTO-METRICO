@@ -3,13 +3,13 @@
 // registro delle spese, dove arrivano dalla fattura), e ne esce l'Allegato
 // 1 da firmare con l'impresa.
 import { computed, defineComponent, ref } from "vue";
-import { CampioneVuoto, Griglia, Metrica } from "./componenti.js";
+import { CampioneVuoto, Griglia, Metrica, Scelta } from "./componenti.js";
 import { gesto, scarica, stato } from "./rete.js";
 
 const TUTTI = "Tutti gli stati";
 
 export const SchedaMateriali = defineComponent({
-  components: { Griglia, Metrica, CampioneVuoto },
+  components: { Griglia, Metrica, CampioneVuoto, Scelta },
   setup() {
     const m = computed(() => stato.vista.materiali);
     const filtro = ref(TUTTI);
@@ -63,17 +63,16 @@ export const SchedaMateriali = defineComponent({
               title="Prima quello da ordinare, poi l'ordinato, in fondo il consegnato: quello che ti resta da fare in cima.">⇅ Stato</button>
       <button class="bottone" style="flex:1" @click="gesto('riordina_materiali', {criterio: 'Fornitore'}, {zitto: true})"
               title="Raggruppa per negozio — comodo quando si va a comprare. Chi non ha ancora un fornitore va in fondo.">⇅ Fornitore</button>
-      <select class="casella" style="flex:1.5" v-model="filtro" aria-label="Mostra"
-              title="Mostra solo le voci in un certo stato — per esempio solo quelle da ordinare. Mentre il filtro è attivo non si aggiungono né si cancellano righe: torna a «tutti gli stati» per farlo.">
-        <option :value="TUTTI">{{ TUTTI }}</option>
-        <option v-for="s in m.stati" :key="s.nome" :value="s.nome">{{ s.tessera }} {{ s.nome }}</option>
-      </select>
+      <Scelta style="flex:1.5" classe="casella" :valore="filtro" etichetta="Mostra"
+              :opzioni="[TUTTI, ...m.stati.map(s => ({valore: s.nome, testo: (s.tessera + ' ' + s.nome).trim()}))]"
+              title="Mostra solo le voci in un certo stato — per esempio solo quelle da ordinare. Mentre il filtro è attivo non si aggiungono né si cancellano righe: torna a «tutti gli stati» per farlo."
+              @cambia="filtro = $event" />
       <span style="flex:1.9"></span>
     </div>
     <Griglia :colonne="colonne" :righe="vista" :dinamica="indici === null" obbligatoria="descrizione"
              :nuova="nuova" @cambia="cambia" />
-    <p v-if="indici === null" class="didascalia grigio">«＋ riga» aggiunge una riga in fondo · la casella a
-      sinistra della riga la seleziona, e da lì si cancella o si copia · un blocco di celle copiato da Excel
+    <p v-if="indici === null" class="didascalia grigio">Il <b>+</b> in alto a destra aggiunge una riga · la casella a
+      sinistra della riga (compare passandoci sopra) la seleziona, e da lì si cancella o si copia · un blocco di celle copiato da Excel
       si incolla in una cella e si distribuisce sulle altre.</p>
     <p v-else class="didascalia"><span class="arancio">Filtro attivo: vedi <b>{{ indici.length }}</b> voci,
       <b>{{ nascoste }}</b> sono nascoste.</span> <span class="grigio">Le modifiche si salvano normalmente; per

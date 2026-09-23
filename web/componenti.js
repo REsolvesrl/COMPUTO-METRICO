@@ -66,6 +66,108 @@ export const Scorre = defineComponent({
   },
 });
 
+// -------------------------------------------------------- la tendina di scelta
+// Al posto della tendina del sistema, che il browser apre di scatto e non
+// si lascia vestire: questa scende sotto la casella con una dissolvenza,
+// come quella di Streamlit. Si usa anche da tastiera (frecce, Invio, Esc)
+// e si chiude cliccando fuori. L'elenco vive in fondo alla pagina
+// (Teleport), così nessuna tabella o scheda lo taglia.
+// Opzioni: stringhe, oppure {valore, testo}.
+export const Scelta = defineComponent({
+  props: { valore: [String, Number], opzioni: Array, etichetta: String,
+           classe: String, disabilitato: Boolean, vuota: Boolean },
+  emits: ["cambia"],
+  setup(props, { emit }) {
+    const aperta = ref(false);
+    const bottone = ref(null);
+    const elenco = ref(null);
+    const attiva = ref(-1);
+    const posto = ref({});
+    const voci = computed(() => [
+      ...(props.vuota ? [{ valore: "", testo: "" }] : []),
+      ...(props.opzioni || []).map((o) => (typeof o === "object" && o !== null
+        ? { valore: o.valore ?? o.testo, testo: o.testo ?? o.valore } : { valore: o, testo: o }))]);
+    const testo = computed(() => {
+      const v = voci.value.find((o) => String(o.valore) === String(props.valore ?? ""));
+      return v ? v.testo : (props.valore ?? "");
+    });
+    function colloca() {
+      if (!bottone.value) return;
+      const r = bottone.value.getBoundingClientRect();
+      const sotto = window.innerHeight - r.bottom;
+      const alto = Math.min(300, voci.value.length * 36 + 10);
+      const sopra = sotto < alto + 12 && r.top > sotto;
+      posto.value = { left: `${r.left}px`, minWidth: `${Math.max(r.width, 120)}px`,
+                      ...(sopra ? { bottom: `${window.innerHeight - r.top + 4}px`, transformOrigin: "bottom" }
+                                : { top: `${r.bottom + 4}px`, transformOrigin: "top" }) };
+    }
+    function apri() {
+      if (props.disabilitato) return;
+      colloca();
+      attiva.value = Math.max(0, voci.value.findIndex((o) => String(o.valore) === String(props.valore ?? "")));
+      aperta.value = true;
+      nextTick(() => elenco.value?.querySelector(".attiva")?.scrollIntoView({ block: "nearest" }));
+    }
+    function chiudi() { aperta.value = false; }
+    function scegli(o) {
+      chiudi();
+      bottone.value?.focus();
+      if (String(o.valore) !== String(props.valore ?? "")) emit("cambia", o.valore);
+    }
+    function tasto(ev) {
+      if (!aperta.value) {
+        if (["ArrowDown", "ArrowUp", "Enter", " "].includes(ev.key)) { ev.preventDefault(); apri(); }
+        return;
+      }
+      if (ev.key === "Escape" || ev.key === "Tab") { chiudi(); return; }
+      if (ev.key === "ArrowDown") attiva.value = Math.min(voci.value.length - 1, attiva.value + 1);
+      else if (ev.key === "ArrowUp") attiva.value = Math.max(0, attiva.value - 1);
+      else if (ev.key === "Enter" || ev.key === " ") { scegli(voci.value[attiva.value]); }
+      else return;
+      ev.preventDefault();
+      nextTick(() => elenco.value?.querySelector(".attiva")?.scrollIntoView({ block: "nearest" }));
+    }
+    function fuori(ev) {
+      if (!aperta.value) return;
+      if (bottone.value?.contains(ev.target) || elenco.value?.contains(ev.target)) return;
+      chiudi();
+    }
+    function scorre(ev) {
+      if (aperta.value && !elenco.value?.contains(ev.target)) colloca();
+    }
+    onMounted(() => {
+      document.addEventListener("mousedown", fuori);
+      window.addEventListener("scroll", scorre, true);
+      window.addEventListener("resize", chiudi);
+    });
+    onBeforeUnmount(() => {
+      document.removeEventListener("mousedown", fuori);
+      window.removeEventListener("scroll", scorre, true);
+      window.removeEventListener("resize", chiudi);
+    });
+    return { aperta, bottone, elenco, attiva, posto, voci, testo, apri, chiudi, scegli, tasto };
+  },
+  template: `
+  <div class="scelta-ancora">
+  <button type="button" ref="bottone" class="scelta" :class="[classe, {aperta}]" :disabled="disabilitato"
+          :aria-label="etichetta" aria-haspopup="listbox" :aria-expanded="aperta"
+          @click="aperta ? chiudi() : apri()" @keydown="tasto">
+    <span class="scelta-testo">{{ testo }}</span>
+    <svg class="scelta-freccia" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+  </button>
+  <Teleport to="body">
+    <Transition name="tendina">
+      <ul v-if="aperta" ref="elenco" class="scelta-elenco" role="listbox" :style="posto">
+        <li v-for="(o, i) in voci" :key="String(o.valore) + i" role="option"
+            :aria-selected="String(o.valore) === String(valore ?? '')"
+            :class="{attiva: i === attiva, scelta: String(o.valore) === String(valore ?? '')}"
+            @mouseenter="attiva = i" @mousedown.prevent="scegli(o)">{{ o.testo || ' ' }}</li>
+      </ul>
+    </Transition>
+  </Teleport>
+  </div>`,
+});
+
 // ------------------------------------------------------- riquadro a scatto
 // st.expander. Resta aperto da solo: nel vecchio la tendina si richiudeva
 // a ogni giro, qui il giro non tocca la pagina.
@@ -208,16 +310,15 @@ export const CampoPassi = defineComponent({
 });
 
 export const Tendina = defineComponent({
+  components: { Scelta },
   props: { valore: [String, Number], opzioni: Array, etichetta: String, aiuto: String,
            classe: String, disabilitato: Boolean },
   emits: ["cambia"],
   template: `
   <div class="campo">
     <label v-if="etichetta">{{ etichetta }}<span v-if="aiuto" class="aiuto" :title="aiuto">?</span></label>
-    <select class="casella" :class="classe" :value="valore" :disabled="disabilitato"
-            @change="$emit('cambia', $event.target.value)" :aria-label="etichetta">
-      <option v-for="o in opzioni" :key="o.valore ?? o" :value="o.valore ?? o">{{ o.testo ?? o }}</option>
-    </select>
+    <Scelta :classe="'casella ' + (classe || '')" :valore="valore" :opzioni="opzioni" :disabilitato="disabilitato"
+            :etichetta="etichetta" @cambia="$emit('cambia', $event)" />
   </div>`,
 });
 
@@ -239,7 +340,9 @@ export const Popover = defineComponent({
   <div class="popover-ancora" ref="radice">
     <button type="button" :class="classeBottone" :title="aiuto" @click="aperto = !aperto"
             :aria-expanded="aperto"><slot name="bottone" /></button>
-    <div v-if="aperto" class="popover" @keydown.esc="aperto = false"><slot :chiudi="chiudi" /></div>
+    <Transition name="tendina">
+      <div v-if="aperto" class="popover" @keydown.esc="aperto = false"><slot :chiudi="chiudi" /></div>
+    </Transition>
   </div>`,
 });
 
@@ -278,6 +381,7 @@ export const Grafico = defineComponent({
 // (quello che Excel incolla), e un blocco incollato in una cella si
 // distribuisce sulle celle a destra e in basso, come in Excel.
 export const Griglia = defineComponent({
+  components: { Scelta },
   props: { colonne: Array, righe: Array, dinamica: Boolean, obbligatoria: String,
            nuova: Object, altezzaMax: String },
   emits: ["cambia"],
@@ -455,11 +559,8 @@ export const Griglia = defineComponent({
             <template v-if="c.sola_lettura">{{ testoCella(c, r[c.chiave]) }}</template>
             <input v-else-if="c.tipo==='spunta'" type="checkbox" :checked="!!r[c.chiave]"
                    @change="scrivi(r, c, $event.target.checked)" :aria-label="c.titolo">
-            <select v-else-if="c.tipo==='scelta'" class="cella" :value="r[c.chiave] ?? ''"
-                    @change="scrivi(r, c, $event.target.value || null)" :aria-label="c.titolo">
-              <option value=""></option>
-              <option v-for="o in c.opzioni" :key="o.valore ?? o" :value="o.valore ?? o">{{ o.testo ?? o }}</option>
-            </select>
+            <Scelta v-else-if="c.tipo==='scelta'" classe="cella" :valore="r[c.chiave] ?? ''" :opzioni="c.opzioni"
+                    vuota :etichetta="c.titolo" @cambia="scrivi(r, c, $event || null)" />
             <div v-else-if="c.tipo==='link'" style="display:flex;align-items:center">
               <input class="cella" :value="r[c.chiave] ?? ''" @change="scrivi(r, c, $event.target.value)"
                      @paste="incolla($event, i, j)" :aria-label="c.titolo">

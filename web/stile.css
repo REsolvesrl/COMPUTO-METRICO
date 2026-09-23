@@ -760,3 +760,67 @@ table.riepilogo-spese tr.totale td:first-child { color: var(--ottone); letter-sp
 .ritaglio .angolo.ne { right: -8px; top: -8px; cursor: nesw-resize; }
 .ritaglio .angolo.so { left: -8px; bottom: -8px; cursor: nesw-resize; }
 .ritaglio .angolo.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+/* ---------------------------------------- le barre di scorrimento */
+/* A scomparsa, come in Streamlit e in CATASTO: si vedono passandoci
+   sopra. Quando compaiono restano larghe dieci pixel — una barra a
+   scomparsa che sia anche sottile non si riesce a prendere col mouse. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: transparent; border-radius: 6px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+*:hover::-webkit-scrollbar-thumb { background-color: rgba(201, 169, 106, .3); }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(201, 169, 106, .65); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *:hover { scrollbar-color: rgba(201, 169, 106, .3) transparent; }
+}
+
+/* ---------------------------------------- la tendina di scelta */
+.scelta-ancora { min-width: 0; }
+.scelta {
+  font: inherit; color: var(--travertino); cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0;
+}
+.scelta.casella { padding: 0 8px 0 12px; }
+.scelta-testo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; }
+.scelta-freccia { width: 20px; height: 20px; flex: none; fill: currentColor;
+                  opacity: .75; transition: transform .2s ease; }
+.scelta.aperta .scelta-freccia { transform: rotate(180deg); }
+.scelta.aperta.casella { border-color: var(--ottone); }
+.scelta:disabled { cursor: not-allowed; opacity: .5; }
+.riga-voce .scelta.casella { padding: 0 4px 0 8px; }
+.riga-voce .scelta-freccia { width: 16px; height: 16px; }
+/* nelle tabelle la freccia compare passandoci sopra, come nel vecchio */
+table.griglia .scelta.cella { padding: 0 4px 0 8px; }
+table.griglia .scelta.cella .scelta-freccia { opacity: 0; }
+table.griglia td:hover .scelta.cella .scelta-freccia,
+table.griglia .scelta.cella.aperta .scelta-freccia,
+table.griglia .scelta.cella:focus-visible .scelta-freccia { opacity: .75; }
+.scelta-elenco {
+  position: fixed; z-index: 80; margin: 0; padding: 4px 0; list-style: none;
+  max-height: 300px; overflow-y: auto; max-width: 420px;
+  background: var(--ardesia-chiara); color: var(--travertino);
+  border: 1px solid var(--bordo-debole); border-radius: var(--raggio);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  font-family: var(--testo); font-size: 15px;
+}
+.scelta-elenco li {
+  padding: 7px 14px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.scelta-elenco li.attiva { background: rgba(201, 169, 106, .16); }
+.scelta-elenco li.scelta { color: var(--ottone); font-weight: 600; }
+
+/* la dissolvenza delle tendine e dei pannellini: scendono di qualche
+   pixel mentre compaiono, e risalgono sparendo */
+.tendina-enter-active { transition: opacity .18s ease-out, transform .18s ease-out; }
+.tendina-leave-active { transition: opacity .12s ease-in, transform .12s ease-in; }
+.tendina-enter-from, .tendina-leave-to { opacity: 0; transform: translateY(-6px) scaleY(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .tendina-enter-active, .tendina-leave-active { transition: none; }
+}

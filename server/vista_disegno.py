@@ -237,6 +237,13 @@ def vista_planimetria(b):
         [dict(p, zone=[z for z in p["zone"]
                        if z["categoria"] in CATEGORIE_SOLO_COMPUTO])
          for p in piante], perc)
+    # La superficie REALE è quella che si calpesta: le stanze interne più
+    # le pertinenze, ognuna per intero. Il perimetro commerciale ne resta
+    # fuori: è un contorno che le racchiude già, e sommarlo le conterebbe
+    # due volte. (Nel vecchio era il contrario — perimetro più pertinenze —
+    # e l'utente l'ha corretta il 23/09/2026.)
+    _, reale, _, _ = geo.riepilogo_superfici(piante, perc,
+                                             escludi=CATEGORIE_INVOLUCRO)
     ha_interne = any(z["categoria"] in CATEGORIE_SOLO_COMPUTO
                      for p in piante for z in p["zone"])
     ha_perimetro = any(z["categoria"] in CATEGORIE_INVOLUCRO
@@ -254,7 +261,7 @@ def vista_planimetria(b):
             "%": "—", "m² commerciali": "non conta",
             "Serve a": "Computo (calpestabile)"} for r in righe_int],
         "interne": bool(righe_int),
-        "totale": tot_sup, "commerciale": tot_comm,
+        "totale": reale, "commerciale": tot_comm,
     }
 
     # ------------------------------------------------ locali e finiture

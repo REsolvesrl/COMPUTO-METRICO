@@ -403,9 +403,12 @@ export const SchedaPlanimetria = defineComponent({
         commerciale» più le pertinenze con la loro percentuale. La <b>superficie interna</b> è il calpestabile: resta
         fuori da questo conteggio e va al computo metrico.</p>
       <div class="colonne resta" style="margin-bottom:16px">
-        <Metrica style="flex:1" nome="Superficie reale totale" :valore="numeroIt(p.superfici.totale, 2) + ' m²'" />
+        <Metrica style="flex:1" nome="Superficie reale totale" :valore="numeroIt(p.superfici.totale, 2) + ' m²'"
+                 aiuto="Le stanze (superficie interna) più le pertinenze, ognuna per intero. Il perimetro commerciale resta fuori: le racchiude già." />
         <Metrica style="flex:1" nome="Superficie commerciale totale" :valore="numeroIt(p.superfici.commerciale, 2) + ' m²'" />
       </div>
+      <p class="didascalia grigio">La <b>superficie reale</b> è quella che si calpesta: le stanze più le pertinenze,
+        per intero. Il perimetro commerciale non si somma — le racchiude già.</p>
       <button class="bottone primario" style="margin-bottom:16px" @click="g('superficie_al_computo', {}, false)">
         ➕ Riporta la superficie commerciale nel computo</button>
     </template>
