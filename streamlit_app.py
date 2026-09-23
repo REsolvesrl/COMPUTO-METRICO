@@ -97,6 +97,7 @@ from tabelle import (
     cat_display,
     cat_pulita,
     df_materiali_da_righe,
+    df_mca_normalizzato,
     df_mca_vuoto,
     df_spese_da_righe,
     df_spese_vuoto,
@@ -4782,8 +4783,7 @@ if "da_caricare" in st.session_state:
         [merito.migra_scelte(riga)
          for riga in (dati.get("mca_comparabili") or [])]).reindex(
         columns=COLONNE_MCA)
-    for col in ("prezzo", "mq", "coeff"):
-        df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
+    df_mc = df_mca_normalizzato(df_mc)
     st.session_state.df_mca = df_mc if len(df_mc) else df_mca_vuoto()
     # ⚠️ Chiave ASSENTE e chiave con dentro dei vuoti sono due cose diverse,
     # e confonderle si vede subito. Un progetto salvato prima della griglia
@@ -8248,8 +8248,9 @@ with tab_bp:
         # moncone largo 52 px — misurato dal vivo su un progetto reale — con
         # la barra degli strumenti, appesa al bordo destro, che finisce
         # fuori dallo schermo. Il reindex ristabilisce le colonne e non
-        # tocca i dati.
-        st.session_state.df_mca = df_mca_ed.reindex(columns=COLONNE_MCA)
+        # tocca i dati; la normalizzazione tiene booleana la spunta
+        # dell'ascensore anche se la colonna arrivasse mancante.
+        st.session_state.df_mca = df_mca_normalizzato(df_mca_ed)
 
         # --- quanto vale, qui, essere già ristrutturati -------------------
         # ⚠️ Il livello di prezzo della zona si prende dai €/mq RICHIESTI,
