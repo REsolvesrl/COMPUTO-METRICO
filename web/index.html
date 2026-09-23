@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CME — computo</title>
+<link rel="stylesheet" href="/statico/stile.css">
+<!-- ⚠️ Nessun passo di compilazione, come in CATASTO: Vue è un file sul
+     disco e il browser lo carica come modulo. Un assemblatore si aggiunge
+     quando le pagine saranno tante, non prima. -->
+<script type="importmap">
+{ "imports": { "vue": "/statico/vendor/vue.esm-browser.prod.js" } }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="/statico/app.js"></script>
+</body>
+</html>
