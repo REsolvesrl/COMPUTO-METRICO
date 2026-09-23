@@ -203,7 +203,7 @@ const SchedaCategoria = defineComponent({
   <section class="scheda-cat" :class="{aperta}" :style="{'--tinta': cat.colore, '--su-tinta': cat.su_tinta}">
     <button class="testa" @click="scambia" :aria-expanded="aperta">
       <span class="pastiglia">{{ String(cat.serie).padStart(2, '0') }}</span>
-      <span class="nome-cat" :class="classeNome">{{ aperta ? '▾' : '▸' }} {{ cat.nome }}</span>
+      <span class="nome-cat" :class="classeNome"><span class="freccia-cat" aria-hidden="true">▸</span>{{ cat.nome }}</span>
       <span class="totale-cat">{{ euro(cat.totale) }}</span>
     </button>
     <Scorre><div v-if="aperta" class="righe-voci">
@@ -306,7 +306,7 @@ const Pool = defineComponent({
            placeholder="🔎  Cerca fra le voci — codice, descrizione, unità" aria-label="Cerca una voce">
     <template v-for="cat in categorie" :key="cat.nome">
       <button class="cat-pool" @click="scambia(cat.nome)">
-        <span :class="colore(cat.md)">{{ aperta(cat.nome) ? '▾' : '▸' }} {{ cat.nome }}</span>
+        <span :class="colore(cat.md)"><span class="freccia-cat" :class="{girata: aperta(cat.nome)}" aria-hidden="true">▸</span>{{ cat.nome }}</span>
         <span class="grigio"> · {{ cat.disponibili.length }}</span>
       </button>
       <Scorre><div v-if="aperta(cat.nome)">

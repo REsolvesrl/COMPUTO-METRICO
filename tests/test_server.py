@@ -135,3 +135,9 @@ def test_la_tela_e_quella_del_programma_vecchio(client):
     r = client.get("/tela/index.html")
     assert r.status_code == 200 and "streamlit-component-lib.js" in r.text
     assert client.get("/tela/main.js").status_code == 200
+
+
+def test_i_file_della_pagina_si_ricontrollano_sempre(client):
+    """Senza, il browser teneva i moduli vecchi e le correzioni sparivano."""
+    for indirizzo in ("/", "/statico/app.js", "/tela/main.js"):
+        assert client.get(indirizzo).headers["cache-control"] == "no-cache"

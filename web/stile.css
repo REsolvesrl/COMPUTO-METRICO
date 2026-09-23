@@ -737,11 +737,21 @@ table.riepilogo-spese tr.totale td:first-child { color: var(--ottone); letter-sp
 /* ------------------------------------------------ le tendine che si aprono */
 /* Si aprono e si chiudono scorrendo, non di scatto: l'altezza la misura la
    pagina (vedi Scorre in componenti.js), qui c'è solo il ritmo. */
-.scorre-attivo { overflow: hidden; transition: height .28s cubic-bezier(.2, .7, .3, 1),
-                 opacity .22s ease; }
-@media (prefers-reduced-motion: reduce) {
-  .scorre-attivo { transition: none; }
+/* Curva dolce in entrata e in uscita: il movimento si distribuisce su
+   tutta la durata, invece di consumarsi nei primi cento millisecondi. */
+.scorre-attivo {
+  overflow: hidden;
+  transition-property: height, opacity, transform;
+  transition-timing-function: cubic-bezier(.45, .05, .35, 1), ease-out,
+                              cubic-bezier(.45, .05, .35, 1);
 }
+/* la freccia della categoria ruota invece di cambiare di colpo */
+.scheda-cat .freccia-cat, .cat-pool .freccia-cat {
+  display: inline-block; margin-right: .35em; font-size: .8em;
+  transition: transform .35s cubic-bezier(.45, .05, .35, 1);
+}
+.scheda-cat.aperta .freccia-cat, .cat-pool .freccia-cat.girata { transform: rotate(90deg); }
+.scheda-cat { transition: border-color .35s ease; }
 
 /* il ritaglio: il foglio intero, e fuori dal riquadro l'ombra di quello
    che verrà tagliato via */

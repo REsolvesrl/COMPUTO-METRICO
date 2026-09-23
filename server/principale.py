@@ -55,6 +55,24 @@ PLOTLY_JS = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
 
 app = FastAPI(title="CME", docs_url="/api/documentazione", redoc_url=None)
 
+@app.middleware("http")
+async def sempre_freschi(richiesta, chiama):
+    """I file della pagina si ricontrollano a ogni apertura.
+
+    ⚠️ Senza, il browser si tiene i moduli JavaScript che ha già e non
+    chiede se sono cambiati: la pagina nuova girava coi pezzi vecchi, e una
+    correzione sembrava non esserci. Con «no-cache» il browser chiede ogni
+    volta, e se il file è lo stesso il motore risponde «non cambiato» senza
+    rimandarlo. Le immagini delle piante no: il loro indirizzo porta già
+    l'impronta, e quelle si tengono.
+    """
+    risposta = await chiama(richiesta)
+    percorso = richiesta.url.path
+    if percorso == "/" or percorso.startswith(("/statico/", "/tela/")):
+        risposta.headers["Cache-Control"] = "no-cache"
+    return risposta
+
+
 BANCO = Banco()
 # Un gesto alla volta: le rotte girano in un gruppo di thread, e due gesti
 # che si incrociano sullo stesso progetto sarebbero un disastro silenzioso.

@@ -33,28 +33,35 @@ export const Metrica = defineComponent({
 // ritmo sta in stile.css, .scorre-attivo). Chi ha chiesto al sistema meno
 // movimento la vede aprirsi e basta.
 function scorri(el, da, a, fatto) {
+  const apre = a !== "0px";
+  const piena = apre ? el.scrollHeight : parseFloat(da);
+  // Più è alta, più ci mette: una categoria da venti voci che si aprisse
+  // negli stessi 280 ms di una da due sembrerebbe uno scatto.
+  const durata = Math.round(Math.min(700, Math.max(420, 300 + piena * 0.45)));
   el.classList.add("scorre-attivo");
+  el.style.transitionDuration = `${durata}ms, ${Math.round(durata * 0.8)}ms, ${durata}ms`;
   el.style.height = da;
-  el.style.opacity = a === "0px" ? "1" : "0";
+  el.style.opacity = apre ? "0" : "1";
+  el.style.transform = apre ? "translateY(-8px)" : "translateY(0)";
   // Leggere offsetHeight obbliga il browser a fissare la misura di
   // partenza: da lì la nuova altezza è una transizione, non uno scatto.
   // (Non si aspetta il fotogramma dopo: a finestra coperta il browser non
   // ne disegna, e la tendina restava chiusa fino allo scadere del tempo.)
   // eslint-disable-next-line no-unused-expressions
   el.offsetHeight;
-  el.style.height = a === "auto" ? `${el.scrollHeight}px` : a;
-  el.style.opacity = a === "0px" ? "0" : "1";
+  el.style.height = apre ? `${piena}px` : "0px";
+  el.style.opacity = apre ? "1" : "0";
+  el.style.transform = apre ? "translateY(0)" : "translateY(-8px)";
   let chiuso = false;
   const fine = () => {
     if (chiuso) return;
     chiuso = true;
     el.classList.remove("scorre-attivo");
-    el.style.height = "";
-    el.style.opacity = "";
+    for (const p of ["height", "opacity", "transform", "transitionDuration"]) el.style[p] = "";
     fatto();
   };
   el.addEventListener("transitionend", (e) => { if (e.target === el && e.propertyName === "height") fine(); });
-  setTimeout(fine, 400);
+  setTimeout(fine, durata + 150);
 }
 export const Scorre = defineComponent({
   setup(_, { slots }) {
