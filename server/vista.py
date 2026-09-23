@@ -20,6 +20,7 @@ from banco import Banco, serie_della_categoria, unita_della_voce, \
     unita_per_categoria
 from costanti import COLORI_CATEGORIE, OTTONE, UM_A_CORPO, UM_A_PASSI
 from formato import colore_testo_su
+from server.vista_bp import vista_bp
 from server.vista_disegno import vista_planimetria
 from tabelle import EMOJI_CAPITOLO, EMOJI_STATO
 
@@ -203,4 +204,5 @@ def vista(b: Banco):
         "computo": computo(b),
         "materiali": vista_materiali(b),
         "planimetria": vista_planimetria(b),
+        "bp": vista_bp(b),
     }

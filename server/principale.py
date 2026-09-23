@@ -184,8 +184,32 @@ GESTI_DISEGNO = {
 }
 
 
+def _chiudi(b):
+    return f"«{b.chiudi_operazione()}» è nello storico ✔"
+
+
+GESTI_BP = {
+    "bp": lambda b, chiave, valore: b.imposta_bp(chiave, valore),
+    "riprendi_mq": lambda b: b.riprendi_mq_planimetria(),
+    "usa_come_vendita": lambda b, valore: b.usa_come_vendita(valore),
+    "applica_imprevisti": lambda b, percentuale:
+        b.applica_imprevisti(percentuale),
+    "spese": lambda b, registro, righe: b.scrivi_spese(registro, righe),
+    "aggiungi_fatture": lambda b, righe: b.aggiungi_fatture(righe),
+    "scarta_fatture": lambda b: b.scarta_fatture(),
+    "cantiere": lambda b, campo, valore: b.imposta_cantiere(campo, valore),
+    "sal": lambda b, righe: b.scrivi_sal(righe),
+    "contratto_dal_computo": lambda b: b.contratto_dal_computo(),
+    "chiudi_operazione": _chiudi,
+    "comparabili": lambda b, righe: b.scrivi_comparabili(righe),
+    "soggetto": lambda b, campo, valore: b.scegli_soggetto(campo, valore),
+    "statistica": lambda b, valore: b.scegli_statistica(valore),
+}
+
+
 GESTI = {
     **GESTI_DISEGNO,
+    **GESTI_BP,
     "salva": _salva,
     "apri": lambda b, nome: b.apri(nome),
     "apri_versione": _apri_versione,
@@ -298,6 +322,23 @@ async def carica_planimetria(file: UploadFile) -> dict:
         except ErroreDisegno as errore:
             esito = {"tipo": "errore", "testo": str(errore)}
         BANCO.giro()
+        return {"vista": _vista(), "esito": esito}
+
+
+@app.post("/api/fatture")
+async def leggi_fatture(file: list[UploadFile]) -> dict:
+    """Le fatture trascinate: si leggono qui, sul computer, e nessun dato
+    esce. Le righe lette tornano da controllare prima di aggiungerle."""
+    contenuti = [(f.filename or "", await f.read()) for f in file]
+    with CHIAVE:
+        n = BANCO.leggi_fatture(contenuti)
+        esito = None
+        if BANCO.fatture_lette["non_letti"]:
+            esito = {"tipo": "errore", "testo": "Non sono riuscito a leggere: "
+                     + ", ".join(BANCO.fatture_lette["non_letti"])
+                     + ". Aggiungile a mano nella tabella sotto."}
+        elif n:
+            esito = {"tipo": "ok", "testo": f"{n} fattura/e lette."}
         return {"vista": _vista(), "esito": esito}
 
 

@@ -8,10 +8,11 @@
 //                              consuntivo · 🏗️ Cantiere — contratto e SAL ·
 //                              🏷️ MCA — prezzo di vendita
 import { computed, createApp, defineComponent, onMounted, ref, watch } from "vue";
-import { Avviso, CampioneVuoto } from "./componenti.js";
+import { Avviso } from "./componenti.js";
 import { SchedaComputo } from "./computo.js";
 import { SchedaMateriali } from "./materiali.js";
 import { SchedaPlanimetria } from "./planimetria.js";
+import { SchedaBp } from "./bp.js";
 import { caricaVista, gesto, stato } from "./rete.js";
 
 const SCHEDE = [
@@ -34,18 +35,6 @@ function ricorda(chiave, predefinito) {
   watch(r, (v) => { try { localStorage.setItem(chiave, v); } catch (e) { /* niente */ } });
   return r;
 }
-
-// Le schede che non sono ancora passate di qua: il vecchio le ha tutte, e
-// finché non arrivano si dice chiaramente dove trovarle.
-const InCostruzione = defineComponent({
-  components: { CampioneVuoto },
-  props: { nome: String },
-  template: `
-  <div class="in-costruzione">
-    <CampioneVuoto :titolo="nome + ' — in arrivo'"
-      testo="Questa scheda non è ancora passata nella versione nuova. Il lavoro vero si fa col programma di sempre (Avvia CME.bat): lì c'è tutta, e legge gli stessi progetti." />
-  </div>`,
-});
 
 const Testata = defineComponent({
   setup() {
@@ -71,7 +60,7 @@ const Testata = defineComponent({
 });
 
 const App = defineComponent({
-  components: { Testata, SchedaComputo, SchedaMateriali, SchedaPlanimetria, InCostruzione, Avviso },
+  components: { Testata, SchedaComputo, SchedaMateriali, SchedaPlanimetria, SchedaBp, Avviso },
   setup() {
     const scheda = ricorda("cme_scheda", "computo");
     const sotto = {
@@ -79,12 +68,8 @@ const App = defineComponent({
       bp: ricorda("cme_sotto_bp", "fattibilita"),
     };
     const aperta = computed(() => SCHEDE.find((s) => s.id === scheda.value) || SCHEDE[0]);
-    const nomeSotto = computed(() => {
-      const s = aperta.value.sotto.find((x) => x.id === sotto[aperta.value.id]?.value);
-      return s ? s.nome : aperta.value.nome;
-    });
     onMounted(caricaVista);
-    return { stato, SCHEDE, scheda, sotto, aperta, nomeSotto };
+    return { stato, SCHEDE, scheda, sotto, aperta };
   },
   template: `
   <template v-if="stato.vista">
@@ -106,7 +91,7 @@ const App = defineComponent({
     <SchedaComputo v-if="scheda === 'computo' && sotto.computo.value === 'il_computo'" />
     <SchedaMateriali v-else-if="scheda === 'computo'" />
     <SchedaPlanimetria v-else-if="scheda === 'planimetria'" />
-    <InCostruzione v-else :nome="nomeSotto" />
+    <SchedaBp v-else :sotto="sotto.bp.value" />
   </template>
   <Avviso v-else-if="stato.errore" tipo="errore">{{ stato.errore }}</Avviso>
   <p v-else class="grigio">Apro il banco…</p>

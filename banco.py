@@ -27,6 +27,7 @@ from datetime import date, datetime
 import pandas as pd
 
 import archivio_locale
+from banco_bp import BusinessPlanMixin
 from banco_disegno import DisegnoMixin, ErroreDisegno
 import calcoli
 import cantiere
@@ -355,7 +356,7 @@ def json_bytes(dati):
 # ------------------------------------------------------------------ banco
 
 
-class Banco(DisegnoMixin):
+class Banco(DisegnoMixin, BusinessPlanMixin):
     """Il progetto aperto. Uno per motore, come una sessione di Streamlit."""
 
     def __init__(self):
@@ -370,6 +371,7 @@ class Banco(DisegnoMixin):
         self.piante_scartate = []
         self._uso_contati = set()
         self.carica_disegno()
+        self.carica_bp()
         self.carica_giro()
 
     # ------------------------------------------------------ progetto intero
@@ -381,6 +383,7 @@ class Banco(DisegnoMixin):
         self.ultimo_salvataggio = None
         self.firma_salvata = None
         self.carica_disegno()
+        self.carica_bp()
         self.carica_giro()
         self.giro()
 
