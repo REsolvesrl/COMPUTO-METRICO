@@ -27,6 +27,20 @@ Da riga di comando
     python uso.py verifica 2026      # controllo integrita' della catena
     python uso.py consolida 2026 CARTELLA   # somma i registri di piu' postazioni
 
+Righe da non contare
+--------------------
+Il registro non si corregge MAI: toglierne una riga romperebbe la catena, e
+riscriverla dopo i fatti renderebbe la catena una prova di niente. Se delle
+righe non sono lavorazioni vere (le hanno scritte dei test, per esempio),
+si elencano in `esclusioni_ANNO.json`, accanto al registro:
+
+    {"esclusioni": [{"h": "<hash della riga>", "motivo": "..."}, ...]}
+
+`report` e `allegato` le tolgono dai conteggi e dicono quante sono;
+`verifica` controlla la catena intera come sempre, controlla che ogni riga
+esclusa esista davvero nel registro, e stampa l'impronta dell'elenco, da
+marcare nel tempo insieme agli hash finali.
+
 Piu' postazioni
 ---------------
 Ogni postazione tiene il proprio registro: il nome del file include quello
@@ -128,11 +142,43 @@ def _file_anno(anno: int, cartella: Path | None = None) -> list[Path]:
     return sorted(Path(p) for p in glob.glob(str(base / f"uso_{anno}*.jsonl")))
 
 
-def _leggi(anno: int, cartella: Path | None = None) -> list[dict]:
+def _file_esclusioni(anno: int, cartella: Path | None = None) -> list[Path]:
+    base = cartella or BASE
+    return sorted(Path(p) for p in glob.glob(str(base / f"esclusioni_{anno}*.json")))
+
+
+def esclusioni(anno: int, cartella: Path | None = None) -> dict[str, str]:
+    """{hash della riga: motivo} delle righe da non contare."""
+    fuori: dict[str, str] = {}
+    for f in _file_esclusioni(anno, cartella):
+        with f.open("r", encoding="utf-8") as fh:
+            for e in json.load(fh).get("esclusioni", []):
+                fuori[e["h"]] = e.get("motivo", "")
+    return fuori
+
+
+def _leggi(anno: int, cartella: Path | None = None,
+           con_escluse: bool = False) -> list[dict]:
     righe: list[dict] = []
     for f in _file_anno(anno, cartella):
         righe.extend(_leggi_file(f))
-    return righe
+    if con_escluse:
+        return righe
+    fuori = esclusioni(anno, cartella)
+    return [r for r in righe if r.get("h") not in fuori]
+
+
+def _nota_esclusioni(anno: int, cartella: Path | None = None) -> str:
+    tutte = _leggi(anno, cartella, con_escluse=True)
+    contate = _leggi(anno, cartella)
+    tolte = len(tutte) - len(contate)
+    if not tolte:
+        return ""
+    per_app = Counter(r["app"] for r in tutte
+                      if r.get("h") in esclusioni(anno, cartella))
+    dettaglio = ", ".join(f"{a} {n}" for a, n in sorted(per_app.items()))
+    return (f"Righe escluse dal conteggio: {tolte} ({dettaglio}); "
+            f"motivi in esclusioni_{anno}.json.")
 
 
 def report(anno: int, cartella: Path | None = None) -> str:
@@ -160,6 +206,9 @@ def report(anno: int, cartella: Path | None = None) -> str:
             out.append(f"   {'attivo da':<24} {mesi[0]} a {mesi[-1]}")
         out.append("")
     out.append(f"Totale registrazioni: {len(righe)}")
+    nota = _nota_esclusioni(anno, cartella)
+    if nota:
+        out.append(nota)
     return "\n".join(out)
 
 
@@ -178,6 +227,10 @@ def allegato(anno: int, cartella: Path | None = None) -> str:
     out.append("| 4 | Tempo medio per lavorazione senza applicativo (ore) | _da stimare_ |")
     out.append("| 5 | Costo orario di chi la svolgerebbe (€/ora) | _da stimare_ |")
     out.append("| 6 | Costo annuo di distribuzione e archiviazione (€) | _da rilevare_ |")
+    nota = _nota_esclusioni(anno, cartella)
+    if nota:
+        out.append("")
+        out.append(nota)
     return "\n".join(out)
 
 
@@ -200,8 +253,20 @@ def verifica(anno: int, cartella: Path | None = None) -> str:
             esiti.append(f"{path.name}: CATENA INTERROTTA alla riga {rotto[0]} ({rotto[1]}).")
         else:
             esiti.append(f"{path.name}: integra, {len(righe)} registrazioni. Hash finale {prec}")
+    fuori = esclusioni(anno, cartella)
+    if fuori:
+        presenti = {r.get("h") for r in _leggi(anno, cartella, con_escluse=True)}
+        mancanti = [h for h in fuori if h not in presenti]
+        esiti.append("")
+        esiti.append(f"Esclusioni: {len(fuori)} righe, "
+                     + ("tutte presenti nel registro." if not mancanti
+                        else f"{len(mancanti)} NON TROVATE nel registro."))
+        for f in _file_esclusioni(anno, cartella):
+            impronta = hashlib.sha256(f.read_bytes()).hexdigest()
+            esiti.append(f"{f.name}: impronta {impronta}")
     esiti.append("")
-    esiti.append("Apporre marca temporale sugli hash finali a fine anno.")
+    esiti.append("Apporre marca temporale sugli hash finali a fine anno"
+                 + (" e sulle impronte delle esclusioni." if fuori else "."))
     return "\n".join(esiti)
 
 
