@@ -1,49 +1,60 @@
 @echo off
 rem ===================================================================
 rem  CME - Computo Metrico Estimativo
-rem  Doppio clic per aprire il programma nel browser.
+rem  Doppio clic per aprire il programma. Il browser si apre da solo.
 rem
 rem  Si apre una finestra nera: e' il motore del programma, va lasciata
 rem  aperta mentre lavori. E' anche il posto dove compaiono i messaggi
 rem  quando qualcosa non va: se vedi un errore, copialo e mandalo.
 rem  Per chiudere CME: chiudi questa finestra.
+rem
+rem  ATTENZIONE: La versione vecchia, quella a Streamlit, e' ancora qui e si
+rem  avvia con "Avvia CME (vecchio).bat": legge lo stesso archivio. E' la
+rem  rete di sicurezza finche' questa non avra' lavorato per qualche
+rem  settimana senza sorprese.
 rem ===================================================================
 
 title CME - motore in funzione (non chiudere questa finestra)
 cd /d "%~dp0"
 
-rem Al primo avvio Streamlit chiede un indirizzo email per la sua newsletter e
-rem resta li' ad aspettare, con l'app ferma. Questo file di configurazione
-rem risponde "nessuna email" una volta per tutte.
-if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
-    if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"
-    > "%USERPROFILE%\.streamlit\credentials.toml" echo [general]
-    >> "%USERPROFILE%\.streamlit\credentials.toml" echo email = ""
+rem ===================================================================
+rem  QUESTO FILE NON SI COPIA: SI COLLEGA
+rem  Il .bat parte dalla cartella in cui sta, e il motore e' li'
+rem  accanto. Copiato altrove - per esempio sul Desktop - la cartella
+rem  e' un'altra e Python risponde con venti righe di traceback e
+rem  "No module named 'server'": vero, e illeggibile. Per averlo sul
+rem  Desktop si fa un COLLEGAMENTO.
+rem ===================================================================
+if not exist "%~dp0server\principale.py" (
+    echo.
+    echo   ================================================
+    echo   Questo file e' una COPIA, e da qui non parte:
+    echo   il motore non e' in questa cartella.
+    echo.
+    echo   Apri il collegamento "Avvia CME" sul Desktop,
+    echo   oppure il .bat che sta in
+    echo   C:\Users\fredr\code\CME
+    echo   ================================================
+    echo.
+    pause
+    exit /b 1
 )
 
 rem ===================================================================
 rem  AGGIORNAMENTO AUTOMATICO
-rem  Prima si scarica l'ultima versione, poi si parte.
+rem  Prima si scarica l'ultima versione, poi si parte. Un aggiornamento
+rem  che dipende da chi si ricorda di premerlo non e' un aggiornamento.
 rem
-rem  Prima c'era un "Aggiorna CME.bat" da lanciare a mano: ma un
-rem  aggiornamento che dipende da chi si ricorda di premerlo non e' un
-rem  aggiornamento. Si finisce a lavorare per giorni sulla versione
-rem  vecchia convinti di avere l'ultima, e a segnalare difetti gia'
-rem  corretti - che e' esattamente quello che e' successo.
-rem
-rem  ATTENZIONE: se l'aggiornamento non riesce (niente rete, modifiche locali non
-rem  salvate, git assente) il programma parte LO STESSO con la versione
-rem  che c'e'. Un aggiornamento fallito non deve mai lasciarti senza
-rem  programma; e "--ff-only" fa in modo che non venga mai toccato del
-rem  lavoro non ancora inviato.
-rem  I tuoi progetti non c'entrano: vivono in un'altra cartella e questo
-rem  comando non li sfiora.
+rem  ATTENZIONE: se l'aggiornamento non riesce (niente rete, modifiche
+rem  locali non salvate, git assente) il programma parte LO STESSO con la
+rem  versione che c'e'; e "--ff-only" non tocca mai lavoro non ancora
+rem  inviato. I tuoi progetti non c'entrano: vivono in un'altra cartella.
 rem ===================================================================
 where git >nul 2>&1
 if errorlevel 1 (
     echo.
     echo   Git non e' installato: salto l'aggiornamento e parto.
-    goto avvia
+    goto librerie
 )
 
 echo.
@@ -58,21 +69,36 @@ if errorlevel 1 (
     echo   ------------------------------------------------
 )
 
-:avvia
+:librerie
+rem Il motore nuovo ha bisogno di FastAPI e Uvicorn: se mancano (un
+rem computer dove CME girava solo con Streamlit) si installano una volta.
+python -c "import fastapi, uvicorn" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo   Installo le librerie che mancano, una volta sola...
+    python -m pip install -r requirements.txt
+)
+
 echo.
 echo   Avvio di CME. Tra pochi secondi si apre il browser da solo.
 echo.
+echo   Se non si apre, vai su:  http://127.0.0.1:8504
+echo.
 echo   NON CHIUDERE questa finestra mentre lavori: e' il motore.
-echo   Per uscire, chiudila.
 echo.
 
-rem Streamlit su questa macchina si lancia con "python -m": la cartella degli
-rem eseguibili installati da pip non e' nel PATH.
-rem
-rem Porta fissa 8501: senza, CME e CATASTO (altro programma sulla stessa
-rem macchina) finiscono a contendersi la stessa porta di default, e chi
-rem parte per secondo si becca la scheda del browser gia' aperta sull'altro.
-python -m streamlit run streamlit_app.py --server.port=8501 --browser.gatherUsageStats=false
+rem ===================================================================
+rem  IL BROWSER SI APRE DA SOLO
+rem  Uvicorn non lo apre, al contrario di Streamlit: lo apriamo noi, con
+rem  qualche secondo di ritardo perche' il motore faccia in tempo a
+rem  rispondere. Gira di fianco (/b: nessuna finestra in piu') e se non
+rem  riesce, pazienza: l'indirizzo e' scritto qui sopra.
+rem ===================================================================
+start "" /b python -c "import time, webbrowser; time.sleep(4); webbrowser.open('http://127.0.0.1:8504')"
+
+rem --host 127.0.0.1: risponde soltanto a questo computer, mai alla rete.
+rem Porta 8504: la vecchia resta sulla 8501, e possono stare aperte insieme.
+python -m uvicorn server.principale:app --host 127.0.0.1 --port 8504
 
 if errorlevel 1 (
     echo.

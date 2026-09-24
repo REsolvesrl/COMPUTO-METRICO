@@ -1,0 +1,840 @@
+/* ======================================================================
+   Il mondo «Campionario» (DESIGN.md), portato fuori da Streamlit.
+
+   Due strati, nell'ordine in cui li applicava il programma vecchio:
+   1. l'aspetto di base dei componenti di Streamlit col tema di
+      .streamlit/config.toml — caselle, bottoni, tendine, linguette,
+      riquadri — MISURATO sul programma vecchio acceso, non ricordato;
+   2. sopra, le regole di css_mondo() e css_schede_computo(), con gli
+      stessi valori e le stesse ragioni (scritte là, riassunte qui).
+   Chi cambia un colore lo cambia in costanti.py e qui, come nel vecchio.
+   ====================================================================== */
+
+:root {
+  --ardesia: #1A2744;
+  --ardesia-chiara: #243352;
+  --ottone: #C9A96A;
+  --travertino: #ECE7DA;
+  --cotto: #C1502E;
+  --cemento: #6E7377;
+  --gres: #4E7A5E;
+  /* i testi colorati di Streamlit sul tema scuro (:red[…], :green[…]) */
+  --md-rosso: #ff6c6c;
+  --md-verde: #5ce488;
+  --md-azzurro: #3d9df3;
+  --md-arancio: #ffbd45;
+  --md-viola: #b27eff;
+  --md-grigio: rgba(250, 250, 250, .6);
+  --etichette: #A9B4C9;
+  --bordo-debole: rgba(236, 231, 218, .2);
+  /* nessun carattere scaricato: il programma lavora anche senza rete */
+  --testo: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --raggio: 8px;
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: dark; }
+body {
+  margin: 0;
+  background: var(--ardesia);
+  color: var(--travertino);
+  font-family: var(--testo);
+  font-size: 16px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+#app { padding: 16px 40px 64px; }
+@media (max-width: 700px) { #app { padding: 12px 16px 48px; } }
+
+p { margin: 0 0 1rem; }
+a { color: var(--ottone); }
+h4 { font-size: 1.5rem; font-weight: 600; margin: .5rem 0 1rem;
+     line-height: 1.2; }
+h3.sottotitolo { font-size: 1.75rem; font-weight: 600; margin: 1.5rem 0 1rem;
+                 line-height: 1.2; }
+hr, .divisore { border: none; border-top: 1px solid var(--bordo-debole);
+                margin: 1.25rem 0; }
+
+/* i colori dei testi di Streamlit */
+.rosso { color: var(--md-rosso); }
+.verde { color: var(--md-verde); }
+.azzurro { color: var(--md-azzurro); }
+.arancio { color: var(--md-arancio); }
+.viola { color: var(--md-viola); }
+.grigio { color: var(--md-grigio); }
+.didascalia {
+  font-size: 14px; line-height: 1.6; margin: 0 0 1rem; max-width: 82ch;
+}
+.didascalia.larga { max-width: none; }
+
+/* ------------------------------------------------------------ testata */
+/* Il cartiglio: nome dello strumento e, accanto, il progetto aperto
+   scritto come l'etichetta di un campione. Bassa: il lavoro viene prima. */
+.testata-riga {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 16px;
+}
+.testata-riga > .cme-testata { flex: 6 1 0; margin-bottom: 0; }
+.testata-riga > .salva-testata { flex: 1 1 0; min-width: 130px; }
+.cme-testata {
+  display: flex; align-items: baseline; gap: 1.1rem; flex-wrap: wrap;
+  padding: .1rem 0 .55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ottone) 38%, transparent);
+  margin-bottom: 1.1rem;
+}
+.cme-testata h1 {
+  font-size: 2.05rem; font-weight: 650; letter-spacing: -.01em; margin: 0;
+  color: var(--travertino); line-height: 1.2;
+}
+.cme-testata .sigla { color: var(--ottone); font-weight: 700; }
+.cme-etichetta {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .12em;
+  color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
+  font-weight: 600;
+}
+.cme-testata .progetto {
+  color: var(--travertino); font-size: .82rem; letter-spacing: .02em;
+  padding: .12rem .5rem;
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  background: color-mix(in srgb, var(--ottone) 12%, transparent);
+}
+.cme-testata .versione {
+  font-size: .68rem; letter-spacing: .04em; white-space: nowrap;
+  color: color-mix(in srgb, var(--travertino) 55%, var(--cemento));
+}
+.cme-testata .salvataggio {
+  margin-left: auto; font-size: .72rem; letter-spacing: .04em;
+  padding: .12rem .5rem; white-space: nowrap;
+}
+.cme-testata .salvataggio.pari {
+  color: #9FD6AC;
+  border: 1px solid color-mix(in srgb, var(--gres) 75%, transparent);
+  background: color-mix(in srgb, var(--gres) 22%, transparent);
+}
+.cme-testata .salvataggio.sospeso {
+  color: #F2B79E;
+  border: 1px solid color-mix(in srgb, var(--cotto) 70%, transparent);
+  background: color-mix(in srgb, var(--cotto) 20%, transparent);
+}
+
+/* ---------------------------------------------------------- linguette */
+/* Le linguette di una cartella di campioni: quella aperta è piena
+   d'ottone, le altre restano pietra. */
+.linguette {
+  display: flex; gap: .35rem; flex-wrap: wrap;
+  border-bottom: 1px solid color-mix(in srgb, var(--ottone) 25%, transparent);
+  margin-bottom: 16px;
+}
+.linguetta {
+  font: inherit; font-size: 14px; font-weight: 600; line-height: 22.4px;
+  background: color-mix(in srgb, var(--travertino) 6%, transparent);
+  border: 1px solid transparent; border-bottom: none;
+  padding: 8px 17.6px; cursor: pointer;
+  color: color-mix(in srgb, var(--travertino) 72%, transparent);
+  position: relative; border-radius: 0;
+}
+.linguetta:hover {
+  background: color-mix(in srgb, var(--ottone) 14%, transparent);
+  color: var(--travertino);
+}
+.linguetta.aperta {
+  background: color-mix(in srgb, var(--ottone) 22%, transparent);
+  border-color: color-mix(in srgb, var(--ottone) 55%, transparent);
+  color: var(--travertino);
+}
+.linguetta.aperta::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px; background: var(--ottone);
+}
+
+/* ------------------------------------------------------------ bottoni */
+/* Ottone pieno per l'azione principale, contorno per le altre. */
+.bottone {
+  font: inherit; font-size: 16px; line-height: 1.6;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: .4rem; min-height: 40px; padding: 4px 12px;
+  border-radius: var(--raggio); cursor: pointer; text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  background: transparent; color: var(--travertino);
+}
+.bottone:hover:not(:disabled) {
+  border-color: var(--ottone);
+  background: color-mix(in srgb, var(--ottone) 14%, transparent);
+}
+.bottone.primario {
+  background: var(--ottone); border-color: var(--ottone);
+  color: var(--ardesia); font-weight: 650;
+}
+.bottone.primario:hover:not(:disabled) {
+  background: #d4b87e; border-color: #d4b87e; color: var(--ardesia);
+}
+.bottone:disabled {
+  cursor: not-allowed; opacity: .4;
+}
+.bottone.largo { width: 100%; }
+/* le azioni che distruggono si vestono di cotto */
+.bottone.distrugge {
+  border-color: color-mix(in srgb, var(--cotto) 60%, transparent);
+  color: var(--cotto); background: transparent;
+}
+.bottone.distrugge:hover:not(:disabled) {
+  border-color: var(--cotto);
+  background: color-mix(in srgb, var(--cotto) 16%, transparent);
+  color: var(--travertino);
+}
+.bottone:focus-visible, .linguetta:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible,
+summary:focus-visible, a:focus-visible {
+  outline: 2px solid var(--ottone); outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------- caselle */
+.campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.campo > label, .etichetta-campo {
+  font-size: 14px; line-height: 1.6; color: var(--travertino);
+  display: flex; align-items: center; gap: 4px;
+}
+.casella, select.casella, textarea.casella {
+  font: inherit; font-size: 16px; color: var(--travertino);
+  background: var(--ardesia-chiara); border: 1px solid var(--ardesia-chiara);
+  border-radius: var(--raggio); height: 40px; padding: 0 12px;
+  width: 100%; min-width: 0;
+}
+textarea.casella { height: auto; padding: 8px 12px; resize: vertical; }
+select.casella { padding: 0 8px; cursor: pointer; }
+.casella:focus { border-color: var(--ottone); outline: none; }
+.casella::placeholder { color: rgba(236, 231, 218, .45); }
+input[type="checkbox"] { accent-color: var(--ottone); width: 1rem;
+                         height: 1rem; }
+.spunta { display: inline-flex; align-items: center; gap: .5rem;
+          font-size: 16px; cursor: pointer; }
+/* l'interruttore (st.toggle) */
+.interruttore { display: inline-flex; align-items: center; gap: .6rem;
+                cursor: pointer; font-size: 16px; }
+.interruttore input { position: absolute; opacity: 0; pointer-events: none; }
+.interruttore .binario {
+  width: 2rem; height: 1rem; border-radius: 1rem; position: relative;
+  background: rgba(236, 231, 218, .35); transition: background .15s;
+  flex: none;
+}
+.interruttore .binario::after {
+  content: ""; position: absolute; top: .1rem; left: .1rem; width: .8rem;
+  height: .8rem; border-radius: 50%; background: var(--travertino);
+  transition: left .15s;
+}
+.interruttore input:checked + .binario { background: var(--ottone); }
+.interruttore input:checked + .binario::after { left: 1.1rem; }
+.interruttore input:focus-visible + .binario {
+  outline: 2px solid var(--ottone); outline-offset: 2px;
+}
+.aiuto {
+  display: inline-flex; width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid rgba(236, 231, 218, .6); color: rgba(236, 231, 218, .6);
+  font-size: 11px; align-items: center; justify-content: center;
+  cursor: help; flex: none; line-height: 1;
+}
+
+/* ---------------------------------------------------- riquadri a scatto */
+/* st.expander */
+.pannello {
+  border: 1px solid var(--bordo-debole); border-radius: var(--raggio);
+  margin-bottom: 16px;
+}
+.pannello-testa {
+  font: inherit; color: var(--travertino); background: transparent;
+  border: 0; width: 100%; text-align: left; cursor: pointer;
+  padding: 4px 12px; min-height: 38px; border-radius: var(--raggio);
+  display: flex; align-items: center; gap: .6rem;
+}
+.pannello-testa:hover { color: var(--ottone); }
+.pannello-testa .segno {
+  font-size: 1.1rem; line-height: 1; width: 1rem; display: inline-block;
+  transition: transform .25s ease;
+}
+.pannello.aperto > .pannello-testa .segno { transform: rotate(90deg); }
+.pannello .corpo { padding: 8px 16px 16px; }
+
+/* st.info / warning / error / success */
+.avviso {
+  border-radius: var(--raggio); padding: 16px; margin: 0 0 16px;
+  line-height: 1.5;
+}
+.avviso p:last-child { margin-bottom: 0; }
+.avviso.info { background: rgba(61, 157, 243, .2); color: #D7DEEA; }
+.avviso.attenzione { background: rgba(255, 189, 69, .2); color: #ffe6a3; }
+.avviso.errore { background: rgba(255, 108, 108, .2); color: #ffc7c7; }
+.avviso.bene { background: rgba(92, 228, 136, .2); color: #c8f5d6; }
+
+/* il messaggio che compare e se ne va (st.toast) */
+.tostapane {
+  position: fixed; right: 20px; bottom: 20px; z-index: 50;
+  display: flex; flex-direction: column; gap: 8px; max-width: 380px;
+}
+.tostapane .fetta {
+  background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  padding: 12px 16px; border-radius: var(--raggio);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .35); font-size: 15px;
+}
+.tostapane .fetta.errore { border-color: var(--cotto); }
+
+/* ---------------------------------------------------- campioni di misura */
+/* st.metric: l'etichetta nomina, il numero è il protagonista */
+.metrica {
+  background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 26%, transparent);
+  padding: .55rem .7rem .6rem; min-width: 0;
+}
+.metrica .nome {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .12em;
+  font-weight: 600; line-height: 1.5;
+  color: color-mix(in srgb, var(--travertino) 78%, var(--cemento));
+}
+.metrica .valore {
+  color: var(--travertino); font-weight: 700; font-size: 36px;
+  line-height: 1.15; padding-bottom: 4px; overflow-wrap: anywhere;
+}
+/* La detrazione sotto il numero: la pastiglia di st.metric, con la sua
+   freccia. Grigia quando è un'informazione (delta_color="off"), verde o
+   rossa quando dice se va bene o male. */
+.metrica .delta {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;
+  font-size: .78rem; line-height: 1.5; padding: 0 8px 0 6px;
+  border-radius: 999px; color: rgba(236, 231, 218, .75);
+  background: rgba(236, 231, 218, .1);
+}
+.metrica .delta .freccia { font-size: .85em; }
+.metrica .delta.su { color: var(--md-verde); background: rgba(92, 228, 136, .15); }
+.metrica .delta.giu { color: var(--md-rosso); background: rgba(255, 108, 108, .15); }
+/* in una fila di campioni, tutti alti uguali */
+.colonne:has(> .metrica), .colonne:has(> div > .metrica) { align-items: stretch; }
+
+/* il campione più pieno della pagina: il numero che si paga */
+.totale-oro {
+  background: var(--ottone); padding: 13px 15px; margin: 6px 0 10px;
+  color: var(--ardesia);
+}
+.totale-oro .nome {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; opacity: .85;
+}
+.totale-oro .valore { font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
+.totale-oro .sotto { font-size: .74rem; opacity: .8; }
+.totale-oro .separato {
+  font-size: .74rem; margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid rgba(26, 39, 68, .25);
+}
+
+/* ------------------------------------------------------------ colonne */
+.colonne { display: flex; gap: 16px; align-items: flex-start; }
+.colonne > * { min-width: 0; }
+.colonne.centro { align-items: center; }
+.colonne.fondo { align-items: flex-end; }
+@media (max-width: 900px) {
+  .colonne:not(.resta) { flex-wrap: wrap; }
+  .colonne:not(.resta) > * { flex-basis: 100% !important; }
+}
+
+/* ---------------------------------------------------------- stato vuoto */
+.cme-vuoto {
+  border: 1px solid color-mix(in srgb, var(--ottone) 30%, transparent);
+  background: var(--ardesia-chiara); padding: 1.6rem 1.7rem 1.4rem;
+  margin-bottom: .9rem;
+}
+.cme-vuoto .campioni { display: flex; gap: .4rem; margin-bottom: 1.1rem; }
+.cme-vuoto .campioni i { display: block; width: 46px; height: 30px; }
+.cme-vuoto h3 { margin: 0 0 .4rem; font-size: 1.15rem; font-weight: 650; }
+.cme-vuoto p {
+  margin: 0; max-width: 62ch; line-height: 1.55;
+  color: color-mix(in srgb, var(--travertino) 82%, transparent);
+}
+
+/* ======================================================= IL COMPUTO */
+
+/* Le schede delle categorie: una categoria, una tinta, un totale. La
+   tinta arriva dalla pagina in --tinta; il fondo è la tinta al 15%, il
+   contorno al 60% (al 90% quando è aperta, come il campione tirato fuori
+   dalla cartella). */
+.scheda-cat {
+  background: color-mix(in srgb, var(--tinta) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tinta) 60%, transparent);
+  margin-bottom: 0.55rem; padding-bottom: 0.2rem;
+}
+.scheda-cat.aperta {
+  border-color: color-mix(in srgb, var(--tinta) 90%, transparent);
+}
+/* L'intestazione: la pastiglia col numero, il nome, il totale. */
+.scheda-cat > .testa {
+  font: inherit; color: var(--travertino); width: 100%;
+  display: grid; grid-template-columns: 44px 1fr auto; align-items: center;
+  column-gap: 0.85rem; background: transparent; border: none;
+  padding: 0.6rem 0.9rem; cursor: pointer; text-align: left;
+}
+.scheda-cat > .testa:hover {
+  background: color-mix(in srgb, var(--tinta) 12%, transparent);
+}
+.scheda-cat .pastiglia {
+  align-self: stretch; min-height: 44px; display: flex;
+  align-items: center; justify-content: center; font-size: 0.72rem;
+  font-weight: 700; letter-spacing: 0.06em; background: var(--tinta);
+  color: var(--su-tinta);
+}
+.scheda-cat .nome-cat {
+  font-size: 1.35rem; font-weight: 650; line-height: 1.25;
+  text-align: center;
+}
+.scheda-cat .totale-cat {
+  justify-self: end; font-size: 1.4rem; font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Le righe del computo: una tabella, non un modulo. */
+.righe-voci { padding: 0 0 0.2rem; }
+.riga-voce {
+  display: grid; align-items: center; gap: 0.35rem; padding: 0.3rem 0;
+  grid-template-columns: 0.5fr 3.17fr 1.2fr 0.85fr 0.8fr 1fr 0.45fr;
+  font-size: 0.86rem;
+}
+/* Il codice si stacca dal bordo della scheda: attaccato sembrava fuori
+   dalla tabella. Stesso rientro per intestazione e righe, che restano in
+   colonna. */
+.riga-voce > :first-child { padding-left: 0.5rem; }
+.riga-voce.intestazione { padding-bottom: 0; }
+.riga-voce.intestazione > span { font-size: 14px; }
+.riga-voce + .riga-voce:not(.intestazione) {
+  border-top: 1px solid color-mix(in srgb, var(--tinta) 60%, transparent);
+}
+.riga-voce .casella {
+  font-size: 0.86rem; height: 1.85rem; padding: 0.1rem 0.5rem;
+  line-height: 1.3; border-radius: var(--raggio);
+}
+.riga-voce textarea.casella {
+  field-sizing: content; height: auto; min-height: 1.52rem;
+  max-height: 3.85rem; padding: 0.2rem 0.5rem; resize: none;
+  overflow-y: auto; line-height: 1.3;
+}
+.riga-voce select.casella { padding: 0 0.4rem; }
+.riga-voce .parziale { text-align: right; font-size: 0.94rem;
+                       font-weight: 700; white-space: nowrap; }
+.riga-voce .parziale.vuoto { font-weight: 400; color: var(--md-arancio); }
+.riga-voce .intestazione-parziale { text-align: right; }
+/* il codice è la maniglia della riga: apre il suo pannellino */
+.codice-voce {
+  font: inherit; font-weight: 700; white-space: nowrap; cursor: pointer;
+  background: transparent; border: none; padding: 0;
+  color: rgba(236, 231, 218, .6); text-align: left;
+  display: inline-flex; align-items: center; gap: 2px;
+}
+.codice-voce:hover { color: var(--ottone); }
+.codice-voce .freccia { font-size: .7rem; opacity: .8; }
+/* la ✕ che toglie la voce: in disparte finché non la si cerca */
+.togli {
+  font: inherit; width: 100%; min-height: 1.9rem; padding: 0;
+  border: none; border-radius: 999px; background: transparent;
+  color: rgba(236, 231, 218, .5); font-size: 0.95rem; line-height: 1;
+  cursor: pointer; transition: color .15s ease, background .15s ease;
+}
+.togli:hover, .togli:focus-visible {
+  color: var(--travertino);
+  background: radial-gradient(circle at center, rgba(193, 80, 46, .85) 0%,
+                              rgba(193, 80, 46, .55) 55%,
+                              rgba(193, 80, 46, 0) 100%);
+}
+.togli:active {
+  background: radial-gradient(circle at center, #C1502E 0%,
+                              rgba(193, 80, 46, .7) 60%,
+                              rgba(193, 80, 46, 0) 100%);
+}
+
+/* il pannellino che si apre da un codice (st.popover) */
+.popover-ancora { position: relative; }
+.popover {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0;
+  width: 340px; background: var(--ardesia-chiara);
+  border: 1px solid var(--bordo-debole); border-radius: var(--raggio);
+  padding: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  font-size: 16px; font-weight: 400; color: var(--travertino);
+}
+.popover .didascalia { margin-bottom: .6rem; }
+.popover .fila { display: flex; gap: 8px; margin: 8px 0; }
+.popover .fila > * { flex: 1; }
+.popover hr { margin: 12px 0; }
+
+/* Il pool: il magazzino, non il documento. Stessa forma, spenta. */
+.scheda-pool {
+  background: color-mix(in srgb, var(--cemento) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cemento) 45%, transparent);
+  padding: 0.7rem 0.9rem 0.3rem; margin-top: 0.9rem;
+}
+.scheda-pool .titolo-pool {
+  font-size: 1.05rem; font-weight: 650; line-height: 1.4;
+  margin: 0 0 1rem;
+}
+.scheda-pool .cat-pool {
+  font: inherit; font-size: 16px; width: 100%; cursor: pointer;
+  background: transparent; border-radius: var(--raggio);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  color: var(--travertino); padding: 4px 12px; min-height: 40px;
+  margin-bottom: 8px; font-weight: 700;
+}
+.scheda-pool .cat-pool:hover {
+  border-color: var(--ottone);
+  background: color-mix(in srgb, var(--ottone) 14%, transparent);
+}
+.voce-pool {
+  display: grid; grid-template-columns: 0.4fr 3.9fr 1.1fr 0.3fr;
+  align-items: center; gap: 16px; margin-bottom: 8px;
+}
+.voce-pool .prendi {
+  font: inherit; font-weight: 700; min-height: 1.9rem; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  background: transparent; color: var(--travertino); border-radius: 0;
+  padding: 0.1rem 0;
+}
+.voce-pool .prendi:hover { background: color-mix(in srgb, var(--ottone) 14%,
+                                                  transparent); }
+.voce-pool .cestina {
+  font: inherit; background: transparent; border: none; cursor: pointer;
+  color: rgba(236, 231, 218, .6); padding: 0;
+}
+.voce-pool .cestina:hover { color: var(--cotto); }
+
+/* L'aggiunta di una voce tua sta in una scheda sua, neutra */
+.scheda-aggiungi .pannello { margin: 0.9rem 0 0; }
+
+/* Il riepilogo costi, la colonna di destra */
+.riepilogo h4 { margin-top: 0; }
+.riga-dot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin: 4px 0; font-size: 0.9rem;
+}
+.riga-dot .dot {
+  display: inline-block; width: 12px; height: 12px; margin-right: 9px;
+  vertical-align: -1px;
+}
+
+/* La scheda dei materiali: contorno d'ottone, roba di chi paga */
+.scheda-materiali {
+  background: color-mix(in srgb, var(--ottone) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ottone) 55%, transparent);
+  padding: 0.7rem 0.9rem 0.5rem; margin-top: 0.9rem;
+}
+.scheda-materiali .titolo-materiali {
+  font-size: 1.05rem; font-weight: 650; line-height: 1.4;
+  margin: 0 0 1.1rem; color: var(--ottone);
+}
+
+/* ---------------------------------------------- le tabelle modificabili */
+/* Al posto di st.data_editor, e vestite come lui: celle in ardesia chiara,
+   righe da 35 px, fili verticali fra le colonne, colonne larghe quanto il
+   contenuto, il carattere delle tabelle di Streamlit (Source Sans), e le
+   tendine che mostrano la freccia solo passandoci sopra. La barra degli
+   strumenti sta sempre in vista, come l'aveva voluta il vecchio. */
+@font-face {
+  font-family: "Source Sans";
+  src: url("/statico/vendor/SourceSans-VF.woff2") format("woff2");
+  font-weight: 200 900; font-style: normal; font-display: swap;
+}
+.griglia-scatola { position: relative; margin-bottom: 16px; }
+.griglia-barra { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.griglia-barra .attrezzi {
+  display: flex; gap: 2px; padding: 4px; background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+}
+.griglia-barra button {
+  width: 34px; height: 34px; padding: 7px; cursor: pointer; border: 0;
+  border-radius: 0; background: transparent; color: var(--travertino);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.griglia-barra button svg { width: 20px; height: 20px; fill: currentColor; }
+.griglia-barra button:hover:not(:disabled) {
+  background: var(--ottone); color: var(--ardesia);
+}
+.griglia-barra button:disabled { opacity: .35; cursor: not-allowed; }
+.griglia-scorre { overflow-x: auto; border: 1px solid rgba(236, 231, 218, .1); }
+table.griglia {
+  border-collapse: collapse; width: 100%; table-layout: fixed;
+  font-family: "Source Sans", "Segoe UI", sans-serif; font-size: 14px;
+  background: var(--ardesia-chiara);
+}
+table.griglia th {
+  text-align: left; font-weight: 400; color: rgba(236, 231, 218, .6);
+  height: 35px; padding: 0 8px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; background: #202e4b;
+  border-right: 1px solid rgba(236, 231, 218, .1);
+  border-bottom: 1px solid rgba(236, 231, 218, .1);
+}
+table.griglia th .icona-colonna {
+  display: inline-block; width: 14px; margin-right: 6px; font-size: 11px;
+  color: rgba(236, 231, 218, .45); text-align: center;
+}
+table.griglia td {
+  height: 35px; padding: 0; overflow: hidden; white-space: nowrap;
+  border-right: 1px solid rgba(236, 231, 218, .1);
+  border-bottom: 1px solid rgba(236, 231, 218, .1);
+}
+table.griglia td.sola-lettura { padding: 0 8px; text-overflow: ellipsis; }
+table.griglia td.num, table.griglia th.num { text-align: right; }
+table.griglia tr:hover td { background: rgba(236, 231, 218, .03); }
+table.griglia tr.selezionata td { background: rgba(201, 169, 106, .12); }
+table.griglia .cella {
+  font: inherit; color: var(--travertino); width: 100%; height: 34px;
+  background: transparent; border: 1px solid transparent; padding: 0 8px;
+  border-radius: 0; text-overflow: ellipsis;
+}
+table.griglia .cella:focus { border-color: var(--ottone); outline: none;
+                             background: var(--ardesia); }
+/* la tendina si riconosce solo quando serve, come nel vecchio */
+table.griglia select.cella {
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+table.griglia td:hover select.cella, table.griglia select.cella:focus {
+  appearance: auto; -webkit-appearance: auto;
+}
+table.griglia select.cella option { background: var(--ardesia-chiara); }
+table.griglia input[type="checkbox"] { margin: 0 8px; }
+/* la colonna che seleziona le righe: la spunta compare passandoci sopra */
+table.griglia .scelta-riga { text-align: center; }
+table.griglia td.scelta-riga input { opacity: 0; margin: 0; }
+table.griglia tr:hover td.scelta-riga input,
+table.griglia tr.selezionata td.scelta-riga input,
+table.griglia td.scelta-riga input:focus-visible { opacity: 1; }
+table.griglia a { padding: 0 8px; }
+/* schermo intero */
+.griglia-scatola.a-tutto-schermo {
+  position: fixed; inset: 16px; z-index: 60; margin: 0; padding: 12px;
+  background: var(--ardesia); overflow: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .6);
+}
+
+/* tabelle di sola lettura (st.dataframe) */
+table.tabella {
+  border-collapse: collapse; width: 100%; font-size: 14px;
+  margin-bottom: 16px;
+}
+table.tabella th {
+  text-align: left; font-weight: 400; color: rgba(236, 231, 218, .6);
+  padding: 5px 8px; border-bottom: 1px solid var(--bordo-debole);
+  background: rgba(36, 51, 82, .6); white-space: nowrap;
+}
+table.tabella td { padding: 3px 8px; line-height: 1.45;
+                   border-bottom: 1px solid rgba(236, 231, 218, .08); }
+table.tabella td input[type="checkbox"] { vertical-align: middle; margin: 0; }
+table.tabella td.num, table.tabella th.num { text-align: right;
+                                             white-space: nowrap; }
+.tabella-scorre { overflow-x: auto; }
+
+/* i grafici: nessuno sfondo, lo mette il banco */
+.grafico { width: 100%; }
+
+/* le schede in costruzione */
+.in-costruzione .cme-vuoto h3 { color: var(--ottone); }
+
+/* ======================================================== LA PLANIMETRIA */
+
+/* La tela è il pezzo vero appoggiato sul piano da lavoro: fondo rialzato e
+   contorno d'ottone, il contrasto più alto della scheda. */
+.tela {
+  background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  padding: .5rem; margin-bottom: .85rem;
+}
+.tela-cornice { display: block; width: 100%; border: 0; }
+/* sotto la tela i campioni sono sei in fila: la cifra scende di taglia */
+.totali-tela .metrica { padding: .5rem .55rem .55rem; }
+.totali-tela .metrica .valore { font-size: 1.45rem; }
+.totali-tela .metrica .nome { font-size: .64rem; letter-spacing: .08em; }
+/* I pannelli dei comandi stanno attorno in cemento, mai in competizione
+   col disegno. */
+.pannello-cemento {
+  border: 1px solid color-mix(in srgb, var(--cemento) 55%, transparent);
+  background: color-mix(in srgb, var(--cemento) 9%, transparent);
+  padding: .6rem .9rem .25rem; margin-bottom: .75rem;
+}
+.pannello-cemento > p { margin-bottom: .5rem; }
+.pannello-cemento .campo { margin-bottom: .4rem; }
+/* le etichette lunghe vanno a capo: le caselle restano sulla stessa riga */
+.pannello-cemento .colonne { align-items: flex-end; }
+.legenda { font-size: 16px; margin: 1rem 0; }
+.legenda .dot, .dot {
+  display: inline-block; width: 12px; height: 12px; margin-right: 5px;
+  vertical-align: -1px;
+}
+.cursore { display: flex; align-items: center; gap: 12px; }
+.cursore input[type="range"] { flex: 1; accent-color: var(--ottone); }
+.cursore b { min-width: 3ch; text-align: right; color: var(--ottone); }
+.col-piante { min-width: 110px; }
+
+/* ===================================================== IL BUSINESS PLAN */
+
+h5 { font-size: 1.1rem; font-weight: 600; margin: .75rem 0 .75rem; line-height: 1.3; }
+h6 { font-size: 1rem; font-weight: 600; margin: .75rem 0 .75rem; line-height: 1.3; }
+/* Su schermo stretto lo studio SCORRE, non si impila: un foglio di conti
+   si legge affiancato, come nell'Excel da cui viene. */
+.bp-scorre { overflow-x: auto; padding-bottom: 6px; }
+/* la testata di colonna: un'etichetta campione a piena larghezza */
+.intestazione-bp {
+  background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  padding: 5px 10px; margin: 8px 0 6px; text-align: center;
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--travertino);
+}
+/* il blocchetto etichetta / valore, stile Excel */
+.riga-bp {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 3px 2px; font-size: 0.93rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.riga-bp > span:first-child { color: var(--etichette); }
+.riga-bp > span:last-child { white-space: nowrap; }
+/* prezzi base evidenziati come in Excel: acquisto giallino, vendita azzurro */
+.prezzo-acquisto input { background: #FFF2CC !important; color: #7F6000 !important;
+                         font-weight: 700; }
+.prezzo-vendita input { background: #DDEBF7 !important; color: #1F4E79 !important;
+                        font-weight: 700; }
+.nota-base {
+  font-size: 0.72rem; color: var(--etichette); margin: 10px 0 2px;
+  padding: 6px 9px; line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--cemento) 40%, transparent);
+}
+.nota-base b { color: var(--travertino); }
+.legenda-matrice { font-size: 0.72rem; color: var(--etichette); margin: -6px 0 10px; }
+.legenda-matrice .chip {
+  display: inline-block; width: 11px; height: 11px; margin-right: 5px;
+  vertical-align: -1px; border: 1px solid #3C4C6E;
+}
+/* il dettaglio costi: etichetta | % | netto | IVA % | IVA € */
+.riga-costo {
+  display: grid; grid-template-columns: 1.5fr .75fr 1.15fr .7fr 1fr;
+  gap: 8px; align-items: center; margin-bottom: 6px;
+}
+.riga-costo.intestazione > span { font-size: 14px; }
+.riga-costo .campo { gap: 0; }
+.riga-costo .campo > label { display: none; }
+.riga-costo .casella { height: 36px; }
+.barra-vuota { text-align: center; color: #8FA0BE; }
+.ristr-mq {
+  background: var(--ardesia-chiara);
+  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
+  padding: 8px 11px; margin: 2px 0 8px; display: flex;
+  justify-content: space-between; align-items: baseline; gap: .6rem;
+}
+.ristr-mq span { font-size: .7rem; font-weight: 600; text-transform: uppercase;
+                 letter-spacing: .12em; color: var(--ottone); }
+.ristr-mq b { font-size: 1.35rem; white-space: nowrap; }
+/* il riepilogo delle spese: ogni categoria col colore della sua fetta */
+table.riepilogo-spese {
+  width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 10px;
+}
+table.riepilogo-spese th {
+  color: #C3C8CE; font-size: 0.7rem; text-align: left; text-transform: uppercase;
+  letter-spacing: .12em; font-weight: 600; padding: 4px 8px;
+}
+table.riepilogo-spese td { padding: 5px 8px; white-space: nowrap; }
+table.riepilogo-spese .num { text-align: right; }
+table.riepilogo-spese tr.totale td {
+  background: #2C3E63; font-weight: 700; padding: 8px;
+  border-top: 2px solid var(--ottone);
+}
+table.riepilogo-spese tr.totale td:first-child { color: var(--ottone); letter-spacing: .03em; }
+
+/* ------------------------------------------------ le tendine che si aprono */
+/* Si aprono e si chiudono scorrendo, non di scatto: l'altezza la misura la
+   pagina (vedi Scorre in componenti.js), qui c'è solo il ritmo. */
+/* Curva dolce in entrata e in uscita: il movimento si distribuisce su
+   tutta la durata, invece di consumarsi nei primi cento millisecondi. */
+.scorre-attivo {
+  overflow: hidden;
+  transition-property: height, opacity, transform;
+  transition-timing-function: cubic-bezier(.45, .05, .35, 1), ease-out,
+                              cubic-bezier(.45, .05, .35, 1);
+}
+/* la freccia della categoria ruota invece di cambiare di colpo */
+.scheda-cat .freccia-cat, .cat-pool .freccia-cat {
+  display: inline-block; margin-right: .35em; font-size: .8em;
+  transition: transform .35s cubic-bezier(.45, .05, .35, 1);
+}
+.scheda-cat.aperta .freccia-cat, .cat-pool .freccia-cat.girata { transform: rotate(90deg); }
+.scheda-cat { transition: border-color .35s ease; }
+
+/* il ritaglio: il foglio intero, e fuori dal riquadro l'ombra di quello
+   che verrà tagliato via */
+.ritaglio { position: relative; overflow: hidden; user-select: none;
+            touch-action: none; cursor: crosshair; line-height: 0; }
+.ritaglio img { width: 100%; display: block; pointer-events: auto; }
+.ritaglio .riquadro {
+  position: absolute; cursor: move; border: 2px solid var(--ottone);
+  box-shadow: 0 0 0 9999px rgba(10, 16, 30, .62);
+}
+.ritaglio .angolo {
+  position: absolute; width: 14px; height: 14px; background: var(--ottone);
+  border: 2px solid var(--ardesia);
+}
+.ritaglio .angolo.no { left: -8px; top: -8px; cursor: nwse-resize; }
+.ritaglio .angolo.ne { right: -8px; top: -8px; cursor: nesw-resize; }
+.ritaglio .angolo.so { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.ritaglio .angolo.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+/* ---------------------------------------- le barre di scorrimento */
+/* A scomparsa, come in Streamlit e in CATASTO: si vedono passandoci
+   sopra. Quando compaiono restano larghe dieci pixel — una barra a
+   scomparsa che sia anche sottile non si riesce a prendere col mouse. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: transparent; border-radius: 6px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+*:hover::-webkit-scrollbar-thumb { background-color: rgba(201, 169, 106, .3); }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(201, 169, 106, .65); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *:hover { scrollbar-color: rgba(201, 169, 106, .3) transparent; }
+}
+
+/* ---------------------------------------- la tendina di scelta */
+.scelta-ancora { min-width: 0; }
+.scelta {
+  font: inherit; color: var(--travertino); cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0;
+}
+.scelta.casella { padding: 0 8px 0 12px; }
+.scelta-testo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; }
+.scelta-freccia { width: 20px; height: 20px; flex: none; fill: currentColor;
+                  opacity: .75; transition: transform .2s ease; }
+.scelta.aperta .scelta-freccia { transform: rotate(180deg); }
+.scelta.aperta.casella { border-color: var(--ottone); }
+.scelta:disabled { cursor: not-allowed; opacity: .5; }
+.riga-voce .scelta.casella { padding: 0 4px 0 8px; }
+.riga-voce .scelta-freccia { width: 16px; height: 16px; }
+/* nelle tabelle la freccia compare passandoci sopra, come nel vecchio */
+table.griglia .scelta.cella { padding: 0 4px 0 8px; }
+table.griglia .scelta.cella .scelta-freccia { opacity: 0; }
+table.griglia td:hover .scelta.cella .scelta-freccia,
+table.griglia .scelta.cella.aperta .scelta-freccia,
+table.griglia .scelta.cella:focus-visible .scelta-freccia { opacity: .75; }
+.scelta-elenco {
+  position: fixed; z-index: 80; margin: 0; padding: 4px 0; list-style: none;
+  max-height: 300px; overflow-y: auto; max-width: 420px;
+  background: var(--ardesia-chiara); color: var(--travertino);
+  border: 1px solid var(--bordo-debole); border-radius: var(--raggio);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  font-family: var(--testo); font-size: 15px;
+}
+.scelta-elenco li {
+  padding: 7px 14px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.scelta-elenco li.attiva { background: rgba(201, 169, 106, .16); }
+.scelta-elenco li.scelta { color: var(--ottone); font-weight: 600; }
+
+/* la dissolvenza delle tendine e dei pannellini: scendono di qualche
+   pixel mentre compaiono, e risalgono sparendo */
+.tendina-enter-active { transition: opacity .18s ease-out, transform .18s ease-out; }
+.tendina-leave-active { transition: opacity .12s ease-in, transform .12s ease-in; }
+.tendina-enter-from, .tendina-leave-to { opacity: 0; transform: translateY(-6px) scaleY(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .tendina-enter-active, .tendina-leave-active { transition: none; }
+}

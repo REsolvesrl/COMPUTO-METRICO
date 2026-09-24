@@ -60,6 +60,13 @@ CME/
 
 ## Come avviare l'app sul proprio PC
 
+> **Dal 24 settembre 2026 CME è la versione nuova**: motore FastAPI e pagina
+> Vue al posto di Streamlit, stesse schede, stessa grafica, stesso archivio
+> (`~/CME/progetti`) e stesso formato dei file. `Avvia CME.bat` avvia lei,
+> sulla porta 8504. La versione a Streamlit resta come rete di sicurezza:
+> `Avvia CME (vecchio).bat`, porta 8501, sullo stesso archivio — possono
+> stare aperte insieme. Tutto il resto in [VERSIONE-NUOVA.md](VERSIONE-NUOVA.md).
+
 **Doppio clic su `Avvia CME.bat`.** Si apre una finestra nera — è il motore,
 va lasciata aperta — e il browser con l'app. Per chiudere CME si chiude la
 finestra nera.
