@@ -361,9 +361,38 @@ def materiali_da_df(df):
 def df_mca_vuoto():
     colonne = {}
     for col in COLONNE_MCA:
-        tipo = "float64" if col in COLONNE_MCA_NUM else "object"
+        if col in COLONNE_MCA_NUM:
+            tipo = "float64"
+        elif col in COLONNE_MCA_BOOL:
+            tipo = "bool"
+        else:
+            tipo = "object"
         colonne[col] = pd.Series(dtype=tipo)
     return pd.DataFrame(colonne)
+
+
+def df_mca_normalizzato(df):
+    """La tabella dei comparabili con le colonne e i tipi che l'editor vuole.
+
+    ⚠️ Una colonna che manca in TUTTI i comparabili il reindex la crea
+    tutta NaN, cioe' float. Succede ai progetti salvati prima che
+    l'ascensore entrasse nella griglia, e a quelli senza nessuna nota. Il
+    data_editor con la casella di spunta (o la colonna di testo) su una
+    colonna float non da' un errore nella scheda: fa cadere la pagina
+    intera. Quindi la spunta esce booleana — il vuoto vale False come in
+    mca_da_df, e va detto esplicitamente perche' bool(NaN) e' True, cioe'
+    «con ascensore» — e il testo esce object, come in df_mca_vuoto.
+    """
+    df = df.reindex(columns=COLONNE_MCA)
+    for col in COLONNE_MCA:
+        if col in COLONNE_MCA_NUM:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        elif col in COLONNE_MCA_BOOL:
+            df[col] = df[col].map(
+                lambda v: False if _mancante(v) else bool(v)).astype(bool)
+        else:
+            df[col] = df[col].astype(object)
+    return df
 
 
 def mca_da_df(df):

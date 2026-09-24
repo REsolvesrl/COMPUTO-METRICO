@@ -9,7 +9,32 @@ progetto vero, e i test sarebbero diversi su ogni macchina.
 Qui tutto viene dirottato in una cartella usa e getta, per l'intera
 sessione di test.
 """
+import os
+import shutil
+import tempfile
+from pathlib import Path
+
 import pytest
+
+# ⚠️ Il registro d'uso (uso.py) è la quarta cosa, e la più delicata: conta
+# le «operazioni valutate con CME» per l'Allegato F. Ogni test che apre e
+# salva un progetto ne scriveva una — circa quindici a ogni `pytest` — e al
+# 24 settembre il registro vero ne aveva 212 di prova su 225.
+# Va dirottato QUI, all'import del conftest, e non in una fixture: uso.py
+# fissa la sua cartella (BASE) quando viene importato, e i moduli di test lo
+# importano già mentre pytest li raccoglie, prima di qualunque fixture.
+os.environ["USO_DIR"] = tempfile.mkdtemp(prefix="cme_uso_di_prova_")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _registro_d_uso_finto():
+    """Se il registro puntasse ancora a quello vero, niente test."""
+    import uso
+    assert uso.BASE != Path.home() / ".resolve_uso", \
+        "i test scriverebbero nel registro d'uso vero"
+    assert str(uso.BASE) == os.environ["USO_DIR"]
+    yield
+    shutil.rmtree(os.environ["USO_DIR"], ignore_errors=True)
 
 
 @pytest.fixture(autouse=True, scope="session")
