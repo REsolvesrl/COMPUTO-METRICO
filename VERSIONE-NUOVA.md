@@ -1,40 +1,45 @@
-# Il cantiere
+# CME — la versione nuova
 
-Questa cartella è la **versione nuova** di CME, in costruzione: motore
-FastAPI e pagina Vue, al posto di Streamlit. È la stessa strada fatta con
-CATASTO. Non sostituisce niente: il programma che usi tutti i giorni è in
-`C:\Users\fredr\code\CME` e si avvia col suo `Avvia CME.bat`, come sempre.
+Questa **è** la versione che lavora, dal 24 settembre 2026: motore FastAPI
+e pagina Vue, al posto di Streamlit. È la stessa strada fatta con CATASTO.
+Legge e scrive l'archivio di sempre, `~/CME/progetti`, nello stesso
+formato.
 
-I due sono la stessa cartella di git vista da due porte (`git worktree`):
-il cantiere sta sul ramo `nuovo`, il programma vero su `sviluppo`/`main`.
-Niente di quello che succede qui arriva là finché non lo decidiamo.
+⚠️ La versione a Streamlit è ancora qui, si avvia con
+`Avvia CME (vecchio).bat` e lavora sullo stesso archivio: è la **rete di
+sicurezza**, non un pezzo di museo. Si toglie quando questa avrà lavorato
+per qualche settimana senza sorprese.
 
 ## Come si avvia
 
-Doppio clic su **`Avvia CME NUOVO.bat`**: il browser si apre da solo su
-<http://127.0.0.1:8504>. Porte diverse — 8501 il vecchio, 8504 questo (8502
-e 8503 sono di CATASTO) — quindi **possono stare aperti nello stesso
-momento**.
+Doppio clic su **`Avvia CME.bat`** (o il collegamento sul Desktop): cerca
+aggiornamenti, parte, e **il browser si apre da solo** su
+<http://127.0.0.1:8504>. Se non si apre — capita se il motore ci mette di
+più a partire — l'indirizzo è scritto nella finestra nera.
 
-## Lavora in una cartella sua: `~/CME/prova`
+La versione vecchia è `Avvia CME (vecchio).bat`, porta 8501: **possono
+stare aperte nello stesso momento**, e leggono lo stesso archivio. (8502 e
+8503 sono di CATASTO.)
 
-Il cantiere non tocca il lavoro vero, e non perché il .bat si ricordi di
-dirglielo: è deciso in [`server/principale.py`](server/principale.py).
+⚠️ Il motore avviato dal .bat **non si ricarica da solo**: dopo un
+aggiornamento si chiude la finestra nera e si riapre.
 
-| | vero | cantiere |
-|---|---|---|
-| progetti | `~/CME/progetti` | `~/CME/prova/progetti` |
-| listino personale | `~/CME/listino_personale.json` | `~/CME/prova/listino_personale.json` |
-| storico delle operazioni | `~/CME/storico_operazioni.json` | `~/CME/prova/storico_operazioni.json` |
-| registro d'uso | `~/.resolve_uso` | `~/CME/prova/uso` |
+## L'archivio è quello vero (e com'era prima)
 
-⚠️ Listino e storico vivono **accanto** alla cartella dei progetti: è per
-questo che la copia sta in `prova/progetti` e non in `progetti-prova` (com'era
-nella prima pietra), dove listino e storico sarebbero finiti in quelli veri.
+Adesso questa versione apre `~/CME/progetti`, e accanto il listino
+personale e lo storico delle operazioni: gli stessi file del programma
+vecchio. Anche il registro d'uso è quello vero, `~/.resolve_uso`.
 
-⚠️ Il rovescio: **quello che scrivi qui resta nella copia.** Nel cantiere si
-prova, non si lavora. Per riprovare coi progetti di oggi basta ricopiarli
-da `~/CME/progetti` a `~/CME/prova/progetti`.
+Per una settimana **non** è stato così: il cantiere lavorava in
+`~/CME/prova` — progetti, listino, storico e registro d'uso — e il
+dirottamento era scritto in `server/principale.py`, non nel .bat né in una
+variabile d'ambiente. Al passaggio la copia era identica all'archivio vero
+byte per byte: niente da riportare. Copia di sicurezza dei progetti,
+datata: `~/CME/progetti-copia-2026-09-24`.
+
+Se un giorno serve di nuovo un archivio finto per provare qualcosa:
+`set CME_ARCHIVIO=...` e `set USO_DIR=...` prima di avviare (il registro
+d'uso conta lavorazioni, e le prove non lo sono).
 
 ## Il patto fra le due versioni
 
@@ -43,7 +48,7 @@ Non è una promessa: [`tests/test_banco_come_il_vecchio.py`](tests/test_banco_co
 fa girare davvero il programma vecchio (AppTest), gli fa aprire un progetto
 e premere Salva, fa lo stesso col nuovo e confronta i due file chiave per
 chiave — su un progetto scritto apposta coi formati di prima, sul modello di
-un progetto nuovo, e sui progetti veri della copia di prova. L'unica
+un progetto nuovo, e sui progetti veri. L'unica
 differenza dichiarata sono le immagini, che il vecchio ricodifica in JPEG a
 ogni apertura e il nuovo lascia com'erano.
 
@@ -206,10 +211,8 @@ fascia; aperture nei muri da demolire, costruire e in cartongesso.
   Render). Oggi CME gira sul computer, e il nuovo ascolta solo su
   127.0.0.1: se il programma online serve ancora, vanno rifatti; se no, si
   lasciano andare con Streamlit.
-- **Quando il cantiere diventa il programma**: come per CATASTO — si toglie
-  il blocco della cartella di prova in `server/principale.py`, `Avvia
-  CME.bat` passa al motore nuovo, e il vecchio resta accanto qualche
-  settimana come rete di sicurezza.
+- **Quando si toglie il vecchio**: dopo qualche settimana senza sorprese,
+  come per CATASTO.
 
 ## Se qualcosa non torna
 

@@ -28,15 +28,14 @@ def test_la_salute_dice_su_quale_archivio_si_lavora(client, tmp_path):
         str(tmp_path / "progetti")
 
 
-def test_senza_variabile_il_cantiere_lavora_nella_prova(monkeypatch):
-    """Il sigillo: senza CME_ARCHIVIO non si tocca ~/CME/progetti."""
+def test_senza_variabile_si_lavora_sull_archivio_vero(monkeypatch):
+    """Dal 24/09/2026 il motore non dirotta piu' niente: ~/CME/progetti."""
     import importlib
+    from pathlib import Path
     monkeypatch.setenv("CME_ARCHIVIO", "")
     monkeypatch.delenv("CME_ARCHIVIO")
-    monkeypatch.setenv("USO_DIR", "")
-    monkeypatch.delenv("USO_DIR")
     importlib.reload(principale)
-    assert archivio_locale.cartella().parts[-2:] == ("prova", "progetti")
+    assert archivio_locale.cartella() == Path.home() / "CME" / "progetti"
 
 
 def test_all_avvio_si_riapre_l_ultimo_salvato(client):

@@ -11,7 +11,7 @@ qualità ogni volta), il nuovo le lascia com'erano. Si confronta tutto il
 resto della pianta.
 
 Oltre al progetto di prova scritto qui, se sul computo ci sono i progetti
-della copia di prova (`~/CME/prova/progetti`) si confrontano anche quelli:
+dell'archivio vero (`~/CME/progetti`, letti e mai scritti) si confrontano anche quelli:
 sono i file veri, con le loro stranezze.
 """
 import base64
@@ -27,7 +27,7 @@ import archivio_locale
 import banco
 
 SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
-PROVA_VERA = Path.home() / "CME" / "prova" / "progetti"
+PROVA_VERA = Path.home() / "CME" / "progetti"   # si leggono e basta
 
 
 def _png_b64():

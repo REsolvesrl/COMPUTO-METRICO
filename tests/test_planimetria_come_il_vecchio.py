@@ -8,7 +8,7 @@ finestra, locali rivestiti e aperture. Qui il programma vecchio gira davvero
 detrazione) e le voci proposte al computo, e si confrontano con quello che
 il nuovo manda alla pagina.
 
-Si prova sui progetti veri della copia di prova e su varianti che accendono
+Si prova sui progetti veri dell'archivio (letti e basta) e su varianti che accendono
 ogni detrazione: se una formula agganciata al disegno cambia di un
 centesimo fra i due programmi, qui si vede.
 """
@@ -24,7 +24,7 @@ from formato import numero_it
 from server import vista
 
 SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
-PROVA_VERA = Path.home() / "CME" / "prova" / "progetti"
+PROVA_VERA = Path.home() / "CME" / "progetti"   # si leggono e basta
 
 # ⚠️ «Superficie reale totale» NON c'è: nel nuovo è voluta diversa (le
 # stanze più le pertinenze, senza il perimetro commerciale), e la prova

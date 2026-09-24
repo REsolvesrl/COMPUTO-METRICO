@@ -19,19 +19,11 @@ import os
 import threading
 from pathlib import Path
 
-# ⚠️ **Il cantiere non tocca il lavoro vero, e non perché qualcuno si
-# ricordi di dirglielo.** Finché questa versione è in costruzione lavora in
-# ~/CME/prova: i progetti in `prova/progetti`, e accanto a loro — perché è
-# lì che li cercano i loro moduli — il listino personale e lo storico delle
-# operazioni. Anche il registro d'uso va in una cartella sua: le prove non
-# sono lavorazioni. È deciso qui, non nel .bat (che si può lanciare in un
-# altro modo) né in una variabile d'ambiente (che si può dimenticare): chi
-# vuole l'archivio vero lo dice a voce alta impostando `CME_ARCHIVIO`.
-#
-# Quando il cantiere avrà finito, si toglie questo blocco.
-_PROVA = Path.home() / "CME" / "prova"
-os.environ.setdefault("CME_ARCHIVIO", str(_PROVA / "progetti"))
-os.environ.setdefault("USO_DIR", str(_PROVA / "uso"))
+# L'archivio è quello vero, ~/CME/progetti, lo stesso del programma a
+# Streamlit (dal 24/09/2026). Per una settimana il cantiere ha lavorato su
+# una copia in ~/CME/prova, decisa qui e non nel .bat: se un giorno serve
+# di nuovo un archivio finto per provare qualcosa, `set CME_ARCHIVIO=...`
+# (e `USO_DIR`, perché le prove non sono lavorazioni) prima di avviare.
 
 import base64  # noqa: E402
 import io  # noqa: E402
