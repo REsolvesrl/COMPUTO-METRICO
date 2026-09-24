@@ -34,8 +34,9 @@ Per una settimana **non** è stato così: il cantiere lavorava in
 `~/CME/prova` — progetti, listino, storico e registro d'uso — e il
 dirottamento era scritto in `server/principale.py`, non nel .bat né in una
 variabile d'ambiente. Al passaggio la copia era identica all'archivio vero
-byte per byte: niente da riportare. Copia di sicurezza dei progetti,
-datata: `~/CME/progetti-copia-2026-09-24`.
+byte per byte: niente da riportare, e la cartella di prova è stata
+cancellata. Copia di sicurezza dei progetti, datata:
+`~/CME/progetti-copia-2026-09-24`.
 
 Se un giorno serve di nuovo un archivio finto per provare qualcosa:
 `set CME_ARCHIVIO=...` e `set USO_DIR=...` prima di avviare (il registro
@@ -91,8 +92,13 @@ arrivano qui con un merge. Chi cambia una costante là la cambia anche in
 
 ## L'inventario: tutto quello che c'è nel vecchio, e dov'è nel nuovo
 
-✅ passato e provato · 🟡 passato, non ancora provato a mano nel browser ·
-⬜ non passato
+✅ passato e provato · ⬜ non passato, e perché
+
+I pezzi che al passaggio non erano ancora stati provati a mano nel browser
+(aprire un .json, le versioni precedenti, l'annulla del computo, caricare
+le piante, la scala, zona e muro selezionati, la pulizia, la stampa delle
+planimetrie, le fatture, la chiusura nello storico, «usa come prezzo di
+vendita») li ha provati l'utente il 24/09/2026: funzionano.
 
 ### Testata e contorno
 
@@ -104,18 +110,18 @@ arrivano qui con un merge. Chi cambia una costante là la cambia anche in
 | ✅ | avviso delle planimetrie che non si sono potute rileggere |
 | ✅ | registro d'uso: un'operazione valutata per progetto e per sessione |
 | ✅ | tre linguette e sei sottolinguette, con gli stessi nomi, nello stesso ordine; la linguetta aperta si ricorda |
-| ⬜ | accesso con password e archivio online su Supabase (vedi «Da decidere») |
+| ⬜ | accesso con password e archivio online su Supabase: non servono più, CME gira sul computer (deciso il 24/09/2026) |
 
 ### 📝 Computo metrico → 📝 Il computo
 
 | | |
 |---|---|
 | ✅ | 📋 Dati del progetto: nome, committente, oggetto, luogo, data |
-| 🟡 | apri un progetto salvato (.json) dal disco |
+| ✅ | apri un progetto salvato (.json) dal disco |
 | ✅ | progetti in archivio: apri, elimina con spunta, archivia con un nome, sovrascrivi con spunta |
-| 🟡 | versioni precedenti (le ultime tre) da riaprire |
+| ✅ | versioni precedenti (le ultime tre) da riaprire |
 | ✅ | nuovo progetto con conferma: riparte dalle voci di Migliarina |
-| 🟡 | ↩️ Annulla del computo (listino personale, quantità dal disegno) |
+| ✅ | ↩️ Annulla del computo (listino personale, quantità dal disegno) |
 | ✅ | 📓 Il mio listino: salva, applica, cancella |
 | ✅ | Tetto e Facciata: accesi entrano, spenti spariscono ma restano da parte |
 | ✅ | le schede delle categorie: pastiglia col numero, nome nella tinta, totale; aperta/chiusa |
@@ -141,32 +147,32 @@ arrivano qui con un merge. Chi cambia una costante là la cambia anche in
 | | |
 |---|---|
 | ✅ | la tela del vecchio (zoom, sposta, area, modifica, scala, parete, misura, etichette trascinabili, scorciatoie) |
-| 🟡 | carica PNG/JPG/PDF (una pianta per pagina), miniature, scegli e togli una pianta |
+| ✅ | carica PNG/JPG/PDF (una pianta per pagina), miniature, scegli e togli una pianta |
 | ✅ | nome della pianta, categoria delle aree nuove, tipo dei muri nuovi |
 | ✅ | ↩️ Annulla del disegno, con l'avviso quando si porta via la scala |
-| 🟡 | la scala: il segmento e la misura reale |
-| 🟡 | zona selezionata: nome, categoria, ➕ al computo, elimina; muro selezionato: tipo, lunghezza, elimina |
+| ✅ | la scala: il segmento e la misura reale |
+| ✅ | zona selezionata: nome, categoria, ➕ al computo, elimina; muro selezionato: tipo, lunghezza, elimina |
 | ✅ | ✂️ Ritaglia la planimetria (nuovo): toglie i margini del foglio, il disegno segue, si annulla |
-| 🟡 | 🧹 Pulisci la planimetria: prova, anteprima affiancata, usa, scarta, ripristina l'originale |
+| ✅ | 🧹 Pulisci la planimetria: prova, anteprima affiancata, usa, scarta, ripristina l'originale |
 | ✅ | 🪄 Rileva stanze (beta) e annulla l'ultimo rilevamento |
 | ✅ | legenda delle categorie; 🔤 etichette (carattere, cosa mostrare, riporta fuori) |
 | ✅ | 🧮 Superfici commerciali: tabella, avvisi, totali, riporta nel computo |
 | ✅ | 📏 locale per locale: altezza, spunte dei locali, porte e rivestimenti, finestre e porte finestra, le sei quantità, 🔍 il conto in chiaro |
 | ✅ | 🧱 muri: aperture, demolire / costruire / cartongesso, esistenti esclusi, rasatura |
 | ✅ | ➕ nel computo: aggancio al disegno, voci da spuntare, «sostituisce», scritte a mano e riaggancia, bottone quando è sganciato |
-| 🟡 | 🖨️ stampa planimetrie (PDF), in piedi o steso |
+| ✅ | 🖨️ stampa planimetrie (PDF), in piedi o steso |
 
 ### 📊 Business plan
 
 | | |
 |---|---|
 | ✅ | 🏦 Studio di fattibilità: mq (dalla planimetria o a mano), passo, durata, ESTIMATED, entry/exit, ROI/ROE/annuo, total cost, EBIT, le due matrici con legenda, dettaglio costi con %, netto, IVA, ristrutturazione dal computo o dai costi reali, €/mq sui calpestabili, IVA a credito |
-| 🟡 | 🧾 Spese a consuntivo: 📎 fatture PDF/XML lette e controllate prima di aggiungerle |
+| ✅ | 🧾 Spese a consuntivo: 📎 fatture PDF/XML lette e controllate prima di aggiungerle |
 | ✅ | 🧾 registro delle sostenute con IVA scorporata, riepilogo per categoria, da sostenere, totale del registro, torta, il computo alla prova del cantiere |
 | ✅ | 🏗️ Cantiere: contratto (anche dal computo), extra, SAL, piano, saldato/residuo/finale, scostamento |
-| 🟡 | 🏗️ chiudi nello storico, riserva tarata sui cantieri chiusi |
+| ✅ | 🏗️ chiudi nello storico, riserva tarata sui cantieri chiusi |
 | ✅ | 🏷️ MCA: comparabili con la griglia, soggetto a lavori finiti, coefficienti, taglio, sconto, salto ristrutturato/da ristrutturare, stima, dispersione, media o mediana |
-| 🟡 | 📥 usa come prezzo di vendita |
+| ✅ | 📥 usa come prezzo di vendita |
 
 ### Le misure della planimetria sono quelle del vecchio
 
@@ -206,13 +212,13 @@ fascia; aperture nei muri da demolire, costruire e in cartongesso.
 
 ## Da decidere
 
-- **Accesso con password e archivio online (Supabase, Render).** Il vecchio
-  li ha per quando girava su internet (computometrico.streamlit.app, e poi
-  Render). Oggi CME gira sul computer, e il nuovo ascolta solo su
-  127.0.0.1: se il programma online serve ancora, vanno rifatti; se no, si
-  lasciano andare con Streamlit.
 - **Quando si toglie il vecchio**: dopo qualche settimana senza sorprese,
   come per CATASTO.
+
+Deciso: **il programma online non serve più** (24/09/2026). Password,
+archivio su Supabase e il servizio su Render erano per quando CME girava su
+internet; oggi gira sul computer e il nuovo ascolta solo su 127.0.0.1. Non
+si rifanno, e se ne andranno insieme alla versione a Streamlit.
 
 ## Se qualcosa non torna
 
