@@ -394,6 +394,10 @@ input[type="checkbox"] { accent-color: var(--ottone); width: 1rem;
   grid-template-columns: 0.5fr 3.17fr 1.2fr 0.85fr 0.8fr 1fr 0.45fr;
   font-size: 0.86rem;
 }
+/* Il codice si stacca dal bordo della scheda: attaccato sembrava fuori
+   dalla tabella. Stesso rientro per intestazione e righe, che restano in
+   colonna. */
+.riga-voce > :first-child { padding-left: 0.5rem; }
 .riga-voce.intestazione { padding-bottom: 0; }
 .riga-voce.intestazione > span { font-size: 14px; }
 .riga-voce + .riga-voce:not(.intestazione) {
