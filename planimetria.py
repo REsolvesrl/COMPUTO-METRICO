@@ -509,26 +509,30 @@ def voci_alimentate(codici, scelte, scartate=(), alternative=()):
     """Fra le voci che il disegno sa misurare, quelle che la misura la ricevono.
 
     codici: le voci con una misura sul disegno, nell'ordine della mappa.
-    scelte / scartate: le voci nel computo e quelle tolte dal pool.
+    scelte / scartate: le voci nel computo (nel loro ordine) e quelle tolte
+        dal pool.
     alternative: gruppi di voci che prendono la stessa misura ma si
-        escludono — la 3.11 posa soltanto, la 3.30 demolisce e ripone.
+        escludono — la 3.5 posa soltanto, la 3.10 demolisce e ripone.
 
     Le SCARTATE restano fuori. Chi ha tolto una voce dal pool ha detto che
     in questo cantiere non c'è; il disegno la rimetteva nel computo al primo
     muro spostato, e con la voce che l'aveva sostituita i metri contavano
     due volte.
 
-    Di un gruppo di ALTERNATIVE ne passa una sola: quella nel computo, e se
-    nessuna c'è la prima del gruppo. Se chi lavora ce le ha messe tutte e
-    due, passano tutte e due: l'ha deciso lui.
+    Di un gruppo di ALTERNATIVE ne passa UNA sola: la prima che sta nel
+    computo, e se nessuna c'è la prima del gruppo. Anche quando nel computo
+    ci sono tutte e due — un progetto nuovo le porta entrambe, a zero — i
+    metri del balcone non si contano due volte: l'altra resta «da
+    quantificare» finché non si toglie la prima.
     """
-    scelte, scartate = set(scelte), set(scartate)
+    scartate = set(scartate)
     restano = [c for c in codici if c not in scartate]
     via = set()
     for gruppo in alternative:
         presenti = [c for c in gruppo if c in restano]
-        tenute = [c for c in presenti if c in scelte] or presenti[:1]
-        via |= set(presenti) - set(tenute)
+        nel_computo = [c for c in scelte if c in presenti]
+        tenuta = (nel_computo or presenti)[:1]
+        via |= set(presenti) - set(tenuta)
     return [c for c in restano if c not in via]
 
 

@@ -298,23 +298,23 @@ def test_il_banco_appena_acceso_non_carica_il_modello(b):
     assert b.dati["voci_scelte"] == [] and b.dati["voci"] == []
 
 
-def test_il_progetto_nuovo_porta_voci_testi_e_prezzi_di_migliarina(b):
+def test_il_progetto_nuovo_porta_le_voci_dei_nostri_cantieri(b):
+    """Tutte quelle che vengono da ENI o da Migliarina, coi testi e i prezzi
+    del listino: niente voci tue, niente riscritture."""
     b.nuovo()
-    assert b.dati["voci_scelte"] == modello_computo.VOCI_SCELTE
-    for codice, prezzo in modello_computo.PREZZI.items():
-        assert b.prezzo(codice) == prezzo
-    for codice, testi in modello_computo.TESTI.items():
-        assert b.testi(codice)[0] == testi["d"]
-    for voce in modello_computo.VOCI_TUE:
-        assert b.e_tua(voce["codice"])
-        assert b.testi(voce["codice"]) == (voce["descrizione"], voce["um"])
+    nostre = [v["codice"] for v in listino.VOCI if v.get("cantieri")]
+    assert b.dati["voci_scelte"] == nostre == modello_computo.VOCI_SCELTE
+    assert b.dati["voci"] == [] and b.dati["testi_voci"] == {}
+    for codice in nostre:
+        assert b.prezzo(codice) == listino.voce_per_codice(codice)["prezzo"]
+    assert b.dati["lavori_facoltativi"] == []       # tetto e facciata spenti
 
 
-def test_le_voci_tue_messe_da_parte_nel_modello_restano_nel_pool(b):
+def test_le_voci_generiche_restano_nel_pool(b):
     b.nuovo()
-    da_parte = [v["codice"] for v in modello_computo.VOCI_TUE
-                if v["codice"] not in modello_computo.VOCI_SCELTE]
-    assert da_parte and set(da_parte) <= set(_pool(b))
+    generiche = [v["codice"] for v in listino.VOCI if not v.get("cantieri")
+                 and v["categoria"] not in listino.CATEGORIE_FACOLTATIVE]
+    assert generiche and set(generiche) == set(_pool(b))
 
 
 def test_il_computo_nuovo_non_vale_niente_finche_non_lo_quantifichi(b):
@@ -330,7 +330,7 @@ def test_ogni_progetto_nuovo_ha_la_sua_copia(b):
     altro = banco.Banco()
     altro.nuovo()
     assert altro.quantita("2.1") == 0
-    assert altro.testi("2.1")[0] == modello_computo.TESTI["2.1"]["d"]
+    assert altro.testi("2.1")[0] == listino.voce_per_codice("2.1")["descrizione"]
 
 
 # ---------------------------------------------- un progetto alla volta
@@ -342,7 +342,8 @@ def test_aprire_un_altro_progetto_non_lascia_tracce(b):
     b.scrivi_descrizione("2.2", "Riscritta")
     b.cambia_lavoro_facoltativo("Tetto", True)
     b.imposta_bp("bp_acquisto", 150000)
-    b.carica({"progetto": {"nome": "Altro"}, "voci_scelte": ["2.1"]})
+    b.carica({"progetto": {"nome": "Altro"}, "voci_scelte": ["2.1"],
+              "listino": listino.VERSIONE})
     assert b.quantita("2.1") == 0
     assert b.prezzo("2.1") == listino.voce_per_codice("2.1")["prezzo"]
     assert b.testi("2.2")[0] == listino.voce_per_codice("2.2")["descrizione"]

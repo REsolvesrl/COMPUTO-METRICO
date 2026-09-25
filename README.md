@@ -2,9 +2,10 @@
 
 Programma per il settore edile, che gira sul computer e si usa dal browser:
 
-- **Computo metrico**: il computo porta **solo le voci di questo cantiere**,
-  pescate con un clic dal **pool** in fondo alla scheda (~70 voci pronte fra
-  demolizioni, ricostruzioni, impianti e serramenti, con una barra di
+- **Computo metrico**: un progetto nuovo porta nel computo, a quantità
+  zero, le **84 voci dei nostri cantieri** (ENI e La Spezia Migliarina, coi
+  loro testi e prezzi): si toglie quello che non serve. Il **pool** in fondo
+  alla scheda ha il resto del listino (137 voci in tutto, con una barra di
   ricerca); una volta su, ogni voce è modificabile in tutto — descrizione,
   unità, quantità e prezzo — e le lavorazioni che il listino non ha si
   scrivono a mano, scegliendo la categoria (il codice lo mette l'app).

@@ -80,7 +80,7 @@ def test_la_1_01_prende_il_pavimento_interno():
     mappa = {codice: grandezza for codice, grandezza, _
              in _voci_da_superfici()}
     assert mappa["2.1"] == "pavimento"
-    assert mappa["3.11"] == "pavimento_esterno"
+    assert mappa["3.5"] == "pavimento_esterno"
 
 
 def test_le_alternative_sono_voci_della_stessa_misura():

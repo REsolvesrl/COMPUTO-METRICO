@@ -1,40 +1,29 @@
-"""«Nuovo progetto» parte dalle voci di Migliarina, non da un foglio bianco.
+"""«Nuovo progetto» parte dalle voci dei nostri cantieri, non da un foglio bianco.
 
-Le voci, i testi riscritti e i prezzi sono quelli del cantiere di La Spezia
-Migliarina; le quantità no, perché sono del cantiere nuovo. Qui il modello
-in sé; quello che fa «Nuovo progetto» sul banco sta in test_banco_computo.py.
+Dal 25/09/2026 sono le voci del listino che vengono da ENI o da La Spezia
+Migliarina, tutte nel computo e a zero. Qui il modello in sé; quello che fa
+«Nuovo progetto» sul banco sta in test_banco_computo.py.
 """
 import listino
 import modello_computo
 
 
-# ------------------------------------------------- il modello in sé
-
-def test_le_voci_del_modello_esistono():
-    """Ogni codice scelto è del listino o è una voce scritta a mano: un
-    codice orfano sparirebbe in silenzio al caricamento."""
-    tue = {v["codice"] for v in modello_computo.VOCI_TUE}
+def test_le_voci_del_modello_sono_quelle_dei_cantieri():
+    """Ogni codice del modello esiste, e sono tutte e sole le nostre."""
     for codice in modello_computo.VOCI_SCELTE:
-        assert listino.voce_per_codice(codice) or codice in tue, codice
+        assert listino.voce_per_codice(codice).get("cantieri"), codice
+    assert len(modello_computo.VOCI_SCELTE) == len(
+        [v for v in listino.VOCI if v.get("cantieri")])
 
 
-def test_prezzi_e_testi_riguardano_voci_del_listino():
-    """Se il listino guida venisse rinumerato, qui un prezzo finirebbe
-    appeso alla voce sbagliata: meglio saperlo da un test."""
-    for codice in [*modello_computo.PREZZI, *modello_computo.TESTI]:
-        assert listino.voce_per_codice(codice), codice
-
-
-def test_le_voci_tue_non_pestano_i_piedi_al_listino():
-    for voce in modello_computo.VOCI_TUE:
-        assert listino.voce_per_codice(voce["codice"]) is None, voce["codice"]
+def test_il_modello_parla_coi_numeri_nuovi():
+    """Senza la chiave verrebbe preso per un file di prima, e tradotto."""
+    assert modello_computo.progetto_nuovo()["listino"] == listino.VERSIONE
 
 
 def test_ogni_progetto_nuovo_ha_la_sua_copia():
     """Il modello non si consuma: toccare un progetto non cambia il prossimo."""
     primo = modello_computo.progetto_nuovo()
     primo["voci_scelte"].clear()
-    primo["testi_voci"]["3.1"]["d"] = "altro"
     secondo = modello_computo.progetto_nuovo()
     assert secondo["voci_scelte"] == modello_computo.VOCI_SCELTE
-    assert secondo["testi_voci"]["3.1"]["d"] != "altro"

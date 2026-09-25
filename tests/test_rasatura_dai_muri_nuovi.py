@@ -23,6 +23,7 @@ import io
 from PIL import Image
 
 import banco
+import listino
 
 MPP = 0.01          # 100 px = 1 m
 ALTEZZA = 3.0
@@ -34,8 +35,9 @@ def _immagine():
     return base64.b64encode(buffer.getvalue()).decode()
 
 
-def _progetto(pareti, voci_scelte=("3.18",), aperture_cos=0):
+def _progetto(pareti, voci_scelte=("3.8",), aperture_cos=0):
     return {
+        "listino": listino.VERSIONE,
         "progetto": {"nome": "Muri", "committente": "", "oggetto": "",
                      "data": "2026-08-31", "aliquota_iva": 10.0},
         "voci": [], "business_plan": {}, "listino_stato": {},
@@ -62,7 +64,7 @@ def _apri(progetto):
     """
     b = banco.Banco()
     b.carica(progetto)
-    b.spunta_voce_dal_disegno("3.18", True)
+    b.spunta_voce_dal_disegno("3.8", True)
     b.giro()
     return b
 
@@ -76,14 +78,14 @@ def test_la_rasatura_sono_le_due_facce_del_muro_nuovo():
     """Muro di 5 m per 3,00 di altezza = 15 m2; da rasare 30, non 15."""
     at = _apri(_progetto([MURO_5M]))
     assert at.quantita("3.1") == 15.0        # il muro, una volta
-    assert at.quantita("3.18") == 30.0       # le sue due facce
+    assert at.quantita("3.8") == 30.0       # le sue due facce
 
 
 def test_il_cartongesso_resta_fuori_dalla_rasatura():
     """Si stucca ai giunti e si tinteggia: rasato non va."""
     at = _apri(_progetto([MURO_5M, CARTONGESSO_4M]))
-    assert at.quantita("3.8") == 12.0        # 4 x 3, lastrato
-    assert at.quantita("3.18") == 30.0       # solo i forati
+    assert at.quantita("3.3") == 12.0        # 4 x 3, lastrato
+    assert at.quantita("3.8") == 30.0       # solo i forati
 
 
 def test_senza_muri_nuovi_la_rasatura_non_arriva():
@@ -92,7 +94,7 @@ def test_senza_muri_nuovi_la_rasatura_non_arriva():
     at = _apri(_progetto([{"id": 3, "tipo": "demolire",
                            "p1": [0, 0], "p2": [300, 0]}]))
     assert at.quantita("2.2") == 9.0        # il muro buttato giu' c'e'
-    assert at.quantita("3.18") == 0.0       # da rasare, niente
+    assert at.quantita("3.8") == 0.0       # da rasare, niente
 
 
 def test_dove_c_e_un_vano_non_c_e_muro_da_rasare():
@@ -100,4 +102,4 @@ def test_dove_c_e_un_vano_non_c_e_muro_da_rasare():
     15 m2 di muro − 1,68 di vano = 13,32, per due = 26,64."""
     at = _apri(_progetto([MURO_5M], aperture_cos=1))
     assert at.quantita("3.1") == 13.32
-    assert at.quantita("3.18") == 26.64
+    assert at.quantita("3.8") == 26.64

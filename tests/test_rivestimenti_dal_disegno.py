@@ -20,6 +20,7 @@ import pytest
 from PIL import Image
 
 import banco
+import listino
 from server import vista
 
 # 3 × 3 m con mpp 0,01: 300 px di lato. Area 9 m², perimetro 12 m.
@@ -38,11 +39,12 @@ def _progetto(rivestito, riv_porte=1, riv_finestre=0):
     quadrato = [[0.0, 0.0], [LATO_PX, 0.0], [LATO_PX, LATO_PX],
                 [0.0, LATO_PX]]
     return {
+        "listino": listino.VERSIONE,
         "progetto": {"nome": "Bagno", "committente": "", "oggetto": "",
                      "data": "2026-08-21", "aliquota_iva": 10.0},
         "voci": [], "business_plan": {},
         "listino_stato": {},
-        "voci_scelte": ["3.12"],
+        "voci_scelte": ["3.6"],
         "altezza_locali": 3.0,
         "finiture": {"porta_larg": 0.80, "porta_alt": 2.10, "porta_n": 0,
                      "porta_n_est": 0, "riv_alt": 1.20,
@@ -65,7 +67,7 @@ def _progetto(rivestito, riv_porte=1, riv_finestre=0):
 def _con_balcone():
     """Il bagno di sempre, più un balcone di 2 × 2 m (4 m²)."""
     progetto = _progetto(rivestito=False)
-    progetto["voci_scelte"] = ["2.1", "3.11"]
+    progetto["voci_scelte"] = ["2.1", "3.5"]
     progetto["piante"][0]["zone"].append({
         "id": 2, "categoria": "Balcone", "nome": "Balcone",
         "punti": [[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]],
@@ -87,36 +89,36 @@ def bagno_rivestito():
 
 def test_la_2_11_riceve_la_fascia_del_bagno(bagno_rivestito):
     """14,40 m² lordi (12 × 1,20) − 0,96 di vano porta = 13,44."""
-    assert bagno_rivestito.quantita("3.12") == 13.44
+    assert bagno_rivestito.quantita("3.6") == 13.44
 
 
 def test_il_vano_porta_si_toglie_solo_per_l_altezza_della_fascia():
     """Con la porta il conto scende di 0,96, non di 1,68."""
     senza = _apri(_progetto(rivestito=True, riv_porte=0))
-    assert senza.quantita("3.12") == 14.4
+    assert senza.quantita("3.6") == 14.4
 
 
 def test_anche_la_finestra_del_bagno_si_toglie():
     """Finestra 0,60 × 0,60, tutta dentro la fascia: −0,36."""
     at = _apri(_progetto(rivestito=True, riv_finestre=1))
-    assert at.quantita("3.12") == 13.08     # 13,44 − 0,36
+    assert at.quantita("3.6") == 13.08     # 13,44 − 0,36
 
 
 def test_senza_locali_rivestiti_la_2_11_resta_a_zero():
     """E non deve diventare negativa per via del vano porta."""
     at = _apri(_progetto(rivestito=False))
-    assert at.quantita("3.12") == 0.0
+    assert at.quantita("3.6") == 0.0
 
 
 def test_la_fascia_si_toglie_ancora_dalla_tinteggiatura(bagno_rivestito):
     """La stessa superficie non si tinteggia: pareti 12 × 3 = 36 m²
     lorde, meno 14,40 di fascia = 21,60, più 9 m² di soffitto."""
-    assert bagno_rivestito.quantita("3.19") == 30.6
+    assert bagno_rivestito.quantita("3.9") == 30.6
 
 
 def test_il_bagno_rivestito_non_prende_battiscopa(bagno_rivestito):
     """Un locale piastrellato non ha zoccolino: la 2.14 resta fuori."""
-    assert bagno_rivestito.quantita("3.15") == 0.0
+    assert bagno_rivestito.quantita("3.7") == 0.0
 
 
 # ------------------- la tabella dei locali segue il disegno, sempre
@@ -139,28 +141,28 @@ def test_rinominare_un_locale_si_vede_subito_in_tabella():
 def test_allargare_una_stanza_aggiorna_i_mq_del_computo():
     """Il difetto grosso: la stanza cresceva e il computo restava fermo."""
     b = _apri(_progetto(rivestito=True))
-    b.porta_nel_computo("3.10")
+    b.porta_nel_computo("3.4")
     b.giro()
-    assert b.quantita("3.10") == 9.0
+    assert b.quantita("3.4") == 9.0
     # da 300 a 500 px di lato: 9 m² diventano 25
     b.dati["piante"][0]["zone"][0]["punti"] = [
         [0.0, 0.0], [500.0, 0.0], [500.0, 500.0], [0.0, 500.0]]
     b.giro()
     assert _locali(b) == [("Bagno", 25.0)]
-    assert b.quantita("3.10") == 25.0
+    assert b.quantita("3.4") == 25.0
     # e la fascia segue il perimetro nuovo: 20 m × 1,20 − 0,96 = 23,04
-    assert b.quantita("3.12") == 23.04
+    assert b.quantita("3.6") == 23.04
 
 
 def test_una_zona_nuova_compare_in_tabella():
     b = _apri(_progetto(rivestito=True))
-    b.porta_nel_computo("3.10")
+    b.porta_nel_computo("3.4")
     b.dati["piante"][0]["zone"].append({
         "id": 2, "categoria": "Superficie interna", "nome": "bagno trilo",
         "punti": [[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]]})
     b.giro()
     assert [n for n, _ in _locali(b)] == ["Bagno", "bagno trilo"]
-    assert b.quantita("3.10") == 13.0        # 9 + 4
+    assert b.quantita("3.4") == 13.0        # 9 + 4
 
 
 # ------------------- la demolizione dei pavimenti è quella DENTRO casa
@@ -169,7 +171,7 @@ def test_la_demolizione_pavimenti_non_prende_i_balconi():
     """1.01 sono le stanze; il balcone è un'altra lavorazione (2.24)."""
     at = _apri(_con_balcone())
     assert at.quantita("2.1") == 9.0     # solo il bagno 3 × 3
-    assert at.quantita("3.11") == 4.0     # il balcone, per conto suo
+    assert at.quantita("3.5") == 4.0     # il balcone, per conto suo
 
 
 def test_la_1_01_arriva_da_sola_senza_spuntare_niente():
@@ -184,42 +186,42 @@ def test_la_1_01_arriva_da_sola_senza_spuntare_niente():
 def _con_pavimento():
     """Il bagno di sempre, con la 2.10 nel computo: 9 m² dal disegno."""
     progetto = _progetto(rivestito=False)
-    progetto["voci_scelte"] = ["3.10"]
+    progetto["voci_scelte"] = ["3.4"]
     return progetto
 
 
 def test_il_disegno_alimenta_la_voce_finche_nessuno_la_tocca():
     at = _apri(_con_pavimento())
-    assert at.quantita("3.10") == 9.0
+    assert at.quantita("3.4") == 9.0
 
 
 def test_la_quantita_scritta_a_mano_non_viene_riscritta():
     """Il difetto: si correggeva un metro quadro e al giro dopo tornava
     quello misurato, senza che niente lo spiegasse."""
     at = _apri(_con_pavimento())
-    at.scrivi_quantita("3.10", 12)
-    assert at.quantita("3.10") == 12.0
-    assert "3.10" in at.dati["voci_a_mano"]
+    at.scrivi_quantita("3.4", 12)
+    assert at.quantita("3.4") == 12.0
+    assert "3.4" in at.dati["voci_a_mano"]
     at.giro()                     # un altro giro: il disegno non la tocca
     at.giro()
-    assert at.quantita("3.10") == 12.0
+    assert at.quantita("3.4") == 12.0
 
 
 def test_riagganciare_rida_il_comando_al_disegno():
     at = _apri(_con_pavimento())
-    at.scrivi_quantita("3.10", 12)
+    at.scrivi_quantita("3.4", 12)
     at.riaggancia_al_disegno()
     assert at.dati["voci_a_mano"] == []
     at.giro()
-    assert at.quantita("3.10") == 9.0
+    assert at.quantita("3.4") == 9.0
 
 
 def test_la_scelta_a_mano_si_salva_col_progetto():
-    at = _apri({**_con_pavimento(), "voci_a_mano": ["3.10"],
-                "listino_stato": {"3.10": {"q": 12.0, "p": 55.0}}})
-    assert at.dati["voci_a_mano"] == ["3.10"]
+    at = _apri({**_con_pavimento(), "voci_a_mano": ["3.4"],
+                "listino_stato": {"3.4": {"q": 12.0, "p": 55.0}}})
+    assert at.dati["voci_a_mano"] == ["3.4"]
     at.giro()
-    assert at.quantita("3.10") == 12.0
+    assert at.quantita("3.4") == 12.0
 
 
 # ------------------ la didascalia delle pareti torna col numero grande

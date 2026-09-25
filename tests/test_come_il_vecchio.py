@@ -30,6 +30,10 @@ from pathlib import Path
 import pytest
 
 import banco
+import banco_disegno
+import listino
+import listino_di_prima
+import rinumerazione
 from formato import numero_it
 from server import vista
 
@@ -39,10 +43,25 @@ RIFERIMENTO = json.loads(
 CON_DISEGNO = sorted(n for n, r in RIFERIMENTO.items() if "metriche" in r)
 
 
+@pytest.fixture(autouse=True)
+def _il_listino_di_allora(monkeypatch):
+    """Il vecchio faceva i conti col listino di prima del 25/09/2026, e i
+    progetti di prova parlano coi suoi numeri: qui il motore li rifà con
+    quello, senza tradurli. Si prova la logica, non il listino."""
+    monkeypatch.setattr(listino, "VOCI", listino_di_prima.VOCI)
+    for modulo in (banco, banco_disegno):
+        monkeypatch.setattr(modulo, "VOCI_DA_SUPERFICI",
+                            listino_di_prima.VOCI_DA_SUPERFICI)
+    monkeypatch.setattr(banco, "ALTERNATIVE_DAL_DISEGNO",
+                        listino_di_prima.ALTERNATIVE_DAL_DISEGNO)
+    monkeypatch.setattr(rinumerazione, "traduci", lambda dati: dati)
+
+
 def _senza_immagini(dati):
     dati = json.loads(json.dumps(dati))
     for p in dati.get("piante") or []:
         p.pop("immagine", None)
+    dati.pop("listino", None)       # la numerazione: il vecchio non l'aveva
     return dati
 
 

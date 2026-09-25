@@ -38,6 +38,7 @@ import merito
 import modello_computo
 import planimetria
 import fattibilita
+import rinumerazione
 from costanti import (
     ALTERNATIVE_DAL_DISEGNO,
     CAMPI_NUMERO_IT,
@@ -171,14 +172,17 @@ def normalizza(dati):
     st.session_state») e poi del suo `_payload_progetto`: un progetto
     aperto qui e salvato subito esce uguale a come lo salvava il vecchio.
     """
-    # le voci tue passate al listino col loro codice diventano sue
-    dati = listino.assorbi_voci_tue(dati or {})
+    # un file coi numeri del listino di prima si traduce (rinumerazione.py);
+    # poi le voci tue passate al listino col loro codice diventano sue
+    dati = listino.assorbi_voci_tue(rinumerazione.traduci(dati or {}))
     progetto = dati.get("progetto") or {}
     try:
         data_prg = date.fromisoformat(progetto.get("data", "")).isoformat()
     except (TypeError, ValueError):
         data_prg = date.today().isoformat()
     fuori = {
+        # la numerazione del listino in cui il file è scritto
+        "listino": listino.VERSIONE,
         "progetto": {
             "nome": progetto.get("nome", "") or "",
             "committente": progetto.get("committente", "") or "",
