@@ -57,11 +57,18 @@ def _il_listino_di_allora(monkeypatch):
     monkeypatch.setattr(rinumerazione, "traduci", lambda dati: dati)
 
 
+# Campi del business plan nati dopo il vecchio (i materiali, 26/09/2026):
+# nel file ci sono, nel riferimento no.
+CAMPI_NUOVI_BP = ("bp_materiali", "bp_iva_materiali")
+
+
 def _senza_immagini(dati):
     dati = json.loads(json.dumps(dati))
     for p in dati.get("piante") or []:
         p.pop("immagine", None)
     dati.pop("listino", None)       # la numerazione: il vecchio non l'aveva
+    for campo in CAMPI_NUOVI_BP:
+        (dati.get("business_plan") or {}).pop(campo, None)
     return dati
 
 

@@ -79,7 +79,7 @@ def iva_su(imponibile, aliquota):
 def costi_acquisto(prezzo, imposta_pct=9.0, imposte_fisse=0.0,
                    notaio=3500.0, agenzia_pct=3.0, iva_agenzia_pct=22.0,
                    imprevisti=0.0, spese_mutuo=0.0, ristrutturazione=0.0,
-                   iva=0.0):
+                   iva=0.0, materiali=0.0):
     """Dettaglio dei costi di acquisto; "totale" è la somma.
 
     `iva` è l'IVA complessiva delle voci, calcolata fuori di qui perché
@@ -98,6 +98,7 @@ def costi_acquisto(prezzo, imposta_pct=9.0, imposte_fisse=0.0,
         "imprevisti": round(imprevisti, 2),
         "spese_mutuo": round(spese_mutuo, 2),
         "ristrutturazione": round(ristrutturazione, 2),
+        "materiali": round(float(materiali or 0.0), 2),
         "iva": round(float(iva or 0.0), 2),
     }
     dettaglio["totale"] = round(sum(dettaglio.values()), 2)
@@ -141,6 +142,7 @@ def studio_fattibilita(parametri):
         imprevisti=parametri.get("imprevisti", 0.0),
         spese_mutuo=parametri.get("spese_mutuo", 0.0),
         ristrutturazione=parametri.get("ristrutturazione", 0.0),
+        materiali=parametri.get("materiali", 0.0),
         iva=parametri.get("iva_costi", 0.0),
     )
     ven = costi_vendita(

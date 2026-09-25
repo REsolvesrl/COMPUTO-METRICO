@@ -114,6 +114,7 @@ def _fattibilita(b, spese):
         "imprevisti": bp["bp_imprevisti"],
         "spese_mutuo": bp["bp_mutuo"],
         "ristrutturazione": ristr_eff,
+        "materiali": bp["bp_materiali"],
         "mq": mq_eff,
         "mq_calpestabile": mq_calp,
         "durata_mesi": bp["bp_durata"],
@@ -179,8 +180,14 @@ def _fattibilita(b, spese):
                     aiuto_destra="I lavori NUDI, senza riserva: gli "
                     "imprevisti sono la riga qui sopra e si contano una "
                     "volta sola. Lasciando 0 arriva il totale del computo — "
-                    "che NON comprende i materiali a cura tua: quelli si "
-                    "mettono fra le spese."),
+                    "che NON comprende i materiali a cura tua: quelli "
+                    "vanno nella riga qui sotto."),
+        _riga_costo("Materiali", bp, derivati, destra="bp_materiali",
+                    iva="bp_iva_materiali",
+                    aiuto_destra="Quello che compri tu e l'impresa non "
+                    "fornisce (l'elenco dei Materiali, Allegato 1): "
+                    "sanitari, rubinetteria, porte, pavimenti… Netto, "
+                    "l'IVA nella sua colonna. Non fa imprevisti."),
     ]
     agenzia_out = _riga_costo(
         "Agenzia OUT", bp, derivati, centro="bp_ag_out",

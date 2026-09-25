@@ -79,6 +79,9 @@ IMPOSTAZIONI_BP = {
     "bp_ag_in": 3.0, "bp_ag_out": 2.5, "bp_iva_ag": 22.0,
     "bp_imprevisti_pct": 10.0, "bp_imprevisti": 0.0, "bp_mutuo": 0.0, "bp_durata": 12,
     "bp_ristr": 0.0, "bp_passo": 10000.0,
+    # I materiali a carico del committente (quelli dell'Allegato 1): non
+    # sono nel computo dell'impresa, e non fanno imprevisti.
+    "bp_materiali": 0.0,
     # Aliquote IVA, una per voce: l'imposta di registro non ne ha (e' gia'
     # un'imposta), notaio e servizi stanno al 22%, i lavori edili al 10%.
     # Imprevisti e condominio partono da ZERO: e' una riserva, non una
@@ -87,6 +90,7 @@ IMPOSTAZIONI_BP = {
     "bp_iva_imposta": 0.0, "bp_iva_imposte_fisse": 0.0,
     "bp_iva_notaio": 22.0, "bp_iva_mutuo": 22.0,
     "bp_iva_imprevisti": 0.0, "bp_iva_ristr": 10.0,
+    "bp_iva_materiali": 22.0,
     "bp_iva_ag_in": 22.0, "bp_iva_ag_out": 22.0,
     "bp_coeff_sogg": 0.0, "bp_sconto": 13.0,
     # Correzione per il taglio: i tagli piccoli costano di piu' al metro.
@@ -244,6 +248,7 @@ VOCI_CON_IVA = (
     ("bp_mutuo", "bp_iva_mutuo"),
     ("bp_imprevisti", "bp_iva_imprevisti"),
     ("bp_ag_in_eur", "bp_iva_ag_in"),
+    ("bp_materiali", "bp_iva_materiali"),
 )
 
 CAMPI_NUMERO_IT = {
@@ -260,6 +265,7 @@ CAMPI_NUMERO_IT = {
     "bp_ag_in_eur": (2, "bp_pct_da_euro_ag_in", 0.0),
     "bp_ag_out_eur": (2, "bp_pct_da_euro_ag_out", 0.0),
     "bp_ristr": (2, None, 0.0),
+    "bp_materiali": (2, None, 0.0),
     "cant_contratto": (2, None, 0.0),
     "cant_extra": (2, None, 0.0),
 }

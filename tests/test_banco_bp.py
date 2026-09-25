@@ -193,3 +193,26 @@ def test_cambiare_l_aliquota_iva_muove_il_totale(b):
     t = b.totali()
     assert t["iva"] == pytest.approx(imponibile * 0.22)
     assert t["totale_con_iva"] == pytest.approx(imponibile * 1.22)
+
+
+# ----------------------------------------------------------- i materiali
+
+def test_i_materiali_entrano_nei_costi_con_la_loro_iva(b):
+    from server.vista_bp import vista_bp
+    b.imposta_bp("bp_acquisto", 100000)
+    prima = vista_bp(b)["fattibilita"]["esito"]
+    b.imposta_bp("bp_materiali", 10000)
+    riga = [r for r in vista_bp(b)["fattibilita"]["costi"]
+            if r["etichetta"] == "Materiali"][0]
+    assert riga["destra"]["valore"] == 10000
+    assert riga["iva"]["valore"] == 22.0 and riga["iva"]["euro"] == 2200.0
+    assert prima != vista_bp(b)["fattibilita"]["esito"]
+
+
+def test_i_materiali_non_fanno_imprevisti(b):
+    b.scrivi_quantita("2.1", 100)
+    b.giro()
+    imprevisti = b.dati["business_plan"]["bp_imprevisti"]
+    b.imposta_bp("bp_materiali", 50000)
+    b.giro()
+    assert b.dati["business_plan"]["bp_imprevisti"] == imprevisti

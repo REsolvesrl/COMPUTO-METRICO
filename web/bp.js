@@ -53,7 +53,7 @@ const RigaCosto = defineComponent({
   setup() { return { imposta, euro }; },
   template: `
   <div class="riga-costo">
-    <span class="grigio"><span v-if="riga.arancio"><b class="arancio">{{ riga.etichetta }}</b> (0 = dal computo)</span>
+    <span class="grigio"><b v-if="riga.arancio" class="arancio">{{ riga.etichetta }}</b>
       <template v-else>{{ riga.etichetta }}</template></span>
     <CampoNumero v-if="riga.centro" :valore="riga.centro.valore" :decimali="2" :aiuto="riga.centro.aiuto"
                  @cambia="imposta(riga.centro.chiave, $event)" />
