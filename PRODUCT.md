@@ -12,7 +12,7 @@ Un solo utente: il titolare di RESolve srl (società immobiliare italiana), che 
 
 ## Product Purpose
 
-CME (Computo Metrico Estimativo) è un'app web Streamlit, live su <https://computometrico.streamlit.app/>, che copre due lavori ugualmente centrali (confermato dall'utente):
+CME (Computo Metrico Estimativo) è un programma che gira sul computer dell'utente e si usa dal browser (motore FastAPI su 127.0.0.1:8504, pagina Vue; fino al 25/09/2026 era un'app Streamlit), e copre due lavori ugualmente centrali (confermato dall'utente):
 
 1. **Valutare operazioni immobiliari** — decidere se un acquisto + ristrutturazione conviene: studio di fattibilità / business plan (costi di acquisto e vendita, EBIT, money multiple, ROE, rendimento annualizzato, matrici di sensitività), MCA (market comparison approach), registro spese a consuntivo con confronto preventivo/consuntivo.
 2. **Preventivare ristrutturazioni** — produrre il computo metrico: voci di lavorazione con quantità calcolate dalle dimensioni, listino guida (~50 voci a prezzi indicativi modificabili), totali per categoria con incidenze, imprevisti % e IVA, export Excel/CSV. Accanto al computo, nella sua seconda linguetta, l'elenco dei **materiali a cura del committente** (extra-appalto): nasce già pieno delle voci ricorrenti, porta fornitore/link/stato dell'ordine e **nessun prezzo** (i soldi dei materiali stanno nel registro spese, dove arrivano dalle fatture), e ne esce l'ALLEGATO 1 firmato con l'impresa.
@@ -27,13 +27,13 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 
 - Flusso tipico: valutazione dell'affare (business plan / MCA) → computo metrico della ristrutturazione → misura delle superfici da planimetria (PDF o immagine) → durante il cantiere, registrazione delle spese a consuntivo caricando le fatture (XML FatturaPA o PDF di cortesia SdI, estrazione automatica dei campi, tutto in locale).
 - Misura da planimetria in stile AreaPlan: più planimetrie per progetto, zone colorate per categoria di superficie con percentuale commerciale, scala su misura nota, misura pareti, riepilogo della superficie commerciale riportabile nel computo; rilevamento automatico stanze (beta, OpenCV).
-- Salvataggio: file .json scaricabile (planimetrie incluse) e archivio online su Supabase Storage (bucket privato, credenziali nei secrets di Streamlit).
-- Deploy su Streamlit Community Cloud; sviluppo locale con `python -m streamlit run streamlit_app.py`, test con pytest.
+- Salvataggio: archivio in una cartella del computer (`~/CME/progetti`, con le ultime tre versioni di ogni progetto) e file .json scaricabile (planimetrie incluse). Il programma online (Streamlit Cloud, poi Render, archivio Supabase, password) non serve più dal 24/09/2026.
+- Avvio con `Avvia CME.bat`, che si aggiorna da sé; test con pytest.
 
 ## Capabilities and Constraints
 
-- Stack: Python + Streamlit; logica di calcolo separata dall'interfaccia in moduli puri e testati (calcoli.py, planimetria.py, fattibilita.py, fattura.py, materiali.py); componente browser custom per il visualizzatore planimetrie (cme_viewer/, canvas + barra strumenti).
-- Vincolo architetturale: la logica resta in funzioni pure coperte da pytest; l'interfaccia vive in streamlit_app.py.
+- Stack: Python (FastAPI) + Vue 3 senza assemblatore; logica di calcolo separata dall'interfaccia in moduli puri e testati (calcoli.py, planimetria.py, fattibilita.py, fattura.py, materiali.py); il progetto aperto e i suoi gesti nel banco (banco*.py); tela custom per le planimetrie (cme_viewer/frontend, canvas + barra strumenti).
+- Vincolo architetturale: la logica resta in funzioni pure coperte da pytest; il banco tiene lo stato, `server/` decide cosa si mostra, `web/` come si vede.
 - Terminologia di dominio (italiano, settore edile/immobiliare): computo metrico, voci di lavorazione, listino, incidenze, imprevisti, IVA scorporata, superficie commerciale, studio di fattibilità, MCA, coefficiente di merito, FatturaPA/SdI, materiali a cura committente. Categorie spese fisse: ACQUISTO, LAVORI, MATERIALE, ARCHITETTO, COSTI INDIRETTI, AGENZIA, ALTRO.
 - **Documenti reali replicati, non inventati.** L'ALLEGATO 1 dei materiali riproduce il foglio che l'utente firma davvero con l'impresa, comprese le voci: capitoli per stanza e per impianto (BAGNO, PORTE E INFISSI, IMPIANTO ELETTRICO, MURATURA, PAVIMENTI, IMPIANTO RISCALDAMENTO), nessun prezzo, nota a piè di pagina con l'asterisco, «luogo, lì data» e due firme «per accettazione». Quando c'è un documento vero, si parte da quello — e le sue voci diventano l'elenco di partenza dell'app, non un esempio inventato.
 - L'interfaccia è in italiano, con una eccezione deliberata: lo studio di

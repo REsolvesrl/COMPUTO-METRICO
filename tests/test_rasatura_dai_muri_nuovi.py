@@ -19,13 +19,10 @@ silenzio:
 """
 import base64
 import io
-from pathlib import Path
 
-import pytest
 from PIL import Image
-from streamlit.testing.v1 import AppTest
 
-SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+import banco
 
 MPP = 0.01          # 100 px = 1 m
 ALTEZZA = 3.0
@@ -63,15 +60,11 @@ def _apri(progetto):
     finche' non la si spunta nessuna quantita' arriva nella voce. Qui la
     accendiamo, perche' e' proprio la quantita' che vogliamo guardare.
     """
-    at = AppTest.from_file(str(SORGENTE), default_timeout=300)
-    at.run()
-    at.session_state["da_caricare"] = progetto
-    at.run()
-    assert not at.exception, [e.value for e in at.exception]
-    at.session_state["supvoce_3.18"] = True
-    at.run()
-    assert not at.exception, [e.value for e in at.exception]
-    return at
+    b = banco.Banco()
+    b.carica(progetto)
+    b.spunta_voce_dal_disegno("3.18", True)
+    b.giro()
+    return b
 
 
 MURO_5M = {"id": 1, "tipo": "costruire", "p1": [0, 100], "p2": [500, 100]}
@@ -82,15 +75,15 @@ CARTONGESSO_4M = {"id": 2, "tipo": "cartongesso",
 def test_la_rasatura_sono_le_due_facce_del_muro_nuovo():
     """Muro di 5 m per 3,00 di altezza = 15 m2; da rasare 30, non 15."""
     at = _apri(_progetto([MURO_5M]))
-    assert at.session_state["q_3.1"] == 15.0        # il muro, una volta
-    assert at.session_state["q_3.18"] == 30.0       # le sue due facce
+    assert at.quantita("3.1") == 15.0        # il muro, una volta
+    assert at.quantita("3.18") == 30.0       # le sue due facce
 
 
 def test_il_cartongesso_resta_fuori_dalla_rasatura():
     """Si stucca ai giunti e si tinteggia: rasato non va."""
     at = _apri(_progetto([MURO_5M, CARTONGESSO_4M]))
-    assert at.session_state["q_3.8"] == 12.0        # 4 x 3, lastrato
-    assert at.session_state["q_3.18"] == 30.0       # solo i forati
+    assert at.quantita("3.8") == 12.0        # 4 x 3, lastrato
+    assert at.quantita("3.18") == 30.0       # solo i forati
 
 
 def test_senza_muri_nuovi_la_rasatura_non_arriva():
@@ -98,13 +91,13 @@ def test_senza_muri_nuovi_la_rasatura_non_arriva():
     3.18 resta a zero e la si scrive a mano dove serve davvero."""
     at = _apri(_progetto([{"id": 3, "tipo": "demolire",
                            "p1": [0, 0], "p2": [300, 0]}]))
-    assert at.session_state["q_2.2"] == 9.0        # il muro buttato giu' c'e'
-    assert at.session_state["q_3.18"] == 0.0       # da rasare, niente
+    assert at.quantita("2.2") == 9.0        # il muro buttato giu' c'e'
+    assert at.quantita("3.18") == 0.0       # da rasare, niente
 
 
 def test_dove_c_e_un_vano_non_c_e_muro_da_rasare():
     """L'apertura si toglie prima, e le facce sono il doppio del netto:
     15 m2 di muro − 1,68 di vano = 13,32, per due = 26,64."""
     at = _apri(_progetto([MURO_5M], aperture_cos=1))
-    assert at.session_state["q_3.1"] == 13.32
-    assert at.session_state["q_3.18"] == 26.64
+    assert at.quantita("3.1") == 13.32
+    assert at.quantita("3.18") == 26.64

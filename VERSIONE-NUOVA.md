@@ -5,10 +5,11 @@ e pagina Vue, al posto di Streamlit. È la stessa strada fatta con CATASTO.
 Legge e scrive l'archivio di sempre, `~/CME/progetti`, nello stesso
 formato.
 
-⚠️ La versione a Streamlit è ancora qui, si avvia con
-`Avvia CME (vecchio).bat` e lavora sullo stesso archivio: è la **rete di
-sicurezza**, non un pezzo di museo. Si toglie quando questa avrà lavorato
-per qualche settimana senza sorprese.
+La versione a Streamlit è stata **tolta il 25 settembre 2026**, su richiesta
+dell'utente che lavorava ormai solo con questa: `streamlit_app.py`, il suo
+`.bat`, la configurazione e il servizio online. Se un giorno servisse
+rivederla, è nella storia di git (l'ultimo commit che la contiene è quello
+della 3.30, 40e2660).
 
 ## Come si avvia
 
@@ -17,9 +18,7 @@ aggiornamenti, parte, e **il browser si apre da solo** su
 <http://127.0.0.1:8504>. Se non si apre — capita se il motore ci mette di
 più a partire — l'indirizzo è scritto nella finestra nera.
 
-La versione vecchia è `Avvia CME (vecchio).bat`, porta 8501: **possono
-stare aperte nello stesso momento**, e leggono lo stesso archivio. (8502 e
-8503 sono di CATASTO.)
+(8502 e 8503 sono di CATASTO.)
 
 ⚠️ Il motore avviato dal .bat **non si ricarica da solo**: dopo un
 aggiornamento si chiude la finestra nera e si riapre.
@@ -42,16 +41,38 @@ Se un giorno serve di nuovo un archivio finto per provare qualcosa:
 `set CME_ARCHIVIO=...` e `set USO_DIR=...` prima di avviare (il registro
 d'uso conta lavorazioni, e le prove non lo sono).
 
-## Il patto fra le due versioni
+## Uguale al vecchio
 
-Lo stesso file, aperto e risalvato da una parte o dall'altra, esce **uguale**.
-Non è una promessa: [`tests/test_banco_come_il_vecchio.py`](tests/test_banco_come_il_vecchio.py)
-fa girare davvero il programma vecchio (AppTest), gli fa aprire un progetto
-e premere Salva, fa lo stesso col nuovo e confronta i due file chiave per
-chiave — su un progetto scritto apposta coi formati di prima, sul modello di
-un progetto nuovo, e sui progetti veri. L'unica
-differenza dichiarata sono le immagini, che il vecchio ricodifica in JPEG a
-ogni apertura e il nuovo lascia com'erano.
+Finché i due hanno convissuto, i test facevano girare davvero il programma
+vecchio (AppTest) e pretendevano che lo stesso file, aperto e risalvato da
+una parte o dall'altra, uscisse **uguale** chiave per chiave, e che le
+misure della planimetria fossero le stesse campione per campione — sui
+progetti veri e su varianti che accendevano ogni detrazione.
+
+Prima di toglierlo, il vecchio ha calcolato un'ultima volta otto progetti
+di prova inventati (un progetto dei formati di prima, il modello di un
+progetto nuovo, un appartamento con ogni categoria di zona, i quattro tipi
+di muro e ogni detrazione in quattro varianti, lo stesso con la 3.30, un
+cantiere con spese, SAL e comparabili). Quello che ha detto sta in
+`tests/dati/riferimento_vecchio.json`, e
+[`tests/test_come_il_vecchio.py`](tests/test_come_il_vecchio.py) pretende
+che il nuovo dica ancora le stesse cose: il file salvato, i campioni della
+planimetria con le detrazioni, le voci proposte al computo, il conto in
+chiaro. L'unica differenza dichiarata sono le immagini, che il vecchio
+ricodificava in JPEG a ogni apertura.
+
+Quei progetti in più hanno trovato due differenze che i confronti di prima
+non avevano mai incontrato, e il nuovo ora fa come il vecchio: un
+comparabile salvato senza la spunta dell'ascensore si riapre «senza
+ascensore» (non vuoto), e un valore di «media o mediana» che non è nessuno
+dei due torna «media».
+
+Le regole del computo che i test del vecchio provavano facendo i gesti
+sulla sua pagina (il pool, le voci tue, gli scarti, l'ordine, Tetto e
+Facciata, il modello di un progetto nuovo, un progetto alla volta, i netti
+del business plan) si provano ora sul banco: `tests/test_banco_computo.py`
+e `tests/test_banco_bp.py`. I test che provavano solo come Streamlit
+disegnava le caselle se ne sono andati con lui.
 
 ## Com'è fatto
 
@@ -60,8 +81,8 @@ ogni apertura e il nuovo lascia com'erano.
                   fattibilita, merito, stampa, archivio_locale…), identico
                   a quello di sviluppo.
 costanti.py       le costanti dell'interfaccia (colori, categorie, muri,
-                  impostazioni del business plan), copiate da
-                  streamlit_app.py: un test le pretende identiche.
+                  impostazioni del business plan, voci agganciate al
+                  disegno).
 grafici.py        le figure Plotly del vecchio, copiate senza toccarle.
 esporta.py        PDF, PDF senza prezzi, Excel, CSV, Allegato 1.
 banco.py          il banco di lavoro: il progetto aperto nel formato del
@@ -69,9 +90,9 @@ banco_disegno.py  file, e tutti i gesti che lo cambiano — computo e
 banco_bp.py       materiali, disegno, business plan. Niente Streamlit.
 server/           FastAPI: la vista (cosa si mostra) e le rotte (i gesti).
 web/              la pagina: Vue 3 come modulo, senza assemblatore.
-cme_viewer/frontend/  la tela delle planimetrie del VECCHIO, servita
+cme_viewer/frontend/  la tela delle planimetrie del vecchio, servita
                   così com'è in /tela: parla il protocollo dei componenti
-                  Streamlit e la pagina nuova glielo parla uguale.
+                  Streamlit e la pagina glielo parla uguale.
 ```
 
 Il modello è quello di Streamlit senza Streamlit: il motore tiene aperto un
@@ -84,11 +105,6 @@ quote SAL predefinite.
 
 ⚠️ **Niente `npm`.** Vue è un file in `web/vendor/`; Plotly.js arriva dal
 pacchetto Python che costruisce le figure, quindi è sempre la versione giusta.
-
-⚠️ `streamlit_app.py` in questo ramo **non si tocca**: finché i due
-convivono, le correzioni al programma vecchio si fanno su `sviluppo` e
-arrivano qui con un merge. Chi cambia una costante là la cambia anche in
-`costanti.py` (il test lo ricorda).
 
 ## L'inventario: tutto quello che c'è nel vecchio, e dov'è nel nuovo
 
@@ -176,15 +192,12 @@ vendita») li ha provati l'utente il 24/09/2026: funzionano.
 
 ### Le misure della planimetria sono quelle del vecchio
 
-[`tests/test_planimetria_come_il_vecchio.py`](tests/test_planimetria_come_il_vecchio.py)
-fa girare il vecchio e confronta, campione per campione, tutte le misure
-della scheda — i sei campioni sotto la tela, i totali delle superfici,
-pavimento, battiscopa, pareti, soffitti, pavimento esterno, rivestimenti
-con le loro detrazioni, i muri con le aperture — le voci proposte al
-computo, e le tabelle del conto in chiaro. Sui progetti veri e su tre
-varianti che accendono ogni detrazione: porte interne ed esterne,
-finestre e porte finestra; locali rivestiti con porte e finestre nella
-fascia; aperture nei muri da demolire, costruire e in cartongesso.
+Tutte le misure della scheda — i campioni sotto la tela, i totali delle
+superfici, pavimento, battiscopa, pareti, soffitti, pavimento esterno,
+rivestimenti con le loro detrazioni, i muri con le aperture — le voci
+proposte al computo e le tabelle del conto in chiaro: finché c'era, il
+vecchio le calcolava accanto al nuovo sui progetti veri; ora le ha lasciate
+scritte per i progetti di prova (vedi «Uguale al vecchio»).
 
 ## Dove il nuovo fa diversamente, apposta
 
@@ -210,15 +223,17 @@ fascia; aperture nei muri da demolire, costruire e in cartongesso.
 - Ricaricare la pagina del browser **non perde niente**: il progetto aperto
   sta nel motore, non nella pagina.
 
-## Da decidere
+## Deciso
 
-- **Quando si toglie il vecchio**: dopo qualche settimana senza sorprese,
-  come per CATASTO.
-
-Deciso: **il programma online non serve più** (24/09/2026). Password,
-archivio su Supabase e il servizio su Render erano per quando CME girava su
-internet; oggi gira sul computer e il nuovo ascolta solo su 127.0.0.1. Non
-si rifanno, e se ne andranno insieme alla versione a Streamlit.
+- **Il programma online non serve più** (24/09/2026). Password, archivio su
+  Supabase e il servizio su Render erano per quando CME girava su internet;
+  oggi gira sul computer e ascolta solo su 127.0.0.1. Non si rifanno.
+- **Il vecchio si toglie** (25/09/2026): l'utente lavorava ormai solo con
+  questo. Se ne sono andati `streamlit_app.py`, `Avvia CME (vecchio).bat`,
+  `.streamlit/`, `archivio.py` (l'archivio online), il componente Python
+  di `cme_viewer` (resta la sua tela, `cme_viewer/frontend`), `Dockerfile`
+  e `render.yaml`. Il ramo `main`, quello che era pubblicato online, non è
+  stato toccato.
 
 ## Se qualcosa non torna
 

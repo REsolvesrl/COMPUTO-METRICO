@@ -9,18 +9,14 @@ StreamlitAPIException. Lo stesso per le note, se nessun comparabile ne
 aveva una. Non si vedeva un errore nella scheda: non si vedeva
 piu' niente.
 
-Come test_apertura_progetto, esegue l'intero script: e' lento, ma e' il
-solo modo di accorgersi che l'editor non accetta i dati.
+Qui il progetto si apre sul banco e la scheda MCA si calcola per intero.
 """
-from pathlib import Path
-
 import pandas as pd
 import pytest
-from streamlit.testing.v1 import AppTest
 
+import banco
 import tabelle
-
-SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+from server.vista_bp import vista_bp
 
 PROGETTO = {
     "progetto": {"nome": "Comparabili vecchi", "data": "2026-09-23"},
@@ -33,25 +29,20 @@ PROGETTO = {
 
 @pytest.fixture(scope="module")
 def progetto_aperto():
-    at = AppTest.from_file(str(SORGENTE), default_timeout=240)
-    at.run()
-    at.session_state["da_caricare"] = PROGETTO
-    at.run()
-    return at
+    b = banco.Banco()
+    b.carica(PROGETTO)
+    return b
 
 
-def test_la_pagina_non_cade(progetto_aperto):
-    assert not progetto_aperto.exception, [
-        e.value for e in progetto_aperto.exception]
+def test_la_scheda_si_calcola(progetto_aperto):
+    assert vista_bp(progetto_aperto)
 
 
 def test_la_spunta_mancante_torna_come_non_spuntata(progetto_aperto):
-    df = progetto_aperto.session_state["df_mca"]
-    assert df["ascensore"].dtype == bool
-    assert df["ascensore"].tolist() == [False]
+    righe = progetto_aperto.dati["mca_comparabili"]
+    assert [r["ascensore"] for r in righe] == [False]
     # e il comparabile c'e' ancora, con i suoi numeri
-    assert df["nome"].tolist() == ["C1"]
-    assert df["prezzo"].tolist() == [250000.0]
+    assert [(r["nome"], r["prezzo"]) for r in righe] == [("C1", 250000.0)]
 
 
 @pytest.mark.parametrize("valori, attesi", [

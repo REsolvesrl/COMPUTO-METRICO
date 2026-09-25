@@ -1,4 +1,3 @@
-streamlit==1.58.0
 pandas==3.0.3
 numpy==2.5.0
 plotly==6.8.0
@@ -6,19 +5,17 @@ openpyxl==3.1.5
 Pillow==12.2.0
 PyMuPDF==1.28.0
 opencv-python-headless==5.0.0.93
-requests==2.34.2
 # stampa del computo in PDF: Python puro, nessuna libreria di sistema
 # da installare (conta, visto che CME gira sul PC dell'utente)
 reportlab==5.0.0
 
-# pyarrow non lo usiamo direttamente: se lo tira dietro Streamlit, che ci
-# converte le tabelle (st.dataframe / st.data_editor). Va fissato lo stesso.
-# Il 2026-08-07 il server ha preso da solo la 25.0.0 ed e' morto di
-# segmentation fault mentre disegnava una pagina; in locale, con la 24.0.0,
-# non e' mai successo. Era l'unica libreria diversa fra i due ambienti.
+# pyarrow non lo usiamo direttamente: lo portava Streamlit, e pandas, se lo
+# trova, ci tiene le colonne di testo. Resta fissato perche' i conti girino
+# con le stesse librerie con cui sono stati provati: il 2026-08-07 la
+# 25.0.0, presa da sola, e' morta di segmentation fault.
 pyarrow==24.0.0
 
-# il motore nuovo (cantiere): FastAPI davanti ai moduli di sempre
+# il motore: FastAPI davanti ai moduli di sempre
 fastapi>=0.115
 uvicorn[standard]>=0.30
 httpx>=0.27          # solo per i test delle rotte (fastapi.testclient)

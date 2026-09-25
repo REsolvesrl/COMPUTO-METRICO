@@ -4,10 +4,10 @@ Il modello è quello di Streamlit, senza Streamlit: il motore tiene aperto
 UN progetto (il banco, come una sessione), la pagina manda un gesto e
 riceve la vista intera, ricalcolata. Si salva col tasto, come prima.
 
-⚠️ Il salvataggio passa per lo stesso identico modulo del programma
-vecchio - `archivio_locale` - e il banco scrive il file nello stesso
-formato (lo prova tests/test_banco_come_il_vecchio.py). Un progetto
-scritto da qui si riapre col vecchio, e viceversa.
+⚠️ Il salvataggio passa per lo stesso modulo del programma vecchio -
+`archivio_locale` - e il banco scrive il file nello stesso formato (lo
+prova tests/test_come_il_vecchio.py): i progetti di prima si aprono come
+sono.
 
 ⚠️ Si ascolta **solo su 127.0.0.1**, ed è scritto nell'avvio: Streamlit,
 per com'è fatto, risponde invece su tutte le schede di rete.
@@ -20,7 +20,7 @@ import threading
 from pathlib import Path
 
 # L'archivio è quello vero, ~/CME/progetti, lo stesso del programma a
-# Streamlit (dal 24/09/2026). Per una settimana il cantiere ha lavorato su
+# Streamlit (dal 24/09/2026; il vecchio è stato tolto il 25). Per una settimana il cantiere ha lavorato su
 # una copia in ~/CME/prova, decisa qui e non nel .bat: se un giorno serve
 # di nuovo un archivio finto per provare qualcosa, `set CME_ARCHIVIO=...`
 # (e `USO_DIR`, perché le prove non sono lavorazioni) prima di avviare.

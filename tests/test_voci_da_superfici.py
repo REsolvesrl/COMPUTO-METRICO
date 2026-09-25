@@ -1,6 +1,6 @@
 """Il ponte fra le misure sulla planimetria e le voci del listino.
 
-`VOCI_DA_SUPERFICI` (in streamlit_app.py) dice quale voce di listino riceve
+`VOCI_DA_SUPERFICI` (in costanti.py) dice quale voce di listino riceve
 quale quantità misurata sul disegno: i muri tracciati «da demolire» vanno
 nella 1.02, quelli «da costruire» nella 2.01, e così per pavimenti,
 battiscopa e tinteggiature.
@@ -9,16 +9,9 @@ Il collegamento è fragile in un modo silenzioso: se un codice sparisce o
 cambia numero nel listino, l'app non protesta — la riga `if voce is None:
 continue` la salta e basta. L'utente preme «Scrivi le quantità nel listino»
 e quella voce semplicemente non compare, senza un errore da leggere.
-
-Qui il sorgente si legge, non si importa: importare streamlit_app farebbe
-partire l'intera interfaccia.
 """
-import ast
-from pathlib import Path
-
+import costanti
 import listino
-
-SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
 
 # Unità di misura che ogni grandezza misurata sulla planimetria deve avere.
 # I muri si computano a superficie (lunghezza × altezza), il battiscopa a
@@ -38,16 +31,7 @@ UM_ATTESA = {
 
 
 def _voci_da_superfici():
-    """La costante letta dal sorgente, come lista di tuple."""
-    # utf-8-sig: il sorgente comincia con un BOM (lo lascia Windows) e ast
-    # non lo digerisce.
-    albero = ast.parse(SORGENTE.read_text(encoding="utf-8-sig"))
-    for nodo in albero.body:
-        if (isinstance(nodo, ast.Assign)
-                and any(getattr(b, "id", None) == "VOCI_DA_SUPERFICI"
-                        for b in nodo.targets)):
-            return ast.literal_eval(nodo.value)
-    raise AssertionError("VOCI_DA_SUPERFICI non trovata in streamlit_app.py")
+    return costanti.VOCI_DA_SUPERFICI
 
 
 def test_ogni_codice_esiste_nel_listino():
@@ -97,3 +81,12 @@ def test_la_1_01_prende_il_pavimento_interno():
              in _voci_da_superfici()}
     assert mappa["2.1"] == "pavimento"
     assert mappa["3.11"] == "pavimento_esterno"
+
+
+def test_le_alternative_sono_voci_della_stessa_misura():
+    """3.11 e 3.30 si escludono perché prendono la stessa misura: se una
+    cambiasse grandezza, non sarebbero più alternative ma voci diverse."""
+    mappa = {codice: grandezza for codice, grandezza, _
+             in _voci_da_superfici()}
+    for gruppo in costanti.ALTERNATIVE_DAL_DISEGNO:
+        assert len({mappa[c] for c in gruppo}) == 1, gruppo

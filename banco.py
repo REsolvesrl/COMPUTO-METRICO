@@ -1,16 +1,16 @@
 """Il banco di lavoro: il progetto aperto, e tutto quello che gli si fa.
 
-È quello che in `streamlit_app.py` stava sparso nello stato di sessione e
-nelle callback dei bottoni, rimesso in un posto solo e senza Streamlit: un
-dizionario nel formato del file (`dati`) e i gesti che lo cambiano. Il
-motore nuovo (`server/`) ne tiene uno aperto, come la sessione di
+È quello che nel programma vecchio (Streamlit, tolto il 25/09/2026) stava
+sparso nello stato di sessione e nelle callback dei bottoni, rimesso in un
+posto solo: un dizionario nel formato del file (`dati`) e i gesti che lo
+cambiano. Il motore (`server/`) ne tiene uno aperto, come la sessione di
 Streamlit teneva il suo; la pagina chiede `vista()` e manda gesti.
 
-⚠️ `dati` è SEMPRE nel formato di `_payload_progetto` (streamlit_app.py),
-già normalizzato come lo lascia il caricamento del programma vecchio:
-salvarlo vuol dire scriverlo così com'è. Niente traduzioni fra un formato
-«di lavoro» e uno «di file»: è il patto che permette ai due programmi di
-aprire gli stessi progetti finché convivono.
+⚠️ `dati` è SEMPRE nel formato del file, già normalizzato come lo lasciava
+il caricamento del programma vecchio: salvarlo vuol dire scriverlo così
+com'è. Niente traduzioni fra un formato «di lavoro» e uno «di file». Che
+esca ancora uguale a come l'avrebbe scritto il vecchio lo prova
+tests/test_come_il_vecchio.py.
 
 Qui non c'è niente dell'interfaccia: nessun colore, nessuna parola da
 mostrare che non sia un dato. La pagina decide come si vede.
@@ -59,6 +59,7 @@ from tabelle import (
     COLONNE_SPESE,
     COLONNE_SPESE_PREV,
     df_materiali_da_righe,
+    df_mca_normalizzato,
     df_spese_da_righe,
     materiali_da_df,
     mca_da_df,
@@ -166,9 +167,9 @@ def normalizza(dati):
     """Il file di un progetto come lo lascia il caricamento del vecchio.
 
     Ritorna (dati_normalizzati, piante_scartate). È la traduzione, passo
-    per passo, del blocco «if "da_caricare" in st.session_state» di
-    streamlit_app.py e poi di `_payload_progetto`: un progetto aperto qui e
-    salvato subito deve uscire uguale a come lo salverebbe il vecchio.
+    per passo, del caricamento del programma vecchio («if "da_caricare" in
+    st.session_state») e poi del suo `_payload_progetto`: un progetto
+    aperto qui e salvato subito esce uguale a come lo salvava il vecchio.
     """
     # le voci tue passate al listino col loro codice diventano sue
     dati = listino.assorbi_voci_tue(dati or {})
@@ -276,11 +277,11 @@ def normalizza(dati):
     fuori["spese_prev"] = spese_da_df(
         df_spese_da_righe(spese_prev, COLONNE_SPESE_PREV))
 
-    df_mc = pd.DataFrame(
+    # ⚠️ normalizzato come nel vecchio: un comparabile salvato prima che
+    # l'ascensore entrasse nella griglia ha la spunta a False, non vuota
+    df_mc = df_mca_normalizzato(pd.DataFrame(
         [merito.migra_scelte(r) for r in (dati.get("mca_comparabili") or [])]
-    ).reindex(columns=COLONNE_MCA)
-    for col in ("prezzo", "mq", "coeff"):
-        df_mc[col] = pd.to_numeric(df_mc[col], errors="coerce")
+    ).reindex(columns=COLONNE_MCA))
     fuori["mca_comparabili"] = mca_da_df(df_mc)
 
     sog = dati.get("mca_soggetto")
@@ -297,7 +298,10 @@ def normalizza(dati):
         else:
             soggetto[campo] = None if valore in (None, "", "—") else str(valore)
     fuori["mca_soggetto"] = soggetto
-    fuori["mca_statistica"] = dati.get("mca_statistica") or "media"
+    # nel vecchio la tendina riportava a «media» qualunque altro valore
+    fuori["mca_statistica"] = (dati.get("mca_statistica")
+                               if dati.get("mca_statistica") == "mediana"
+                               else "media")
 
     piante, scartate = [], []
     for p in dati.get("piante") or []:

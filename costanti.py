@@ -1,14 +1,10 @@
-"""Le costanti dell'interfaccia, fuori da Streamlit.
+"""Le costanti dell'interfaccia.
 
 Colori del Campionario, categorie di superficie, tipi di muro, unita' di
-misura, impostazioni predefinite del business plan: sono scritte in
-`streamlit_app.py`, che non si puo' importare senza far partire la pagina.
-Qui ce n'e' una copia per il motore nuovo (`server/`).
-
-⚠️ Una copia, non una seconda verita': `tests/test_costanti.py` rilegge
-`streamlit_app.py` e pretende che ogni valore qui sia identico al suo.
-Finche' convivono, chi cambia un colore o una percentuale di la' lo deve
-cambiare anche qui, e il test lo ricorda.
+misura, impostazioni predefinite del business plan. Nascono in
+`streamlit_app.py`, il programma vecchio; finche' i due hanno convissuto
+qui ce n'era una copia che un test pretendeva identica. Dal 25/09/2026 il
+vecchio non c'e' piu', e questa e' l'unica verita'.
 """
 import merito
 

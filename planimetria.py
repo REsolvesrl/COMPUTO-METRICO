@@ -1,8 +1,8 @@
 """Geometria pura per la misura delle superfici da planimetria.
 
 Nessuna dipendenza da Streamlit o da immagini: solo coordinate in pixel
-e conversioni in metri. Tutta la logica misurabile vive qui; l'interfaccia
-(upload, disegno, overlay) sta in streamlit_app.py.
+e conversioni in metri. Tutta la logica misurabile vive qui; le piante, la
+tela e le immagini stanno in banco_disegno.py.
 
 Convenzioni:
 - un punto è una coppia (x, y) in pixel;

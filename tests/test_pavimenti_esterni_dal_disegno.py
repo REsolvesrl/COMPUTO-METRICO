@@ -13,7 +13,6 @@ from PIL import Image
 
 import banco
 import listino
-import modello_computo
 import planimetria
 
 
@@ -150,9 +149,3 @@ def test_una_voce_tua_di_un_altra_categoria_resta_tua():
     dati = _progetto_con_la_3_30_tua(categoria="Superfici")
     assert listino.assorbi_voci_tue(dati)["voci"] == dati["voci"]
 
-
-def test_le_voci_tue_del_modello_non_hanno_codici_del_listino():
-    """Altrimenti ogni progetto nuovo se le vedrebbe assorbire."""
-    doppi = [v["codice"] for v in modello_computo.VOCI_TUE
-             if listino.voce_per_codice(v["codice"])]
-    assert not doppi

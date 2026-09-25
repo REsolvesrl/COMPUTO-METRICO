@@ -4,7 +4,7 @@ La tavola stampata non è lo schermo su carta: va in cantiere, e chi la
 guarda ha in mano un metro, non un listino. Le targhette delle aree si
 compongono in `etichetta_zona`, ma quale riga ci finisca lo decide chi
 chiama — a video le impostazioni dell'utente, in stampa le decide
-`pdf_planimetrie_bytes`.
+`pdf_planimetrie` (banco_disegno.py).
 
 La percentuale è il caso che conta: dice quanto di quella superficie fa
 mercato, serve a valutare un immobile e non a costruirlo. Su una tavola dei
@@ -16,7 +16,7 @@ si controlla dove viene decisa, cioè nel sorgente.
 import ast
 from pathlib import Path
 
-SORGENTE = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+SORGENTE = Path(__file__).resolve().parent.parent / "banco_disegno.py"
 
 
 def _funzione(nome):
@@ -24,7 +24,7 @@ def _funzione(nome):
     for nodo in ast.walk(albero):
         if isinstance(nodo, ast.FunctionDef) and nodo.name == nome:
             return nodo
-    raise AssertionError(f"{nome} non c'è più in streamlit_app.py")
+    raise AssertionError(f"{nome} non c'è più in banco_disegno.py")
 
 
 def _impostazioni_etichette(nome_funzione):
@@ -43,7 +43,7 @@ def _impostazioni_etichette(nome_funzione):
 
 def test_sulla_tavola_stampata_niente_percentuali():
     """Serve a valutare, non a costruire: sul foglio di cantiere non va."""
-    percento = _impostazioni_etichette("pdf_planimetrie_bytes")["percento"]
+    percento = _impostazioni_etichette("pdf_planimetrie")["percento"]
     assert isinstance(percento, ast.Constant) and percento.value is False
 
 
@@ -51,9 +51,9 @@ def test_nome_e_metri_sulla_tavola_restano_a_scelta():
     """Quelli sì che servono in cantiere, e li comanda l'utente: se
     diventassero costanti anche loro, le spunte sopra la tela non
     varrebbero più niente per la stampa."""
-    impostazioni = _impostazioni_etichette("pdf_planimetrie_bytes")
+    impostazioni = _impostazioni_etichette("pdf_planimetrie")
     for chiave in ("nome", "m2", "perimetro"):
-        assert isinstance(impostazioni[chiave], ast.Attribute), (
+        assert not isinstance(impostazioni[chiave], ast.Constant), (
             f"«{chiave}» non arriva più dalle impostazioni dell'utente")
 
 
@@ -61,10 +61,10 @@ def test_la_scala_della_pianta_arriva_al_disegno_stampato():
     """Senza mpp la barra di scala non compare, e sparirebbe in silenzio:
     il PDF verrebbe lo stesso, solo senza la cosa che permette di misurare
     con un righello quello che sul foglio non è quotato."""
-    chiamate = [n for n in ast.walk(_funzione("pdf_planimetrie_bytes"))
+    chiamate = [n for n in ast.walk(_funzione("pdf_planimetrie"))
                 if isinstance(n, ast.Call)
                 and isinstance(n.func, ast.Attribute)
                 and n.func.attr == "disegna"]
-    assert chiamate, "la tavola non si disegna più da pdf_planimetrie_bytes"
+    assert chiamate, "la tavola non si disegna più da pdf_planimetrie"
     passati = {k.arg for k in chiamate[0].keywords}
     assert "mpp" in passati, "la scala non arriva più alla tavola stampata"

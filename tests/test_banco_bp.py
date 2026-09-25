@@ -121,3 +121,75 @@ def test_il_soggetto_si_sceglie_dalle_tendine(b):
     s = b.dati["mca_soggetto"]
     assert (s["finiture"], s["giardino"], s["ascensore"]) == \
         ("Signorili", None, True)
+
+
+# ------------------------------------ i netti sono sempre la percentuale
+# (dal programma vecchio: test_percentuali_business_plan e
+# test_valori_forzati, che provavano le stesse regole sulla sua pagina)
+
+@pytest.mark.parametrize("chiave, atteso", [
+    ("bp_imposta_eur", 13050.0),          # 9% di 145.000
+    # le provvigioni sono IMPONIBILI: l'IVA sta nella sua colonna
+    ("bp_ag_in_eur", 5800.0),             # 4% di 145.000
+    ("bp_ag_out_eur", 9000.0),            # 3% di 300.000
+])
+def test_il_netto_e_sempre_la_percentuale_del_suo_prezzo(b, chiave, atteso):
+    """Nel file ci sono solo le percentuali: un netto non può restare
+    storto, perché non c'è un netto da lasciare storto."""
+    b.imposta_bp("bp_acquisto", 145000)
+    b.imposta_bp("bp_vendita", 300000)
+    b.imposta_bp("bp_ag_in", 4)
+    b.imposta_bp("bp_ag_out", 3)
+    assert b.euro_derivati()[chiave] == atteso
+
+
+def test_cambiare_percentuale_o_prezzo_rifa_il_netto(b):
+    b.imposta_bp("bp_acquisto", 145000)
+    b.imposta_bp("bp_imposta", 4)
+    assert b.euro_derivati()["bp_imposta_eur"] == 5800.0
+    b.imposta_bp("bp_imposta", 9)
+    b.imposta_bp("bp_acquisto", 200000)
+    assert b.euro_derivati()["bp_imposta_eur"] == 18000.0
+
+
+def test_scrivere_il_netto_a_mano_aggiusta_la_percentuale(b):
+    b.imposta_bp("bp_acquisto", 145000)
+    b.imposta_bp("bp_imposta_eur", 14500)
+    assert b.dati["business_plan"]["bp_imposta"] == 10.0
+    assert b.euro_derivati()["bp_imposta_eur"] == 14500.0
+
+
+def test_senza_prezzo_il_netto_e_zero(b):
+    b.imposta_bp("bp_imposta_eur", 5000)            # niente su cui ricavarlo
+    assert b.dati["business_plan"]["bp_imposta"] == 9.0
+    assert b.euro_derivati()["bp_imposta_eur"] == 0.0
+
+
+def test_l_iva_delle_provvigioni_sta_a_parte(b):
+    import fattibilita
+    b.imposta_bp("bp_acquisto", 145000)
+    netto = b.euro_derivati()["bp_ag_in_eur"]
+    assert netto == 4350.0                           # 3% imponibile
+    assert b.dati["business_plan"]["bp_iva_ag_in"] == 22.0
+    assert fattibilita.iva_su(netto, 22.0) == 957.0
+
+
+def test_un_progetto_nuovo_riporta_i_predefiniti(b):
+    from costanti import IMPOSTAZIONI_BP
+    b.imposta_bp("bp_durata", 30)
+    b.imposta_bp("bp_iva_imprevisti", 22)
+    b.nuovo()
+    bp = b.dati["business_plan"]
+    for chiave, valore in IMPOSTAZIONI_BP.items():
+        assert bp[chiave] == valore, chiave
+    # una riserva non è una fattura: niente IVA da scorporare
+    assert bp["bp_iva_imprevisti"] == 0.0
+
+
+def test_cambiare_l_aliquota_iva_muove_il_totale(b):
+    b.scrivi_quantita("2.1", 100)
+    imponibile = b.totali()["totale"]
+    b.imposta_progetto("aliquota_iva", 22)
+    t = b.totali()
+    assert t["iva"] == pytest.approx(imponibile * 0.22)
+    assert t["totale_con_iva"] == pytest.approx(imponibile * 1.22)

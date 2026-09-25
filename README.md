@@ -1,7 +1,6 @@
 # CME — Computo Metrico Estimativo
 
-App web per il settore edile, live su
-<https://computometrico.streamlit.app/>:
+Programma per il settore edile, che gira sul computer e si usa dal browser:
 
 - **Computo metrico**: il computo porta **solo le voci di questo cantiere**,
   pescate con un clic dal **pool** in fondo alla scheda (~70 voci pronte fra
@@ -22,39 +21,49 @@ App web per il settore edile, live su
   zone colorate per categoria con percentuale commerciale, scala a vettore,
   misura pareti e riepilogo delle superfici commerciali del fabbricato.
 
-Costruita con [Streamlit](https://streamlit.io); la logica di calcolo è
-separata dall'interfaccia ed è coperta da test automatici.
+Un motore Python ([FastAPI](https://fastapi.tiangolo.com)) tiene aperto il
+progetto e fa i conti; la pagina (Vue 3, senza assemblatore) li mostra. La
+logica di calcolo è separata dall'interfaccia ed è coperta da test
+automatici. Fino al 25 settembre 2026 l'interfaccia era Streamlit: com'è
+avvenuto il passaggio, e che cosa è rimasto uguale, in
+[VERSIONE-NUOVA.md](VERSIONE-NUOVA.md).
 
 ## Struttura
 
 ```
 CME/
-├── streamlit_app.py           # interfaccia (Streamlit)
+├── server/                    # il motore: rotte FastAPI e la vista
+├── web/                       # la pagina (Vue 3, niente npm)
+├── banco.py                   # il progetto aperto e i gesti del computo
+├── banco_disegno.py           #   … della planimetria
+├── banco_bp.py                #   … del business plan
+├── costanti.py                # colori, categorie, voci agganciate al disegno
 ├── calcoli.py                 # logica del computo (funzioni pure, testabili)
 ├── planimetria.py             # geometria e superfici commerciali (pure)
 ├── rilevamento.py             # rilevamento automatico delle stanze (OpenCV)
 ├── listino.py                 # listino guida delle voci di lavorazione
 ├── listino_personale.py       # i tuoi prezzi, fuori dal singolo progetto
+├── modello_computo.py         # da dove parte un progetto nuovo (Migliarina)
 ├── materiali.py               # i materiali a cura del committente (puro)
 ├── stampa.py                  # il computo come PDF da consegnare
+├── esporta.py                 # PDF, Excel, CSV, Allegato 1
+├── grafici.py                 # le figure Plotly
 ├── formato.py                 # numeri e importi all'italiana (puro)
 ├── tabelle.py                 # colonne e conversioni tabella↔dati (puro)
 ├── fattibilita.py             # business plan: fattibilità, spese, MCA
+├── merito.py                  # la griglia dei coefficienti di merito (MCA)
 ├── cantiere.py                # contratto d'appalto, SAL, extra finali
 ├── storico.py                 # le operazioni chiuse, fuori dai progetti
 ├── fattura.py                 # lettura fatture PDF/XML (FatturaPA)
-├── archivio.py                # archivio dei progetti su Supabase Storage
-├── cme_viewer/                # componente visualizzatore planimetrie
-│   ├── __init__.py            #   lato Python
-│   └── frontend/              #   lato browser (canvas + barra strumenti)
-├── assets/                    # logo RESolve (schermata di accesso)
-├── tests/                     # test pytest sui moduli di logica
+├── tavola.py                  # la planimetria disegnata, per la stampa
+├── uso.py                     # registro d'uso (uguale in MORA e CATASTO)
 ├── archivio_locale.py         # archivio dei progetti in una cartella del PC
-├── requirements.txt           # librerie necessarie all'app
+├── cme_viewer/frontend/       # la tela delle planimetrie (canvas + strumenti)
+├── assets/                    # logo RESolve
+├── tests/                     # test pytest
+├── requirements.txt           # librerie necessarie
 ├── requirements-dev.txt       # come sopra + pytest (per lo sviluppo)
 ├── Avvia CME.bat              # avvio quotidiano (si aggiorna da sé)
-├── Dockerfile                 # immagine per il deploy su Render
-├── render.yaml                # ricetta del servizio su Render
 └── pytest.ini
 ```
 
@@ -62,10 +71,9 @@ CME/
 
 > **Dal 24 settembre 2026 CME è la versione nuova**: motore FastAPI e pagina
 > Vue al posto di Streamlit, stesse schede, stessa grafica, stesso archivio
-> (`~/CME/progetti`) e stesso formato dei file. `Avvia CME.bat` avvia lei,
-> sulla porta 8504. La versione a Streamlit resta come rete di sicurezza:
-> `Avvia CME (vecchio).bat`, porta 8501, sullo stesso archivio — possono
-> stare aperte insieme. Tutto il resto in [VERSIONE-NUOVA.md](VERSIONE-NUOVA.md).
+> (`~/CME/progetti`) e stesso formato dei file. La versione a Streamlit è
+> stata tolta il 25 settembre. Tutto il resto in
+> [VERSIONE-NUOVA.md](VERSIONE-NUOVA.md).
 
 **Doppio clic su `Avvia CME.bat`.** Si apre una finestra nera — è il motore,
 va lasciata aperta — e il browser con l'app. Per chiudere CME si chiude la
@@ -106,19 +114,20 @@ Da terminale, in alternativa:
    ```
    python -m pip install -r requirements-dev.txt
    ```
-3. Avvia l'app:
+3. Avvia il motore:
    ```
-   python -m streamlit run streamlit_app.py
+   python -m uvicorn server.principale:app --host 127.0.0.1 --port 8504
    ```
-4. Si apre il browser su `http://localhost:8501`. Per fermare l'app torna
-   nel terminale e premi `Ctrl+C`.
+4. Apri il browser su `http://127.0.0.1:8504`. Per fermarlo torna nel
+   terminale e premi `Ctrl+C`.
 
 ## Rami: lavoro e versione pubblicata
 
-- `sviluppo` — dove si lavora ogni giorno.
-- `main` — la versione **pubblicata**: Streamlit Community Cloud ripubblica
-  in automatico tutto ciò che vi arriva. Ci si porta il lavoro solo quando il
-  proprietario dell'app lo chiede esplicitamente.
+- `sviluppo` — dove si lavora ogni giorno, ed è quello che `Avvia CME.bat`
+  scarica.
+- `main` — era la versione **pubblicata** online (Streamlit Community Cloud,
+  poi Render). Il programma online non serve più (24/09/2026) e `main` è
+  rimasto com'era: non ci si porta niente.
 
 ## Come eseguire i test
 
@@ -129,10 +138,9 @@ python -m pytest
 ```
 
 Girano **in parallelo sui core della macchina** (`pytest-xdist`, già
-configurato in `pytest.ini`): sono poco più di cinquecento e un terzo avvia
-l'app intera, quindi in fila richiederebbero quattro minuti contro il minuto
-scarso che ci mettono così. Per lanciarne uno solo e leggerne l'output senza
-che si mescoli a quello degli altri, `-n 0` li rimette in fila:
+configurato in `pytest.ini`) e durano pochi secondi. Per lanciarne uno solo
+e leggerne l'output senza che si mescoli a quello degli altri, `-n 0` li
+rimette in fila:
 
 ```
 python -m pytest -n 0 tests/test_calcoli.py
@@ -153,94 +161,16 @@ tendina, lo si archivia con un nome e lo si elimina — senza scaricare e
 ricaricare file a mano. L'app sceglie da sola **dove** archiviare, e lo scrive
 sempre in chiaro sopra il menu:
 
-| Dove gira l'app | Dove finiscono i progetti |
-|---|---|
-| Sul tuo computer | **una cartella del computer**: `~/CME/progetti`, oppure il percorso in `CME_ARCHIVIO` (`archivio_locale.py`) |
-| Su Streamlit Cloud / Render, con credenziali Supabase | **bucket privato Supabase** (`archivio.py`) |
-
-La cartella locale non ha niente da configurare e funziona senza connessione.
+I progetti stanno in **una cartella del computer**: `~/CME/progetti`,
+oppure il percorso in `CME_ARCHIVIO` (`archivio_locale.py`). La cartella non ha niente da configurare e funziona senza connessione.
 Il salvataggio è atomico (file temporaneo e poi rinomina): un'interruzione a
 metà non lascia un progetto troncato.
 
-### Archivio online (solo se l'app gira su un server)
-
-Serve perché gli host di app hanno un disco **effimero**, che si azzera a ogni
-riavvio: lì i progetti devono vivere fuori dall'app.
-
-Configurazione (una volta sola):
-
-1. Crea un progetto su [supabase.com](https://supabase.com) → **Storage** →
-   nuovo bucket **privato** chiamato `progetti`.
-2. **Project Settings → API**: copia il *Project URL* e la **chiave segreta**
-   lato server (`service_role`, oppure `sb_secret_…` nelle chiavi nuove).
-   ⚠️ Non la chiave *anon/publishable*, e mai dentro il codice.
-3. Incolla le credenziali dove gira l'app:
-
-   - **Streamlit Cloud** → *Manage app → Settings → Secrets*:
-     ```toml
-     [supabase]
-     url = "https://xxxx.supabase.co"
-     key = "…chiave segreta…"
-     bucket = "progetti"
-     ```
-   - **Render** → *Environment*: `SUPABASE_URL`, `SUPABASE_KEY`,
-     `SUPABASE_BUCKET`.
-   - **In locale**: le stesse righe TOML in `.streamlit/secrets.toml`
-     (già escluso da git).
-
-## Accesso protetto
-
-L'app può stare dietro una **password unica**, impostata in `APP_PASSWORD`
-(secrets di Streamlit o variabile d'ambiente). Il cancello si attiva **solo
-se la password è configurata**: senza, l'accesso resta libero e i deploy
-esistenti non cambiano comportamento. Il confronto usa
-`hmac.compare_digest`, a tempo costante.
-
-## Deploy su dominio proprio (`computo.resolvesrl.com`)
-
-Due vincoli, verificati:
-
-- **Streamlit Community Cloud non supporta i domini personalizzati**: solo
-  sottodomini `*.streamlit.app`.
-- **L'hosting condiviso non fa girare Streamlit**: non è un sito di file, è
-  un processo Python che deve restare acceso. Vale per Aruba come per
-  Hostinger; servirebbe un VPS da amministrare.
-
-Soluzione: l'app gira su **Render** (che legge `render.yaml` e `Dockerfile`),
-il dominio resta dov'è e si aggiunge **un solo record DNS**.
-
-1. **Render** → *New +* → **Blueprint** → repo `REsolvesrl/COMPUTO-METRICO`,
-   branch `main` → *Apply*. Nasce il servizio `cme-resolve`.
-2. *Environment* → aggiungi `APP_PASSWORD` e le tre variabili `SUPABASE_*`.
-3. **Prima il DNS.** `resolvesrl.com` è registrato su Hostinger e usa i
-   nameserver `ns1/ns2.dns-parking.com` → *hPanel → Domini → resolvesrl.com →
-   DNS / Nameserver → Gestisci i record DNS* → **Aggiungi record**: tipo
-   `CNAME`, nome `computo`, destinazione `<nome-servizio>.onrender.com`,
-   TTL default.
-4. **Poi Render**: *Settings → Custom Domains → Add Custom Domain* →
-   `computo.resolvesrl.com`.
-5. Il certificato HTTPS lo genera Render da sé quando la verifica passa.
-
-⚠️ **L'ordine conta.** Se aggiungi il dominio su Render *prima* che il record
-esista, il controllo riceve un «non esiste» che resta in cache per il TTL
-negativo del dominio (600 s), e l'emissione del certificato fallisce anche
-dopo che il record c'è. Creando prima il record, la verifica passa al primo
-colpo.
-
-⚠️ Nel pannello **non** creare `computo` come "sottodominio/sito web":
-creerebbe un record verso l'hosting in conflitto con il CNAME. Serve solo il
-record nella zona DNS. I record del sito e della posta (`MX` verso
-`mx1/mx2.hostinger.com`) non si toccano.
-
-> Nota: esiste anche il dominio `resolve.srl`, registrato su **Aruba** e già
-> usato dal sito aziendale. Se un domani l'app dovesse stare lì, cambia solo
-> il pannello dove si aggiunge il CNAME (Aruba → *Gestione DNS*).
-
-**Memoria richiesta**: misurata in locale, l'app sta sui ~180 MB a riposo con
-picchi di ~270 MB durante il rilevamento stanze su una planimetria da
-2000×1500 px. I piani Render *Free* e *Starter* (512 MB) reggono una o due
-sessioni per volta; per un uso contemporaneo di più persone serve il piano da
-2 GB.
+> Finché CME girava anche online c'erano un archivio su Supabase Storage,
+> una password d'accesso e il servizio su Render con il dominio
+> `computo.resolvesrl.com`. Non servono più (24/09/2026) e il codice se n'è
+> andato col programma a Streamlit; come erano configurati sta nella storia
+> di git di questo file.
 
 ## Materiali a cura del Committente
 
@@ -353,8 +283,6 @@ aree proposte, da rifinire a mano con gli strumenti di modifica.
 - [x] Materiali a cura del committente, con l'Allegato 1 da firmare.
 - [ ] Import da prezzari regionali (Excel/CSV).
 - [ ] Spessore dei muri: distinguere tramezzi e murature portanti.
-- [x] Pubblicazione su Streamlit Community Cloud.
-- [x] Archivio dei progetti online (Supabase Storage).
-- [x] Accesso protetto da password.
-- [x] Pubblicazione su `computo.resolvesrl.com` (Render, regione Frankfurt,
-      CNAME su Hostinger, HTTPS automatico).
+- [x] Pubblicazione online (Streamlit Cloud, poi Render), archivio su
+      Supabase, accesso con password — poi tolti: CME gira sul computer.
+- [x] Motore FastAPI e pagina Vue al posto di Streamlit (24-25/09/2026).

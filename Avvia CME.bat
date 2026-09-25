@@ -7,11 +7,6 @@ rem  Si apre una finestra nera: e' il motore del programma, va lasciata
 rem  aperta mentre lavori. E' anche il posto dove compaiono i messaggi
 rem  quando qualcosa non va: se vedi un errore, copialo e mandalo.
 rem  Per chiudere CME: chiudi questa finestra.
-rem
-rem  ATTENZIONE: La versione vecchia, quella a Streamlit, e' ancora qui e si
-rem  avvia con "Avvia CME (vecchio).bat": legge lo stesso archivio. E' la
-rem  rete di sicurezza finche' questa non avra' lavorato per qualche
-rem  settimana senza sorprese.
 rem ===================================================================
 
 title CME - motore in funzione (non chiudere questa finestra)
@@ -70,8 +65,8 @@ if errorlevel 1 (
 )
 
 :librerie
-rem Il motore nuovo ha bisogno di FastAPI e Uvicorn: se mancano (un
-rem computer dove CME girava solo con Streamlit) si installano una volta.
+rem Il motore ha bisogno di FastAPI e Uvicorn: se mancano (un computer
+rem dove CME girava ancora con Streamlit) si installano una volta.
 python -c "import fastapi, uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo.
@@ -97,7 +92,7 @@ rem ===================================================================
 start "" /b python -c "import time, webbrowser; time.sleep(4); webbrowser.open('http://127.0.0.1:8504')"
 
 rem --host 127.0.0.1: risponde soltanto a questo computer, mai alla rete.
-rem Porta 8504: la vecchia resta sulla 8501, e possono stare aperte insieme.
+rem Porta 8504: quella di sempre del motore, anche nei collegamenti.
 python -m uvicorn server.principale:app --host 127.0.0.1 --port 8504
 
 if errorlevel 1 (

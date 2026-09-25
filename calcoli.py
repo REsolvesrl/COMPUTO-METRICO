@@ -1,7 +1,7 @@
 """Logica di calcolo del computo metrico estimativo (CME).
 
 Solo funzioni pure: niente Streamlit, niente pandas. Tutta la logica
-testabile vive qui; la UI in streamlit_app.py importa da questo modulo.
+testabile vive qui; il banco (banco.py) importa da questo modulo.
 
 Convenzioni:
 - le dimensioni non compilate valgono None (non 0);
