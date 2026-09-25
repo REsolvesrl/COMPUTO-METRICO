@@ -39,6 +39,7 @@ import modello_computo
 import planimetria
 import fattibilita
 from costanti import (
+    ALTERNATIVE_DAL_DISEGNO,
     CAMPI_NUMERO_IT,
     CATEGORIE_ESTERNE,
     CATEGORIE_INVOLUCRO,
@@ -169,7 +170,8 @@ def normalizza(dati):
     streamlit_app.py e poi di `_payload_progetto`: un progetto aperto qui e
     salvato subito deve uscire uguale a come lo salverebbe il vecchio.
     """
-    dati = dati or {}
+    # le voci tue passate al listino col loro codice diventano sue
+    dati = listino.assorbi_voci_tue(dati or {})
     progetto = dati.get("progetto") or {}
     try:
         data_prg = date.fromisoformat(progetto.get("data", "")).isoformat()
@@ -1051,12 +1053,22 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         return grandezze
 
     def voci_dal_disegno(self, grandezze):
-        """Le voci che il disegno può alimentare, con la loro spunta."""
+        """Le voci che il disegno può alimentare, con la loro spunta.
+
+        Non le scartate, e di due alternative una sola
+        (`planimetria.voci_alimentate`).
+        """
+        alimentate = planimetria.voci_alimentate(
+            [c for c, g, _a in VOCI_DA_SUPERFICI
+             if listino.voce_per_codice(c) is not None
+             and round(grandezze.get(g, 0.0), 2) > 0],
+            self.dati["voci_scelte"], self.dati["voci_scartate"],
+            ALTERNATIVE_DAL_DISEGNO)
         fuori = []
         for codice, grandezza, _acceso in VOCI_DA_SUPERFICI:
             voce = listino.voce_per_codice(codice)
             quantita = round(grandezze.get(grandezza, 0.0), 2)
-            if voce is None or quantita <= 0:
+            if voce is None or quantita <= 0 or codice not in alimentate:
                 continue
             fuori.append({"codice": codice, "grandezza": grandezza,
                           "descrizione": voce["descrizione"],

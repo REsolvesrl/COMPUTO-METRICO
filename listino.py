@@ -192,7 +192,8 @@ VOCI = [
                     "spessoratura",
      "nota": "I metri calpestabili delle zone disegnate come balcone, "
              "terrazzo o loggia. Lavorazione diversa da quella interna: "
-             "spessoratura, pendenze e stuccatura per esterni."},
+             "spessoratura, pendenze e stuccatura per esterni. Se c'è da "
+             "demolire anche il vecchio, c'è la 3.30."},
     {"codice": "3.12", "categoria": "Ricostruzioni e ripristini", "um": "m²",
      "prezzo": 55.0,
      "descrizione": "Fornitura e posa rivestimenti in piastrelle",
@@ -247,6 +248,20 @@ VOCI = [
     {"codice": "3.24", "categoria": "Ricostruzioni e ripristini", "um": "cad",
      "prezzo": 280.0,
      "descrizione": "Fornitura e posa porte interne"},
+    # Nata come voce scritta a mano su ENI, e passata al listino per
+    # ritrovarla in ogni progetto e agganciarla al disegno. Tiene il codice
+    # che aveva là: vedi `assorbi_voci_tue`.
+    {"codice": "3.30", "categoria": "Ricostruzioni e ripristini", "um": "m²",
+     "prezzo": 0.0,
+     "descrizione": "Demolizione e posa pavimentazione balconi e terrazze "
+                    "con spessoratura e stuccatura finale compreso colle, "
+                    "stucchi e se necessario massetto autolivellante e "
+                    "impermeabilizzazione",
+     "nota": "I metri calpestabili delle zone disegnate come balcone, "
+             "terrazzo o loggia, come la 3.11 — che però è la sola posa: "
+             "il disegno ne alimenta una delle due, quella che è nel "
+             "computo. Nel computo di ENI il prezzo non c'era ancora: da "
+             "stabilire."},
 
     # ----------------------------------------------------------- 3 · Idraulico
     {"codice": "4.1", "categoria": "Idraulico", "um": "utenza",
@@ -535,3 +550,54 @@ def voce_per_codice(codice):
         if voce["codice"] == codice:
             return voce
     return None
+
+
+def assorbi_voci_tue(dati):
+    """Le voci tue di un progetto che nel frattempo sono entrate nel listino.
+
+    Una voce scritta a mano in un progetto può passare al listino con lo
+    stesso codice (la 3.30 di ENI), per ritrovarla in tutti i progetti e
+    agganciarla al disegno. Il file però la tiene ancora fra le voci tue, e
+    due voci con lo stesso codice nel computo non ci stanno: vince quella
+    del listino, e l'altra resta nel file invisibile, con la quantità e il
+    prezzo che ci erano stati scritti.
+
+    Qui la voce tua diventa quella del listino: quantità e prezzo passano in
+    `listino_stato`, descrizione e unità in `testi_voci` quando non sono
+    quelle del listino — a video si legge quello che c'era scritto. Scelte,
+    scarti e voci scritte a mano parlano già di quel codice e restano come
+    sono. Solo a parità di categoria.
+
+    ⚠️ Lo stesso codice può voler dire voci diverse in progetti diversi (la
+    3.29 di ENI non è quella di Migliarina): prima di dare al listino un
+    codice già usato da una voce tua, si guarda che sia la stessa voce
+    ovunque. Qui il testo si conserva comunque, ma l'aggancio al disegno
+    arriverebbe anche a quella che non c'entra.
+
+    Ritorna una copia; i dati passati non si toccano.
+    """
+    voci_tue = (dati or {}).get("voci") or []
+    if not any(voce_per_codice(r.get("codice")) for r in voci_tue):
+        return dati
+    dati = dict(dati)
+    stato = dict(dati.get("listino_stato") or {})
+    testi = dict(dati.get("testi_voci") or {})
+    restano = []
+    for riga in voci_tue:
+        guida = voce_per_codice(riga.get("codice"))
+        if guida is None or riga.get("categoria") != guida["categoria"]:
+            restano.append(riga)
+            continue
+        codice = guida["codice"]
+        stato.setdefault(codice, {
+            "q": float(riga.get("quantita_manuale") or 0.0),
+            "p": float(riga.get("prezzo") or 0.0)})
+        descrizione = (riga.get("descrizione") or "").strip()
+        um = riga.get("um") or ""
+        testi.setdefault(codice, {
+            "d": descrizione if descrizione != guida["descrizione"] else None,
+            "u": um if um != guida["um"] else None})
+    dati["voci"] = restano
+    dati["listino_stato"] = stato
+    dati["testi_voci"] = testi
+    return dati

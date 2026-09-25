@@ -794,15 +794,16 @@ COLORI_CATEGORIE = {
 # a mano, e il disegno non ci mette più bocca.
 VOCI_DA_SUPERFICI = [
     # ⚠️ «pavimento» sono le stanze e basta: balconi, terrazzi e logge
-    # stanno in «pavimento_esterno» e vanno nella 3.11, che è un'altra
-    # lavorazione. Una demolizione di pavimenti interni non deve portarsi
-    # dentro i metri del balcone.
+    # stanno in «pavimento_esterno» e vanno nella 3.11 o nella 3.30, che
+    # sono un'altra lavorazione. Una demolizione di pavimenti interni non
+    # deve portarsi dentro i metri del balcone.
     ("2.1", "pavimento", True),           # demolizione pavimenti
     ("2.10", "battiscopa", False),        # rimozione zoccolini
     ("3.3", "pavimento", False),          # rifacimento massetto
     ("3.10", "pavimento", True),          # posa gres
     ("3.12", "rivestimenti", True),       # rivestimenti (fascia dei bagni)
     ("3.11", "pavimento_esterno", True),  # pavimentazione di balconi e terrazzi
+    ("3.30", "pavimento_esterno", True),  # la stessa, demolendo la vecchia
     ("3.15", "battiscopa", True),         # posa battiscopa
     ("3.18", "rasatura", False),          # rasatura: le facce dei muri nuovi
     ("3.19", "tinteggiatura", True),      # tinteggiatura muri e soffitti
@@ -810,6 +811,12 @@ VOCI_DA_SUPERFICI = [
     ("2.2", "muri_demolire", True),       # demolizione murature
     ("3.1", "muri_costruire", True),      # ricostruzione muri in forati
     ("3.8", "muri_cartongesso", True),    # pareti in cartongesso
+]
+
+ALTERNATIVE_DAL_DISEGNO = [
+    # stessa misura, lavorazioni che si escludono: il disegno ne alimenta
+    # una sola (planimetria.voci_alimentate)
+    ("3.11", "3.30"),
 ]
 
 # Business plan: colonne delle tabelle e impostazioni predefinite
@@ -4535,7 +4542,8 @@ if "da_caricare" in st.session_state:
     # di prima, e nessun modo di accorgersene. Lasciandolo, il giro
     # successivo ricarica da capo: caricare due volte lo stesso progetto
     # non fa danno, caricarne mezzo sì.
-    dati = st.session_state["da_caricare"]
+    # Le voci tue passate al listino col loro codice diventano sue.
+    dati = listino.assorbi_voci_tue(st.session_state["da_caricare"])
     # E prima di scrivere il progetto nuovo si BUTTA VIA tutto quello che è
     # rimasto attaccato a quello di prima: le caselle (q_…_txt, qn_…_w), i
     # testi riscritti (d_/u_) e i segnalibri «_reso_» che dicono con quale
@@ -7094,10 +7102,16 @@ def scheda_planimetria():
                     "non sommate: si può rifare il rilevamento e cambiare le "
                     "spunte senza contare niente due volte.")
             selezionate = []
+            alimentate = planimetria.voci_alimentate(
+                [c for c, g, _a in VOCI_DA_SUPERFICI
+                 if listino.voce_per_codice(c) is not None
+                 and round(grandezze.get(g, 0.0), 2) > 0],
+                st.session_state.voci_scelte, st.session_state.voci_scartate,
+                ALTERNATIVE_DAL_DISEGNO)
             for codice, grandezza, acceso in VOCI_DA_SUPERFICI:
                 voce = listino.voce_per_codice(codice)
                 quantita = round(grandezze.get(grandezza, 0.0), 2)
-                if voce is None or quantita <= 0:
+                if voce is None or quantita <= 0 or codice not in alimentate:
                     continue
                 attuale = float(st.session_state.get(f"q_{codice}") or 0.0)
                 etichetta = (f"**{codice}** · {voce['descrizione']} → "

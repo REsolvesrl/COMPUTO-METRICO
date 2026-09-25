@@ -505,6 +505,33 @@ def voci_da_riscrivere(mappa, grandezze, attuali, escluse=(),
     return da_scrivere
 
 
+def voci_alimentate(codici, scelte, scartate=(), alternative=()):
+    """Fra le voci che il disegno sa misurare, quelle che la misura la ricevono.
+
+    codici: le voci con una misura sul disegno, nell'ordine della mappa.
+    scelte / scartate: le voci nel computo e quelle tolte dal pool.
+    alternative: gruppi di voci che prendono la stessa misura ma si
+        escludono — la 3.11 posa soltanto, la 3.30 demolisce e ripone.
+
+    Le SCARTATE restano fuori. Chi ha tolto una voce dal pool ha detto che
+    in questo cantiere non c'è; il disegno la rimetteva nel computo al primo
+    muro spostato, e con la voce che l'aveva sostituita i metri contavano
+    due volte.
+
+    Di un gruppo di ALTERNATIVE ne passa una sola: quella nel computo, e se
+    nessuna c'è la prima del gruppo. Se chi lavora ce le ha messe tutte e
+    due, passano tutte e due: l'ha deciso lui.
+    """
+    scelte, scartate = set(scelte), set(scartate)
+    restano = [c for c in codici if c not in scartate]
+    via = set()
+    for gruppo in alternative:
+        presenti = [c for c in gruppo if c in restano]
+        tenute = [c for c in presenti if c in scelte] or presenti[:1]
+        via |= set(presenti) - set(tenute)
+    return [c for c in restano if c not in via]
+
+
 def superficie_calpestabile(piante, percentuali, escludi=()):
     """I metri quadri che si calpestano davvero: le stanze, e basta.
 
