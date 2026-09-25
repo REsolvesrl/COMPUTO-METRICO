@@ -281,7 +281,7 @@ def _fattibilita(b, spese):
                           if esito["eur_mq_acquisto"] else "—", None,
                           f"Prezzo di acquisto {euro(bp['bp_acquisto'])} ÷ "
                           f"{mq_txt}"),
-                         ("Buy cost", euro(acq["totale"]), None, come_buy),
+                         ("Buy cost", euro(acq["totale"]), "bold", come_buy),
                          ("Prezzo netto — entry", euro(entry), "bold",
                           f"Prezzo di acquisto {euro(bp['bp_acquisto'])} + "
                           f"spese d'acquisto {euro(acq['totale'])} = "
@@ -291,7 +291,7 @@ def _fattibilita(b, spese):
                          if esito["eur_mq_vendita"] else "—", None,
                          f"Prezzo di vendita {euro(bp['bp_vendita'])} ÷ "
                          f"{mq_txt}"),
-                        ("Sell cost", euro(ven["totale"]), None, come_sell),
+                        ("Sell cost", euro(ven["totale"]), "bold", come_sell),
                         ("Prezzo netto — exit", euro(uscita), "bold",
                          f"Prezzo di vendita {euro(bp['bp_vendita'])} − "
                          f"spese di vendita {euro(ven['totale'])} = "
@@ -301,7 +301,7 @@ def _fattibilita(b, spese):
                  "bold", f"Exit {euro(uscita)} ÷ entry {euro(entry)}: ogni "
                  f"euro messo ne torna {numero_it(esito['multiplo'], 2)}"),
                 ("Return on Equity (ROE)",
-                 numero_it(esito["roe"] * 100, 1) + " %", None,
+                 numero_it(esito["roe"] * 100, 1) + " %", "bold",
                  f"EBIT {euro(esito['ebit'])} ÷ entry {euro(entry)}"),
                 (etichetta_annuo,
                  numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %", None,

@@ -24,7 +24,7 @@ const RigheBp = defineComponent({
     <template v-for="r in righe" :key="r[0]">
       <div v-if="r[1] !== null && r[1] !== '' && r[1] !== '—'" class="riga-bp"
            :class="{ spiegata: r[3] }" :title="r[3] || null">
-        <span>{{ r[0] }}</span>
+        <span :style="r[2] ? {fontWeight: 700, color: 'var(--travertino)'} : null">{{ r[0] }}</span>
         <span :style="{fontWeight: r[2] ? 700 : 500, color: colore(r[2])}">{{ r[1] }}</span>
       </div>
     </template>
