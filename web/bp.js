@@ -147,8 +147,6 @@ const Fattibilita = defineComponent({
       <RigheBp :righe="f.esito.vendita_totali" />
       <template v-if="f.esito.iva_credito.length">
         <RigheBp :righe="f.esito.iva_credito" />
-        <p class="didascalia grigio">L'IVA pagata su queste voci è <b>a credito</b>: resta nel totale delle spese
-          perché va anticipata, ma per la società rientra con la liquidazione.</p>
       </template>
     </div>
   </div>
