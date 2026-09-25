@@ -81,6 +81,11 @@ def grafico_torta_spese(riepilogo):
     return fig
 
 
+# Sotto questo money multiple la cella è rossa (26/09/2026: 1,10x, per
+# tutti i progetti; prima era il pareggio, 1,00x).
+SOGLIA_MULTIPLO = 1.10
+
+
 def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
                         base_acquisto=None, base_vendita=None, altezza=330):
     """Matrice di sensitività come mappa di calore stile Excel.
@@ -110,8 +115,10 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     minimo, massimo = piatti[0], piatti[-1]
     if minimo == massimo:
         minimo, massimo = minimo - 1, massimo + 1
-    # il pareggio: un money multiple di 1,00x, o un guadagno di 0 €
-    pareggio = 1.0 if metrica == "multiplo" else 0.0
+    # la soglia del bianco: per il money multiple non il pareggio (1,00x) ma
+    # SOGLIA_MULTIPLO — un'operazione che rende meno del 10% non vale il
+    # rischio, e deve già dirlo in rosso; per il guadagno, 0 €
+    pareggio = SOGLIA_MULTIPLO if metrica == "multiplo" else 0.0
     if pareggio <= minimo:
         # ogni scenario della matrice è in utile: dal pareggio in su
         scala = [[0.0, "#FFFFFF"], [1.0, "#63BE7B"]]

@@ -40,9 +40,14 @@ const Intestazione = defineComponent({
 const Legenda = defineComponent({
   props: { metrica: String },
   template: `
-  <div class="legenda-matrice">
+  <div class="legenda-matrice" v-if="metrica === 'multiplo'">
+    <span class="chip" style="background:#F8696B"></span>sotto 1,10x &nbsp;·&nbsp;
+    <span class="chip" style="background:#FFFFFF"></span>soglia (1,10x) &nbsp;·&nbsp;
+    <span class="chip" style="background:#63BE7B"></span>sopra
+  </div>
+  <div class="legenda-matrice" v-else>
     <span class="chip" style="background:#F8696B"></span>in perdita &nbsp;·&nbsp;
-    <span class="chip" style="background:#FFFFFF"></span>pareggio ({{ metrica === 'multiplo' ? '1,00x' : '0 €' }}) &nbsp;·&nbsp;
+    <span class="chip" style="background:#FFFFFF"></span>pareggio (0 €) &nbsp;·&nbsp;
     <span class="chip" style="background:#63BE7B"></span>in utile
   </div>`,
 });
