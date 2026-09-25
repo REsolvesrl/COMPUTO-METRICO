@@ -22,7 +22,8 @@ const RigheBp = defineComponent({
   template: `
   <div>
     <template v-for="r in righe" :key="r[0]">
-      <div v-if="r[1] !== null && r[1] !== '' && r[1] !== '—'" class="riga-bp">
+      <div v-if="r[1] !== null && r[1] !== '' && r[1] !== '—'" class="riga-bp"
+           :class="{ spiegata: r[3] }" :title="r[3] || null">
         <span>{{ r[0] }}</span>
         <span :style="{fontWeight: r[2] ? 700 : 500, color: colore(r[2])}">{{ r[1] }}</span>
       </div>
@@ -53,7 +54,7 @@ const RigaCosto = defineComponent({
   setup() { return { imposta, euro }; },
   template: `
   <div class="riga-costo">
-    <span class="grigio"><b v-if="riga.arancio" class="arancio">{{ riga.etichetta }}</b>
+    <span class="grigio" :class="{ spiegata: riga.come }" :title="riga.come || null"><b v-if="riga.arancio" class="arancio">{{ riga.etichetta }}</b>
       <template v-else>{{ riga.etichetta }}</template></span>
     <CampoNumero v-if="riga.centro" :valore="riga.centro.valore" :decimali="2" :aiuto="riga.centro.aiuto"
                  @cambia="imposta(riga.centro.chiave, $event)" />

@@ -687,6 +687,11 @@ h6 { font-size: 1rem; font-weight: 600; margin: .75rem 0 .75rem; line-height: 1.
 }
 .riga-bp > span:first-child { color: var(--etichette); }
 .riga-bp > span:last-child { white-space: nowrap; }
+/* passandoci sopra, il conto che c'è dietro (title): il puntatore lo dice */
+.spiegata { cursor: help; }
+.riga-bp.spiegata:hover > span:first-child,
+.riga-costo > .spiegata:hover { text-decoration: underline dotted;
+                                text-underline-offset: 3px; }
 /* prezzi base evidenziati come in Excel: acquisto giallino, vendita azzurro */
 .prezzo-acquisto input { background: #FFF2CC !important; color: #7F6000 !important;
                          font-weight: 700; }
@@ -698,7 +703,7 @@ h6 { font-size: 1rem; font-weight: 600; margin: .75rem 0 .75rem; line-height: 1.
   border: 1px solid color-mix(in srgb, var(--cemento) 40%, transparent);
 }
 .nota-base b { color: var(--travertino); }
-.legenda-matrice { font-size: 0.72rem; color: var(--etichette); margin: -6px 0 10px; }
+.legenda-matrice { font-size: 0.72rem; color: var(--etichette); margin: 8px 0 14px; }
 .legenda-matrice .chip {
   display: inline-block; width: 11px; height: 11px; margin-right: 5px;
   vertical-align: -1px; border: 1px solid #3C4C6E;

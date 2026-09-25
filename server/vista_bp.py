@@ -75,8 +75,12 @@ def _spese(b):
 
 def _riga_costo(etichetta, bp, derivati, centro=None, destra=None, iva=None,
                 imponibile=None, aiuto_centro=None, aiuto_destra=None,
-                arancio=False):
-    """Una riga del dettaglio costi: etichetta | % | netto | IVA % | IVA €."""
+                arancio=False, come=None):
+    """Una riga del dettaglio costi: etichetta | % | netto | IVA % | IVA €.
+
+    `come`: da dove viene il netto, detto coi numeri del progetto; la riga
+    ci aggiunge il conto dell'IVA. Si legge passando col cursore.
+    """
     def valore(chiave):
         return derivati[chiave] if chiave in derivati else bp.get(chiave)
     riga = {"etichetta": etichetta, "arancio": arancio,
@@ -84,12 +88,26 @@ def _riga_costo(etichetta, bp, derivati, centro=None, destra=None, iva=None,
                         "aiuto": aiuto_centro} if centro else None),
             "destra": ({"chiave": destra, "valore": valore(destra),
                         "aiuto": aiuto_destra} if destra else None)}
+    righe_come = [come] if come else []
     if iva:
         base = imponibile if imponibile is not None else (valore(destra)
                                                           or 0.0)
         riga["iva"] = {"chiave": iva, "valore": bp[iva],
                        "euro": fattibilita.iva_su(base, bp[iva])}
+        righe_come.append(
+            f"IVA: {euro(base)} × {numero_it(bp[iva], 2)}% = "
+            f"{euro(riga['iva']['euro'])}" if bp[iva] else
+            "IVA: aliquota 0%, niente da aggiungere")
+    riga["come"] = "\n".join(righe_come)
     return riga
+
+
+def _somma(parti, totale):
+    """«a + b + c = totale», solo con le parti che valgono qualcosa."""
+    presenti = [f"{nome} {euro(v)}" for nome, v in parti if v]
+    if not presenti:
+        return f"nessuna voce, {euro(totale)}"
+    return " + ".join(presenti) + f" = {euro(totale)}"
 
 
 def _fattibilita(b, spese):
@@ -152,28 +170,52 @@ def _fattibilita(b, spese):
     durata = bp["bp_durata"]
     etichetta_annuo = ("Rendimento annuo (12 mesi: coincide col ROE)"
                        if durata == 12 else f"Rendimento annuo ({durata} mesi)")
+    a_mano = "Importo scritto a mano"
+    acquisto_txt = f"prezzo di acquisto {euro(bp['bp_acquisto'])}"
+    if usa:
+        origine_ristr = ("I costi reali del cantiere (lavori, materiale, "
+                         "architetto dalle Spese a consuntivo): "
+                         f"{euro(ristr_eff)}")
+    elif bp["bp_ristr"]:
+        origine_ristr = f"{a_mano}: {euro(ristr_eff)}"
+    else:
+        origine_ristr = ("Casella a 0, quindi il totale del computo: "
+                         f"{euro(ristr_eff)}")
+    base_imprevisti = b.base_imprevisti()
     costi = [
         _riga_costo("Imposte d'acquisto", bp, derivati, centro="bp_imposta",
-                    destra="bp_imposta_eur", iva="bp_iva_imposta"),
+                    destra="bp_imposta_eur", iva="bp_iva_imposta",
+                    come=f"{numero_it(bp['bp_imposta'], 2)}% del "
+                    f"{acquisto_txt} = {euro(derivati['bp_imposta_eur'])}"),
         _riga_costo("Imposte fisse", bp, derivati, destra="bp_imposte_fisse",
-                    iva="bp_iva_imposte_fisse"),
+                    iva="bp_iva_imposte_fisse", come=a_mano),
         _riga_costo("Notaio", bp, derivati, destra="bp_notaio",
                     iva="bp_iva_notaio",
-                    aiuto_destra="Compreso IVA, visure, archivio notarile…"),
+                    aiuto_destra="Compreso IVA, visure, archivio notarile…",
+                    come=a_mano),
         _riga_costo("Spese e interessi mutuo", bp, derivati,
-                    destra="bp_mutuo", iva="bp_iva_mutuo"),
+                    destra="bp_mutuo", iva="bp_iva_mutuo", come=a_mano),
         _riga_costo("Imprevisti e condominio", bp, derivati,
                     centro="bp_imprevisti_pct", destra="bp_imprevisti",
                     iva="bp_iva_imprevisti",
                     aiuto_centro="Percentuale sull'importo dei lavori "
                     "considerato qui sotto. Il 10% e' la quota del contratto "
                     "d'appalto: cambiala quando serve, oppure scrivi "
-                    "l'importo a destra e la percentuale si adegua."),
+                    "l'importo a destra e la percentuale si adegua.",
+                    come=(f"{numero_it(bp['bp_imprevisti_pct'], 2)}% dei "
+                          f"lavori {euro(base_imprevisti)} (la "
+                          f"ristrutturazione qui sotto) = "
+                          f"{euro(bp['bp_imprevisti'])}"
+                          if base_imprevisti else
+                          "Coi costi reali del cantiere gli imprevisti non "
+                          "si stimano più: importo scritto a mano")),
         _riga_costo("Agenzia IN", bp, derivati, centro="bp_ag_in",
                     destra="bp_ag_in_eur", iva="bp_iva_ag_in",
                     aiuto_centro="Commissione % sul prezzo di acquisto; "
                     "l'importo a destra è imponibile, l'IVA sta nella sua "
-                    "colonna"),
+                    "colonna",
+                    come=f"{numero_it(bp['bp_ag_in'], 2)}% del "
+                    f"{acquisto_txt} = {euro(derivati['bp_ag_in_eur'])}"),
         _riga_costo("Ristrutturazione stimata", bp, derivati,
                     destra="bp_ristr", iva="bp_iva_ristr",
                     imponibile=ristr_eff, arancio=True,
@@ -181,20 +223,51 @@ def _fattibilita(b, spese):
                     "imprevisti sono la riga qui sopra e si contano una "
                     "volta sola. Lasciando 0 arriva il totale del computo — "
                     "che NON comprende i materiali a cura tua: quelli "
-                    "vanno nella riga qui sotto."),
+                    "vanno nella riga qui sotto.",
+                    come=origine_ristr),
         _riga_costo("Materiali", bp, derivati, destra="bp_materiali",
                     iva="bp_iva_materiali",
                     aiuto_destra="Quello che compri tu e l'impresa non "
                     "fornisce (l'elenco dei Materiali, Allegato 1): "
                     "sanitari, rubinetteria, porte, pavimenti… Netto, "
-                    "l'IVA nella sua colonna. Non fa imprevisti."),
+                    "l'IVA nella sua colonna. Non fa imprevisti.",
+                    come=a_mano),
     ]
     agenzia_out = _riga_costo(
         "Agenzia OUT", bp, derivati, centro="bp_ag_out",
         destra="bp_ag_out_eur", iva="bp_iva_ag_out",
         aiuto_centro="Commissione % sul prezzo di vendita; l'importo a "
-        "destra è imponibile, l'IVA sta nella sua colonna")
+        "destra è imponibile, l'IVA sta nella sua colonna",
+        come=f"{numero_it(bp['bp_ag_out'], 2)}% del prezzo di vendita "
+        f"{euro(bp['bp_vendita'])} = {euro(derivati['bp_ag_out_eur'])}")
     iva_credito = round(acq["iva"] + ven["iva"], 2)
+
+    mq_txt = (f"{numero_it(mq_eff, 2)} mq "
+              + ("scritti a mano" if mq_a_mano else "dalla planimetria"))
+    parti_acq = [("imposte", acq["imposte"]), ("notaio", acq["notaio"]),
+                 ("agenzia IN", acq["agenzia"]),
+                 ("imprevisti", acq["imprevisti"]),
+                 ("mutuo", acq["spese_mutuo"]),
+                 ("ristrutturazione", acq["ristrutturazione"]),
+                 ("materiali", acq["materiali"]), ("IVA", acq["iva"])]
+    come_buy = "Spese d'acquisto: " + _somma(parti_acq, acq["totale"])
+    come_sell = "Spese di vendita: " + _somma(
+        [("agenzia OUT", ven["agenzia"]), ("IVA", ven["iva"])], ven["totale"])
+    nomi_iva = {"bp_imposta_eur": "imposte", "bp_imposte_fisse":
+                "imposte fisse", "bp_notaio": "notaio", "bp_mutuo": "mutuo",
+                "bp_imprevisti": "imprevisti", "bp_ag_in_eur": "agenzia IN",
+                "bp_materiali": "materiali"}
+    iva_parti = [(nomi_iva.get(campo, campo), fattibilita.iva_su(
+        valori.get(campo, 0.0), bp.get(aliquota, 0.0)))
+        for campo, aliquota in VOCI_CON_IVA]
+    iva_parti.append(("ristrutturazione", fattibilita.iva_su(
+        ristr_eff, bp.get("bp_iva_ristr", 0.0))))
+    entry, uscita = esito["entry"], esito["exit"]
+    if durata == 12:
+        come_annuo = "Su 12 mesi coincide col ROE"
+    else:
+        come_annuo = (f"ROI {numero_it(esito['multiplo'], 2)}x portato a un "
+                      f"anno: ROI^(12 ÷ {durata} mesi) − 1")
 
     return {
         "bp": {**bp, **derivati},
@@ -202,38 +275,61 @@ def _fattibilita(b, spese):
                "a_mano": mq_a_mano, "calpestabili": mq_calp,
                "piante": bool(d["piante"])},
         "esito": {
+            # (etichetta, valore, stile, come si è fatto il conto)
             "acquisto": [("€/mq acquisto",
                           numero_it(esito["eur_mq_acquisto"], 0) + " €"
-                          if esito["eur_mq_acquisto"] else "—", None),
-                         ("Buy cost", euro(acq["totale"]), None),
-                         ("Prezzo netto — entry", euro(esito["entry"]),
-                          "bold")],
+                          if esito["eur_mq_acquisto"] else "—", None,
+                          f"Prezzo di acquisto {euro(bp['bp_acquisto'])} ÷ "
+                          f"{mq_txt}"),
+                         ("Buy cost", euro(acq["totale"]), None, come_buy),
+                         ("Prezzo netto — entry", euro(entry), "bold",
+                          f"Prezzo di acquisto {euro(bp['bp_acquisto'])} + "
+                          f"spese d'acquisto {euro(acq['totale'])} = "
+                          f"{euro(entry)}")],
             "vendita": [("€/mq vendita",
                          numero_it(esito["eur_mq_vendita"], 0) + " €"
-                         if esito["eur_mq_vendita"] else "—", None),
-                        ("Sell cost", euro(ven["totale"]), None),
-                        ("Prezzo netto — exit", euro(esito["exit"]), "bold")],
+                         if esito["eur_mq_vendita"] else "—", None,
+                         f"Prezzo di vendita {euro(bp['bp_vendita'])} ÷ "
+                         f"{mq_txt}"),
+                        ("Sell cost", euro(ven["totale"]), None, come_sell),
+                        ("Prezzo netto — exit", euro(uscita), "bold",
+                         f"Prezzo di vendita {euro(bp['bp_vendita'])} − "
+                         f"spese di vendita {euro(ven['totale'])} = "
+                         f"{euro(uscita)}")],
             "risultati": [
                 ("Net Return (ROI)", numero_it(esito["multiplo"], 2) + "x",
-                 "bold"),
+                 "bold", f"Exit {euro(uscita)} ÷ entry {euro(entry)}: ogni "
+                 f"euro messo ne torna {numero_it(esito['multiplo'], 2)}"),
                 ("Return on Equity (ROE)",
-                 numero_it(esito["roe"] * 100, 1) + " %", None),
+                 numero_it(esito["roe"] * 100, 1) + " %", None,
+                 f"EBIT {euro(esito['ebit'])} ÷ entry {euro(entry)}"),
                 (etichetta_annuo,
-                 numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %", None),
+                 numero_it((esito["roi_annuo"] or 0) * 100, 1) + " %", None,
+                 come_annuo),
                 ("Total cost", euro(acq["totale"] + ven["totale"]),
-                 "cattivo"),
+                 "cattivo", f"Spese d'acquisto {euro(acq['totale'])} + spese "
+                 f"di vendita {euro(ven['totale'])}"),
                 ("EBIT", euro(esito["ebit"]),
-                 "buono" if esito["ebit"] >= 0 else "cattivo")],
-            "acquisto_totali": [("di cui IVA", euro(acq["iva"]), None),
+                 "buono" if esito["ebit"] >= 0 else "cattivo",
+                 f"Exit {euro(uscita)} − entry {euro(entry)}")],
+            "acquisto_totali": [("di cui IVA", euro(acq["iva"]), None,
+                                 "IVA delle righe qui sopra: "
+                                 + _somma(iva_parti, acq["iva"])),
                                 ("TOTALE SPESE ACQUISTO",
-                                 euro(acq["totale"]), "bold")],
+                                 euro(acq["totale"]), "bold", come_buy)],
             "vendita_totali": [
                 ("di cui IVA (vendita)",
-                 euro(ven["iva"]) if ven.get("iva") else None, None),
+                 euro(ven["iva"]) if ven.get("iva") else None, None,
+                 f"IVA dell'agenzia OUT: {euro(derivati['bp_ag_out_eur'])} × "
+                 f"{numero_it(bp.get('bp_iva_ag_out', 0.0), 2)}%"),
                 ("TOTALE SPESE (acquisto + vendita)",
-                 euro(acq["totale"] + ven["totale"]), "bold")],
+                 euro(acq["totale"] + ven["totale"]), "bold",
+                 f"Spese d'acquisto {euro(acq['totale'])} + spese di vendita "
+                 f"{euro(ven['totale'])}")],
             "iva_credito": ([("TOTALE IVA A CREDITO", euro(iva_credito),
-                              "buono")] if iva_credito else []),
+                              "buono", f"IVA sugli acquisti "
+                              f"{euro(acq['iva'])} + IVA sulla vendita "
+                              f"{euro(ven['iva'])}")] if iva_credito else []),
             "eur_mq_ristrutturazione": esito["eur_mq_ristrutturazione"],
         },
         "matrici": matrici,
