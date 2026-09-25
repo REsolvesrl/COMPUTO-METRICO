@@ -140,16 +140,6 @@ const Fattibilita = defineComponent({
              title="Lavori + materiale + architetto dalla scheda «Spese a consuntivo» (sostenute e da sostenere), al posto della stima. Ha la precedenza sulla cifra a mano qui sopra.">
         <input type="checkbox" :checked="f.bp.bp_usa_consuntivo" @change="imposta('bp_usa_consuntivo', $event.target.checked)">
         Usa i costi reali del cantiere ({{ euro(f.consuntivo) }})</label>
-      <template v-if="f.esito.eur_mq_ristrutturazione">
-        <div class="ristr-mq"><span>Ristrutturazione al mq</span>
-          <b>{{ numeroIt(f.esito.eur_mq_ristrutturazione, 0) }} €/mq</b></div>
-        <p class="didascalia grigio">Su <b>{{ numeroIt(f.mq.calpestabili, 2) }} mq calpestabili</b> — le stanze
-          disegnate in planimetria, non la superficie commerciale: balconi, vano scale e perimetro si vendono ma non
-          si ristrutturano.</p>
-      </template>
-      <p v-else-if="f.mq.calpestabili <= 0 && f.ristr_eff" class="didascalia arancio">Per avere il costo al mq
-        disegna le stanze in planimetria: servono i <b>mq calpestabili</b>, e la superficie commerciale non va bene
-        come ripiego.</p>
       <RigheBp :righe="f.esito.acquisto_totali" />
       <div style="height:10px"></div>
       <RigaCosto :riga="f.agenzia_out" />

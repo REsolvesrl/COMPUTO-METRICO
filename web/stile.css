@@ -713,15 +713,6 @@ h6 { font-size: 1rem; font-weight: 600; margin: .75rem 0 .75rem; line-height: 1.
 .riga-costo .campo > label { display: none; }
 .riga-costo .casella { height: 36px; }
 .barra-vuota { text-align: center; color: #8FA0BE; }
-.ristr-mq {
-  background: var(--ardesia-chiara);
-  border: 1px solid color-mix(in srgb, var(--ottone) 45%, transparent);
-  padding: 8px 11px; margin: 2px 0 8px; display: flex;
-  justify-content: space-between; align-items: baseline; gap: .6rem;
-}
-.ristr-mq span { font-size: .7rem; font-weight: 600; text-transform: uppercase;
-                 letter-spacing: .12em; color: var(--ottone); }
-.ristr-mq b { font-size: 1.35rem; white-space: nowrap; }
 /* il riepilogo delle spese: ogni categoria col colore della sua fetta */
 table.riepilogo-spese {
   width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 10px;
