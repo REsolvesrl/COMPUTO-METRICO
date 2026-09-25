@@ -85,6 +85,11 @@ def grafico_torta_spese(riepilogo):
 # tutti i progetti; prima era il pareggio, 1,00x).
 SOGLIA_MULTIPLO = 1.10
 
+# rosso → arancio → giallo alla soglia → verde (26/09/2026: prima il
+# bianco stava alla soglia, e una matrice tutta sopra era solo verde)
+ARANCIO = "#FFA84C"
+GIALLO = "#FFEB84"
+
 
 def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
                         base_acquisto=None, base_vendita=None, altezza=330):
@@ -121,14 +126,14 @@ def grafico_sensitivita(prezzi_acquisto, prezzi_vendita, matrice, metrica,
     pareggio = SOGLIA_MULTIPLO if metrica == "multiplo" else 0.0
     if pareggio <= minimo:
         # ogni scenario della matrice è in utile: dal pareggio in su
-        scala = [[0.0, "#FFFFFF"], [1.0, "#63BE7B"]]
+        scala = [[0.0, GIALLO], [1.0, "#63BE7B"]]
     elif pareggio >= massimo:
         # ogni scenario è in perdita: nessun verde da mostrare
-        scala = [[0.0, "#F8696B"], [1.0, "#FFFFFF"]]
+        scala = [[0.0, "#F8696B"], [0.5, ARANCIO], [1.0, GIALLO]]
     else:
         frazione_bianco = (pareggio - minimo) / (massimo - minimo)
-        scala = [[0.0, "#F8696B"], [frazione_bianco, "#FFFFFF"],
-                 [1.0, "#63BE7B"]]
+        scala = [[0.0, "#F8696B"], [frazione_bianco / 2, ARANCIO],
+                 [frazione_bianco, GIALLO], [1.0, "#63BE7B"]]
 
     etichette_v = [numero_it(p / 1000, 0) + "k" for p in prezzi_vendita]
     etichette_a = [numero_it(p / 1000, 0) + "k" for p in prezzi_acquisto]
