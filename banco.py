@@ -876,6 +876,30 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
 
     # --------------------------------------------------- i conti del computo
 
+    def voci_da_stampare(self):
+        """Le voci calcolate come vanno sui documenti: nell'ordine della
+        pagina — categoria per categoria, e dentro nell'ordine del computo —
+        e coi codici rinumerati di fila, 9.1, 9.2, 9.3…
+
+        Il codice del listino (la 9.12 accanto alla 9.4) a video serve a
+        ritrovare la voce; su un foglio che va all'impresa sembra un elenco
+        a cui mancano dei pezzi. Il numero della categoria resta quello
+        della pastiglia (la Facciata è la 9 anche col Tetto spento). Solo
+        le voci che si stampano, quelle con una quantità: una voce «da
+        quantificare» non si prende un numero.
+        """
+        calcolate = self.voci_calcolate()
+        ordine = {c: i for i, c in enumerate(self.scelte())}
+        categorie = {c: i for i, c in enumerate(self.categorie_del_computo())}
+        calcolate.sort(key=lambda v: (categorie.get(v["categoria"],
+                                                    len(categorie)),
+                                      ordine.get(v["codice"], len(ordine))))
+        numeri = {}
+        for voce in calcolate:
+            n = numeri[voce["categoria"]] = numeri.get(voce["categoria"], 0) + 1
+            voce["codice"] = f"{serie_della_categoria(voce['categoria'])}.{n}"
+        return calcolate
+
     def voci_calcolate(self):
         """Le voci scelte con quantità > 0, calcolate (`voci_dal_listino`)."""
         voci = []

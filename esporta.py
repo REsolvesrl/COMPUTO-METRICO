@@ -36,7 +36,8 @@ def pdf_computo(banco, con_prezzi=True):
     progetto = dict(banco.dati["progetto"])
     if not con_prezzi:
         progetto["data"] = date.today().strftime("%d/%m/%Y")
-    return stampa.pdf_computo(progetto, totali["voci"], _totali_pdf(totali),
+    return stampa.pdf_computo(progetto, banco.voci_da_stampare(),
+                              _totali_pdf(totali),
                               tinte=_tinte(), con_prezzi=con_prezzi)
 
 
@@ -51,15 +52,16 @@ def pdf_allegato_materiali(banco):
     return stampa.pdf_materiali(progetto, banco.dati["materiali"])
 
 
-def _df_calcolato(totali):
-    if totali["voci"]:
-        return pd.DataFrame(totali["voci"]).reindex(
+def _df_calcolato(voci):
+    """Le voci come escono sui documenti: codici di fila (voci_da_stampare)."""
+    if voci:
+        return pd.DataFrame(voci).reindex(
             columns=COLONNE + ["quantita", "importo"])
     return pd.DataFrame(columns=COLONNE + ["quantita", "importo"])
 
 
 def csv_computo(banco):
-    df = _df_calcolato(banco.totali())
+    df = _df_calcolato(banco.voci_da_stampare())
     return df.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
 
 
@@ -114,8 +116,8 @@ def excel_computo(banco):
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        _df_calcolato(totali).to_excel(writer, sheet_name="Computo",
-                                       index=False)
+        _df_calcolato(banco.voci_da_stampare()).to_excel(
+            writer, sheet_name="Computo", index=False)
         df_riepilogo.to_excel(writer, sheet_name="Riepilogo", index=False)
         if df_materiali is not None and len(df_materiali):
             df_materiali.to_excel(writer, sheet_name="Materiali", index=False)
