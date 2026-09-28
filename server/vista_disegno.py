@@ -312,6 +312,12 @@ def vista_planimetria(b):
         {"nome": n, "valore": v, "um": um} for n, v, um in (
             ("Superficie commerciale", tot_comm, "m²"),
             ("Pavimento", grandezze.get("pavimento"), "m²"),
+            # accanto al pavimento interno, perché è l'altra metà della
+            # stessa misura: balconi, terrazzi e logge non si sommano alle
+            # stanze (altra posa, altro prezzo) e senza una cella loro il
+            # totale sotto il disegno sembrava tutto il pavimento del piano
+            ("Pavimentazione esterna",
+             grandezze.get("pavimento_esterno"), "m²"),
             ("Battiscopa", grandezze.get("battiscopa"), "m"),
             ("Tinteggiatura", grandezze.get("tinteggiatura"), "m²"),
             ("Muri da demolire", grandezze.get("muri_demolire"), "m²"),
