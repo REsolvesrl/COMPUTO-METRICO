@@ -154,3 +154,28 @@ def test_una_voce_tua_di_un_altra_categoria_resta_tua():
     dati = rinumerazione.traduci(_progetto_con_la_3_30_tua(categoria="Superfici"))
     assert [v["descrizione"] for v in dati["voci"]] == [
         listino.voce_per_codice("3.10")["descrizione"]]
+
+
+# ------------------- la spunta «pavimentazione esterna», dal banco
+# (28/09/2026: un vano scale si pavimenta come fuori, ma non è un balcone)
+
+def test_la_spunta_sposta_il_vano_scale_fra_i_pavimenti_esterni(b):
+    b.scegli_categoria_nuove("Vano scale")
+    _gesto(b, tipo="zona_chiusa",
+           punti=[[0, 0], [300, 0], [300, 300], [0, 300]])   # 9 m²
+    zona = b.dati["piante"][0]["zone"][-1]
+    b.spunta_locale(0, zona["id"], "pavimento", True)
+    b.giro()
+    assert b.grandezze()["pavimento"] == pytest.approx(9.0)
+    assert b.grandezze().get("pavimento_esterno", 0) == 0
+
+    b.spunta_locale(0, zona["id"], "pavimento_esterno", True)
+    b.giro()
+    assert b.grandezze().get("pavimento", 0) == 0
+    assert b.grandezze()["pavimento_esterno"] == pytest.approx(9.0)
+
+
+def test_sui_balconi_la_spunta_nasce_gia_accesa(b):
+    _balcone(b, 200)
+    riga = next(r for r in b.locali()[0] if r["categoria"] == "Balcone")
+    assert riga["pavimento_esterno"] is True

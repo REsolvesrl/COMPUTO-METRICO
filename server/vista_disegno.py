@@ -131,11 +131,12 @@ def conto_in_chiaro(q, altezza, f, aperture):
                         "un soffitto non ha vani da togliere",
                         q["soffitti"], "m²"),
             _riga_conto("Pavimento (interni)", "superficie dei locali "
-                        "spuntati, balconi e terrazzi esclusi",
-                        q["pavimento"], "m²"),
-            _riga_conto("Pavimento esterno", "balconi, terrazzi e logge: "
-                        "altra posa, altro prezzo, voce sua",
-                        q["pavimento_esterno"], "m²")],
+                        "spuntati, senza quelli con la pavimentazione "
+                        "esterna", q["pavimento"], "m²"),
+            _riga_conto("Pavimento esterno", "i locali spuntati "
+                        "«pavimentazione esterna» — di norma balconi, "
+                        "terrazzi e logge: altra posa, altro prezzo, voce "
+                        "sua", q["pavimento_esterno"], "m²")],
         "totale": f"{numero_it(q['soffitti'] + q['pavimento'] + q['pavimento_esterno'], 2)} m²"})
 
     if q["rivestimenti_lordi"]:
@@ -278,7 +279,8 @@ def vista_planimetria(b):
         "pianta": r["uid"], "zona": r["id"], "Pianta": r["pianta"],
         "Locale": r["nome"], "m2": r["m2"], "perimetro": r["perimetro"],
         "pavimento": r["pavimento"], "battiscopa": r["battiscopa"],
-        "pittura": r["pittura"], "rivestito": r["rivestito"]}
+        "pittura": r["pittura"], "rivestito": r["rivestito"],
+        "pavimento_esterno": r["pavimento_esterno"]}
         for r in locali], "senza_scala": senza_scala_loc}
     q = b.finiture()
     if q is not None:

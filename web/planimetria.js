@@ -427,17 +427,20 @@ export const SchedaPlanimetria = defineComponent({
       <p class="didascalia larga">Spunta, locale per locale, che cosa si rifà. <b>Rivestito</b> (bagni, fascia della
         cucina): la fascia piastrellata non si rasa né si tinteggia, e di norma lì il battiscopa non c'è — ma se c'è
         basta spuntarlo. Pavimento = superficie calpestabile; pareti = perimetro × altezza; soffitti = superficie
-        calpestabile.</p>
+        calpestabile. <b>Pavimentazione esterna</b>: il pavimento di quel locale va nel totale «Pavimento esterno»
+        (spessoratura, pendenza, gres suo) — nasce spuntata su balconi, terrazzi e logge, e puoi accenderla su un
+        vano scale o un porticato che si pavimentano come fuori.</p>
       <div class="tabella-scorre"><table class="tabella">
         <thead><tr><th>Pianta</th><th>Locale</th><th class="num">Superficie (m²)</th><th class="num">Perimetro (m)</th>
           <th title="Conta nella superficie da pavimentare">Pavimento</th>
+          <th title="Il pavimento di questo locale va nel totale «Pavimento esterno» (posa da esterni: spessoratura, pendenza, gres suo). Nasce spuntata su balconi, terrazzi e logge; spuntala anche su un vano scale o un porticato che si pavimentano come fuori. Riguarda solo il pavimento: battiscopa e tinteggiatura restano comandati dalle loro spunte">Pavimentazione esterna</th>
           <th title="Conta nel totale del battiscopa">Battiscopa</th>
           <th title="Conta in pareti e soffitti da tinteggiare">Tinteggiatura</th>
           <th title="Locale piastrellato (bagno, fascia cucina): la fascia rivestita non si rasa né si tinteggia. Il battiscopa lo comanda la sua spunta: di norma qui non ce n'è, ma con la fascia bassa lo zoccolino ci va — spuntalo e il perimetro rientra nel totale">Rivestito</th></tr></thead>
         <tbody><tr v-for="r in p.locali.righe" :key="r.pianta + '-' + r.zona">
           <td>{{ r.Pianta }}</td><td>{{ r.Locale }}</td>
           <td class="num">{{ numeroIt(r.m2, 2) }}</td><td class="num">{{ numeroIt(r.perimetro, 2) }}</td>
-          <td v-for="campo in ['pavimento', 'battiscopa', 'pittura', 'rivestito']" :key="campo">
+          <td v-for="campo in ['pavimento', 'pavimento_esterno', 'battiscopa', 'pittura', 'rivestito']" :key="campo">
             <input type="checkbox" :checked="r[campo]" :aria-label="campo + ' ' + r.Locale"
                    @change="g('spunta_locale', {pianta: r.pianta, zona: r.zona, campo, valore: $event.target.checked})"></td>
         </tr></tbody>

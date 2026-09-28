@@ -525,7 +525,8 @@ class DisegnoMixin:
         self.dati["altezza_locali"] = max(1.0, min(6.0, float(metri)))
 
     def spunta_locale(self, pianta, zona, campo, valore):
-        if campo not in ("pavimento", "battiscopa", "pittura", "rivestito"):
+        if campo not in ("pavimento", "battiscopa", "pittura", "rivestito",
+                         "pavimento_esterno"):
             raise ErroreDisegno(f"Spunta sconosciuta: {campo}")
         z = self._zona(int(pianta), zona)
         if z is None:
