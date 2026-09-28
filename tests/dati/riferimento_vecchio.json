@@ -738,8 +738,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 2,
@@ -766,8 +765,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 3,
@@ -794,8 +792,7 @@
        ],
        "pavimento": true,
        "battiscopa": false,
-       "rivestito": true,
-       "pavimento_esterno": false
+       "rivestito": true
       },
       {
        "id": 4,
@@ -961,7 +958,7 @@
   "conti": [
    "| Battiscopa | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali con lo zoccolino | somma della colonna «Battiscopa» qui sopra | 18,00 m |\n| Vani porta | 0,80 m × 5 interne × 2 lati = 9 lati (non 10: un lato che dà in un locale rivestito senza zoccolino non interrompe niente) | −7,20 m |\n| **Totale** | | **10,80 m** |",
    "| Pareti | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali da tinteggiare × altezza | somma della colonna «Pareti»: perimetro × 2,70 m | 48,60 m² |\n| Vani porta | 0,80 × 2,10 m × 5 interne × 2 lati = 10 lati | −16,80 m² |\n| **Totale** | | **31,80 m²** |",
-   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 20,00 m² |\n| Pavimento (interni) | superficie dei locali spuntati, senza quelli con la pavimentazione esterna | 25,00 m² |\n| Pavimento esterno | i locali spuntati «pavimentazione esterna» — di norma balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 0,00 m² |\n| **Totale** | | **45,00 m²** |"
+   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 20,00 m² |\n| Pavimento (interni) | superficie dei locali spuntati, balconi e terrazzi esclusi | 25,00 m² |\n| Pavimento esterno | balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 0,00 m² |\n| **Totale** | | **45,00 m²** |"
   ]
  },
  "modello_nuovo": {
@@ -3608,8 +3605,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 3,
@@ -3636,8 +3632,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 4,
@@ -3664,8 +3659,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 5,
@@ -3692,8 +3686,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": true,
-       "rivestito": true,
-       "pavimento_esterno": false
+       "rivestito": true
       },
       {
        "id": 6,
@@ -3720,8 +3713,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 7,
@@ -3748,8 +3740,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 8,
@@ -3776,8 +3767,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 9,
@@ -3804,8 +3794,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 10,
@@ -3832,8 +3821,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 11,
@@ -3860,8 +3848,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 12,
@@ -3888,8 +3875,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       }
      ],
      "pareti": [
@@ -4088,7 +4074,7 @@
   "conti": [
    "| Battiscopa | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali con lo zoccolino | somma della colonna «Battiscopa» qui sopra | 58,50 m |\n| Vani porta | 0,80 m × 4 interne × 2 lati + 1 esterne × 1 lato = 8 lati (non 9: un lato che dà in un locale rivestito senza zoccolino non interrompe niente) | −6,40 m |\n| Finestre | il davanzale sta in alto: lo zoccolino ci passa sotto indisturbato | — |\n| Porte finestra | 2 × 1,20 m: arrivano a terra e interrompono lo zoccolino | −2,40 m |\n| **Totale** | | **49,70 m** |",
    "| Pareti | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali da tinteggiare × altezza | somma della colonna «Pareti»: perimetro × 2,80 m | 189,56 m² |\n| Fasce rivestite | perimetro dei locali rivestiti × 1,20 m: sotto la piastrella non si rasa né si tinteggia | −11,04 m² |\n| Vani porta | 0,80 × 2,10 m × 4 interne × 2 lati + 1 esterne × 1 lato = 9 lati | −15,12 m² |\n| Finestre | 5 × 1,20 × 1,40 m | −8,40 m² |\n| Porte finestra | 2 × 1,20 × 2,30 m | −5,52 m² |\n| Vani dei locali rivestiti, restituiti | la fascia se li era già portati via tutti interi: toglierli una seconda volta scontava due volte la striscia bassa | +2,40 m² |\n| **Totale** | | **151,88 m²** |",
-   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, senza quelli con la pavimentazione esterna | 62,44 m² |\n| Pavimento esterno | i locali spuntati «pavimentazione esterna» — di norma balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
+   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, balconi e terrazzi esclusi | 62,44 m² |\n| Pavimento esterno | balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
    "| Rivestimenti | Come si calcola | Quanto |\n|---|---|---:|\n| Fascia dei locali rivestiti | perimetro dei locali rivestiti × 1,20 m | 11,04 m² |\n| Vani porta, la parte dentro la fascia | una porta alta 2,10 su una fascia da 1,20 vale 0,80 × 1,20, non il vano intero | −0,96 m² |\n| Finestre, la parte dentro la fascia | solo quello che cade sotto il bordo alto della fascia | −1,44 m² |\n| **Totale** | | **8,64 m²** |"
   ]
  },
@@ -5636,8 +5622,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 3,
@@ -5664,8 +5649,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 4,
@@ -5692,8 +5676,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 5,
@@ -5720,8 +5703,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": true,
-       "rivestito": true,
-       "pavimento_esterno": false
+       "rivestito": true
       },
       {
        "id": 6,
@@ -5748,8 +5730,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 7,
@@ -5776,8 +5757,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 8,
@@ -5804,8 +5784,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 9,
@@ -5832,8 +5811,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 10,
@@ -5860,8 +5838,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 11,
@@ -5888,8 +5865,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 12,
@@ -5916,8 +5892,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       }
      ],
      "pareti": [
@@ -6116,7 +6091,7 @@
   "conti": [
    "| Battiscopa | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali con lo zoccolino | somma della colonna «Battiscopa» qui sopra | 58,50 m |\n| Vani porta | 0,90 m × 5 interne × 2 lati + 1 esterne × 1 lato = 10 lati (non 11: un lato che dà in un locale rivestito senza zoccolino non interrompe niente) | −9,00 m |\n| Finestre | il davanzale sta in alto: lo zoccolino ci passa sotto indisturbato | — |\n| Porte finestra | 2 × 1,20 m: arrivano a terra e interrompono lo zoccolino | −2,40 m |\n| **Totale** | | **47,10 m** |",
    "| Pareti | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali da tinteggiare × altezza | somma della colonna «Pareti»: perimetro × 2,85 m | 192,94 m² |\n| Fasce rivestite | perimetro dei locali rivestiti × 1,20 m: sotto la piastrella non si rasa né si tinteggia | −11,04 m² |\n| Vani porta | 0,90 × 2,20 m × 5 interne × 2 lati + 1 esterne × 1 lato = 11 lati | −21,78 m² |\n| Finestre | 4 × 1,20 × 1,40 m | −6,72 m² |\n| Porte finestra | 2 × 1,20 × 2,30 m | −5,52 m² |\n| Vani dei locali rivestiti, restituiti | la fascia se li era già portati via tutti interi: toglierli una seconda volta scontava due volte la striscia bassa | +2,52 m² |\n| **Totale** | | **150,41 m²** |",
-   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, senza quelli con la pavimentazione esterna | 62,44 m² |\n| Pavimento esterno | i locali spuntati «pavimentazione esterna» — di norma balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
+   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, balconi e terrazzi esclusi | 62,44 m² |\n| Pavimento esterno | balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
    "| Rivestimenti | Come si calcola | Quanto |\n|---|---|---:|\n| Fascia dei locali rivestiti | perimetro dei locali rivestiti × 1,20 m | 11,04 m² |\n| Vani porta, la parte dentro la fascia | una porta alta 2,20 su una fascia da 1,20 vale 0,90 × 1,20, non il vano intero | −1,08 m² |\n| Finestre, la parte dentro la fascia | solo quello che cade sotto il bordo alto della fascia | −1,44 m² |\n| **Totale** | | **8,52 m²** |"
   ]
  },
@@ -7664,8 +7639,7 @@
        "rivestito": true,
        "battiscopa": true,
        "pavimento": true,
-       "pittura": true,
-       "pavimento_esterno": false
+       "pittura": true
       },
       {
        "id": 3,
@@ -7692,8 +7666,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 4,
@@ -7720,8 +7693,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 5,
@@ -7748,8 +7720,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": true,
-       "rivestito": true,
-       "pavimento_esterno": false
+       "rivestito": true
       },
       {
        "id": 6,
@@ -7776,8 +7747,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 7,
@@ -7804,8 +7774,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 8,
@@ -7832,8 +7801,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 9,
@@ -7860,8 +7828,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 10,
@@ -7888,8 +7855,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 11,
@@ -7916,8 +7882,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 12,
@@ -7944,8 +7909,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       }
      ],
      "pareti": [
@@ -8144,7 +8108,7 @@
   "conti": [
    "| Battiscopa | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali con lo zoccolino | somma della colonna «Battiscopa» qui sopra | 58,50 m |\n| Vani porta | 0,80 m × 3 interne × 2 lati + 1 esterne × 1 lato = 6 lati (non 7: un lato che dà in un locale rivestito senza zoccolino non interrompe niente) | −4,80 m |\n| Finestre | il davanzale sta in alto: lo zoccolino ci passa sotto indisturbato | — |\n| Porte finestra | 2 × 1,20 m: arrivano a terra e interrompono lo zoccolino | −2,40 m |\n| **Totale** | | **51,30 m** |",
    "| Pareti | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali da tinteggiare × altezza | somma della colonna «Pareti»: perimetro × 2,85 m | 192,94 m² |\n| Fasce rivestite | perimetro dei locali rivestiti × 2,40 m: sotto la piastrella non si rasa né si tinteggia | −73,44 m² |\n| Vani porta | 0,80 × 2,10 m × 3 interne × 2 lati + 1 esterne × 1 lato = 7 lati | −11,76 m² |\n| Finestre | 5 × 1,20 × 1,40 m | −8,40 m² |\n| Porte finestra | 2 × 1,20 × 2,30 m | −5,52 m² |\n| Vani dei locali rivestiti, restituiti | la fascia se li era già portati via tutti interi: toglierli una seconda volta scontava due volte la striscia bassa | +5,04 m² |\n| **Totale** | | **98,86 m²** |",
-   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, senza quelli con la pavimentazione esterna | 62,44 m² |\n| Pavimento esterno | i locali spuntati «pavimentazione esterna» — di norma balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
+   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, balconi e terrazzi esclusi | 62,44 m² |\n| Pavimento esterno | balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
    "| Rivestimenti | Come si calcola | Quanto |\n|---|---|---:|\n| Fascia dei locali rivestiti | perimetro dei locali rivestiti × 2,40 m | 73,44 m² |\n| Vani porta, la parte dentro la fascia | una porta alta 2,10 su una fascia da 2,40 vale 0,80 × 2,40, non il vano intero | −3,36 m² |\n| Finestre, la parte dentro la fascia | solo quello che cade sotto il bordo alto della fascia | −1,68 m² |\n| **Totale** | | **68,40 m²** |"
   ]
  },
@@ -9693,8 +9657,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 3,
@@ -9721,8 +9684,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 4,
@@ -9749,8 +9711,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 5,
@@ -9777,8 +9738,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": true,
-       "rivestito": true,
-       "pavimento_esterno": false
+       "rivestito": true
       },
       {
        "id": 6,
@@ -9805,8 +9765,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 7,
@@ -9833,8 +9792,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 8,
@@ -9861,8 +9819,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 9,
@@ -9889,8 +9846,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 10,
@@ -9917,8 +9873,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 11,
@@ -9945,8 +9900,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 12,
@@ -9973,8 +9927,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       }
      ],
      "pareti": [
@@ -10173,7 +10126,7 @@
   "conti": [
    "| Battiscopa | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali con lo zoccolino | somma della colonna «Battiscopa» qui sopra | 58,50 m |\n| Vani porta | 0,80 m × 4 interne × 2 lati + 1 esterne × 1 lato = 8 lati (non 9: un lato che dà in un locale rivestito senza zoccolino non interrompe niente) | −6,40 m |\n| Finestre | il davanzale sta in alto: lo zoccolino ci passa sotto indisturbato | — |\n| Porte finestra | 2 × 1,20 m: arrivano a terra e interrompono lo zoccolino | −2,40 m |\n| **Totale** | | **49,70 m** |",
    "| Pareti | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali da tinteggiare × altezza | somma della colonna «Pareti»: perimetro × 2,85 m | 192,94 m² |\n| Fasce rivestite | perimetro dei locali rivestiti × 1,20 m: sotto la piastrella non si rasa né si tinteggia | −11,04 m² |\n| Vani porta | 0,80 × 2,10 m × 4 interne × 2 lati + 1 esterne × 1 lato = 9 lati | −15,12 m² |\n| Finestre | 5 × 1,20 × 1,40 m | −8,40 m² |\n| Porte finestra | 2 × 1,20 × 2,30 m | −5,52 m² |\n| Vani dei locali rivestiti, restituiti | la fascia se li era già portati via tutti interi: toglierli una seconda volta scontava due volte la striscia bassa | +2,40 m² |\n| **Totale** | | **155,26 m²** |",
-   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, senza quelli con la pavimentazione esterna | 62,44 m² |\n| Pavimento esterno | i locali spuntati «pavimentazione esterna» — di norma balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
+   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, balconi e terrazzi esclusi | 62,44 m² |\n| Pavimento esterno | balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 17,14 m² |\n| **Totale** | | **142,02 m²** |",
    "| Rivestimenti | Come si calcola | Quanto |\n|---|---|---:|\n| Fascia dei locali rivestiti | perimetro dei locali rivestiti × 1,20 m | 11,04 m² |\n| Vani porta, la parte dentro la fascia | una porta alta 2,10 su una fascia da 1,20 vale 0,80 × 1,20, non il vano intero | −0,96 m² |\n| Finestre, la parte dentro la fascia | solo quello che cade sotto il bordo alto della fascia | −1,44 m² |\n| **Totale** | | **8,64 m²** |"
   ]
  },
@@ -11725,8 +11678,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 3,
@@ -11753,8 +11705,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 4,
@@ -11781,8 +11732,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 5,
@@ -11809,8 +11759,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": true,
-       "rivestito": true,
-       "pavimento_esterno": false
+       "rivestito": true
       },
       {
        "id": 6,
@@ -11837,8 +11786,7 @@
        "pavimento": true,
        "battiscopa": true,
        "pittura": true,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 7,
@@ -11865,8 +11813,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 8,
@@ -11893,8 +11840,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 9,
@@ -11921,8 +11867,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 10,
@@ -11949,8 +11894,7 @@
        "pavimento": true,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": true
+       "rivestito": false
       },
       {
        "id": 11,
@@ -11977,8 +11921,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       },
       {
        "id": 12,
@@ -12005,8 +11948,7 @@
        "pavimento": false,
        "battiscopa": false,
        "pittura": false,
-       "rivestito": false,
-       "pavimento_esterno": false
+       "rivestito": false
       }
      ],
      "pareti": [
@@ -12205,7 +12147,7 @@
   "conti": [
    "| Battiscopa | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali con lo zoccolino | somma della colonna «Battiscopa» qui sopra | 58,50 m |\n| Vani porta | 0,80 m × 4 interne × 2 lati + 1 esterne × 1 lato = 8 lati (non 9: un lato che dà in un locale rivestito senza zoccolino non interrompe niente) | −6,40 m |\n| Finestre | il davanzale sta in alto: lo zoccolino ci passa sotto indisturbato | — |\n| Porte finestra | 2 × 1,20 m: arrivano a terra e interrompono lo zoccolino | −2,40 m |\n| **Totale** | | **49,70 m** |",
    "| Pareti | Come si calcola | Quanto |\n|---|---|---:|\n| Perimetri dei locali da tinteggiare × altezza | somma della colonna «Pareti»: perimetro × 2,80 m | 189,56 m² |\n| Fasce rivestite | perimetro dei locali rivestiti × 1,20 m: sotto la piastrella non si rasa né si tinteggia | −11,04 m² |\n| Vani porta | 0,80 × 2,10 m × 4 interne × 2 lati + 1 esterne × 1 lato = 9 lati | −15,12 m² |\n| Finestre | 5 × 1,20 × 1,40 m | −8,40 m² |\n| Porte finestra | 2 × 1,20 × 2,30 m | −5,52 m² |\n| Vani dei locali rivestiti, restituiti | la fascia se li era già portati via tutti interi: toglierli una seconda volta scontava due volte la striscia bassa | +2,40 m² |\n| **Totale** | | **151,88 m²** |",
-   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, senza quelli con la pavimentazione esterna | 62,44 m² |\n| Pavimento esterno | i locali spuntati «pavimentazione esterna» — di norma balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 22,60 m² |\n| **Totale** | | **147,48 m²** |",
+   "| Voce | Come si calcola | Quanto |\n|---|---|---:|\n| Soffitti | superficie dei locali da tinteggiare: un soffitto non ha vani da togliere | 62,44 m² |\n| Pavimento (interni) | superficie dei locali spuntati, balconi e terrazzi esclusi | 62,44 m² |\n| Pavimento esterno | balconi, terrazzi e logge: altra posa, altro prezzo, voce sua | 22,60 m² |\n| **Totale** | | **147,48 m²** |",
    "| Rivestimenti | Come si calcola | Quanto |\n|---|---|---:|\n| Fascia dei locali rivestiti | perimetro dei locali rivestiti × 1,20 m | 11,04 m² |\n| Vani porta, la parte dentro la fascia | una porta alta 2,10 su una fascia da 1,20 vale 0,80 × 1,20, non il vano intero | −0,96 m² |\n| Finestre, la parte dentro la fascia | solo quello che cade sotto il bordo alto della fascia | −1,44 m² |\n| **Totale** | | **8,64 m²** |"
   ]
  },

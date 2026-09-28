@@ -225,10 +225,8 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
     """Quantità nette di pavimenti, battiscopa, pareti, soffitti, rivestimenti.
 
     locali: [{"m2", "perimetro", "pavimento", "battiscopa", "pittura",
-    "rivestito", "esterno", "pavimento_esterno"}] — le spunte dicono che
-    cosa si rifà in quel locale; `esterno` dice se è un balcone, un terrazzo
-    o una loggia. `pavimento_esterno` dice dove va il suo pavimento: se non
-    c'è lo decide `esterno`.
+    "rivestito", "esterno"}] — le spunte dicono che cosa si rifà in quel
+    locale; `esterno` dice se è un balcone, un terrazzo o una loggia.
 
     Il pavimento esce in DUE quantità, e non è un capriccio: la pavimentazione
     di un balcone non è quella di una camera — vuole la spessoratura, la
@@ -324,13 +322,6 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
         perimetro = float(locale.get("perimetro") or 0.0)
         rivestito = bool(locale.get("rivestito"))
         esterno = bool(locale.get("esterno"))
-        # Dove va il pavimento di questo locale. Di norma lo dice la
-        # categoria (un balcone è fuori), ma la spunta «pavimentazione
-        # esterna» lo decide caso per caso: un vano scale o un porticato
-        # possono avere la posa da esterni pur non essendo un balcone. La
-        # spunta riguarda SOLO il pavimento: battiscopa, pareti e soffitti
-        # restano comandati dalle loro, e dalla categoria.
-        pav_fuori = bool(locale.get("pavimento_esterno", esterno))
         riga = {"nome": locale.get("nome") or "Locale", "m2": round(m2, 3),
                 "perimetro": round(perimetro, 3), "rivestito": rivestito,
                 "esterno": esterno, "pavimento": 0.0,
@@ -338,7 +329,7 @@ def quantita_finiture(locali, altezza, larghezza_porta=0.0, altezza_porta=0.0,
                 "soffitti": 0.0, "fascia": 0.0}
         dettaglio.append(riga)
         if locale.get("pavimento"):
-            if pav_fuori:
+            if esterno:
                 pavimento_esterno += m2
                 riga["pavimento_esterno"] = round(m2, 3)
             else:

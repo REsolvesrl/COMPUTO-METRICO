@@ -989,15 +989,10 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
             interna = percento_di(perc, r["categoria"]) >= 100.0
             bagno = any(parola in (r["nome"] + " " + r["categoria"]).lower()
                         for parola in ("bagno", "wc", "w.c"))
-            fuori = r["categoria"] in CATEGORIE_ESTERNE
             for chiave, predefinito in (("pavimento", interna),
                                         ("battiscopa", interna and not bagno),
                                         ("pittura", interna),
-                                        ("rivestito", bagno),
-                                        # dove va il pavimento: di norma lo
-                                        # dice la categoria, poi comanda la
-                                        # spunta
-                                        ("pavimento_esterno", fuori)):
+                                        ("rivestito", bagno)):
                 zona[chiave] = bool(predefinito if zona.get(chiave) is None
                                     else zona[chiave])
 
@@ -1016,8 +1011,6 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
                           "battiscopa": bool(zona.get("battiscopa")),
                           "pittura": bool(zona.get("pittura")),
                           "rivestito": bool(zona.get("rivestito")),
-                          "pavimento_esterno":
-                              bool(zona.get("pavimento_esterno")),
                           "esterno": (zona.get("categoria") or "")
                           in CATEGORIE_ESTERNE})
         return fuori, senza_scala
