@@ -312,6 +312,9 @@ def normalizza(dati):
         if p.get("immagine") and _immagine_leggibile(p["immagine"]):
             piante.append({"nome": p.get("nome") or "Planimetria",
                            "mpp": p.get("mpp"),
+                           # le misure note da cui viene mpp (30/09/2026);
+                           # nei file di prima non ci sono, e mpp basta
+                           "scale": p.get("scale") or [],
                            "zone": p.get("zone") or [],
                            "pareti": p.get("pareti") or [],
                            "immagine": p["immagine"]})

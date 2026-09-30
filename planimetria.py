@@ -36,6 +36,44 @@ def calibra_da_due_punti(p1, p2, lunghezza_reale_m):
     return metri_per_pixel(distanza_pixel(p1, p2), lunghezza_reale_m)
 
 
+# Oltre questo scarto una misura nota non torna con le altre: un capo
+# cliccato storto, una quota letta male, o un disegno deformato dalla
+# scansione. Il clic sbaglia di un pixel o due, che su un segmento di
+# qualche centinaio di pixel fa meno dell'uno per cento.
+SCARTO_SCALA = 0.02
+
+
+def mpp_da_scale(scale):
+    """Il fattore di scala da più misure note, ognuna {"p1", "p2", "metri"}.
+
+    È la media dei fattori pesata sulla lunghezza dei segmenti, che si
+    riduce a metri totali diviso pixel totali. Il peso sulla lunghezza è
+    quello giusto: l'errore del clic è lo stesso su un segmento corto e su
+    uno lungo, e sul lungo pesa meno. None se non ci sono misure.
+    """
+    pixel = sum(distanza_pixel(s["p1"], s["p2"]) for s in scale)
+    metri = sum(float(s["metri"]) for s in scale)
+    if pixel <= 0 or metri <= 0:
+        return None
+    return metri / pixel
+
+
+def scarti_scale(scale, mpp):
+    """Per ogni misura nota, quanto la misura il fattore medio.
+
+    Ritorna [{"metri", "misurati", "scarto"}]: la quota scritta, la
+    lunghezza che il segmento ha con la scala di tutte insieme, e lo scarto
+    relativo fra le due (+0,03 = il fattore medio la fa più lunga del 3%).
+    """
+    fuori = []
+    for s in scale:
+        metri = float(s["metri"])
+        misurati = distanza_pixel(s["p1"], s["p2"]) * (mpp or 0.0)
+        fuori.append({"metri": metri, "misurati": misurati,
+                      "scarto": (misurati - metri) / metri if metri else 0.0})
+    return fuori
+
+
 def allunga_segmento(p1, p2, lunghezza_pixel):
     """Nuovo p2 perché il segmento p1→p2 misuri `lunghezza_pixel`.
 

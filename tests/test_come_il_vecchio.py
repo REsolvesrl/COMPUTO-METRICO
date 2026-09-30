@@ -66,6 +66,7 @@ def _senza_immagini(dati):
     dati = json.loads(json.dumps(dati))
     for p in dati.get("piante") or []:
         p.pop("immagine", None)
+        p.pop("scale", None)        # le misure note: nate dopo il vecchio
     dati.pop("listino", None)       # la numerazione: il vecchio non l'aveva
     for campo in CAMPI_NUOVI_BP:
         (dati.get("business_plan") or {}).pop(campo, None)

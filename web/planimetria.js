@@ -195,6 +195,8 @@ export const SchedaPlanimetria = defineComponent({
     async function impostaScala() {
       await g("imposta_scala", { metri: metriScala.value }, false);
     }
+    const confrontoScale = computed(() => p.value.scale && p.value.scale.misure.length > 1);
+    const scarto = (x) => (x >= 0 ? "+" : "−") + numeroIt(Math.abs(x) * 100, 1) + " %";
     const colonneSup = ["Pianta", "Categoria", "Zone", "m² reali", "%", "m² commerciali", "Serve a"]
       .map((c) => ({ chiave: c, titolo: c, num: ["Zone", "m² reali", "%", "m² commerciali"].includes(c) }));
     const colonneConto = computed(() => (p.value.conto && p.value.conto.censimento
@@ -206,7 +208,7 @@ export const SchedaPlanimetria = defineComponent({
     const f = computed(() => p.value.finiture);
     function finitura(campo, valore) { g("finitura", { campo, valore }); }
     function stampaPdf() { scarica(orizzontale.value ? "pdf_planimetrie_orizzontale" : "pdf_planimetrie"); }
-    return { p, caricamento, carica, g, opzioniCat, nomeAttiva, metriScala, impostaScala, forza,
+    return { p, caricamento, carica, g, opzioniCat, nomeAttiva, metriScala, impostaScala, confrontoScale, scarto, forza,
              orizzontale, colonneSup, colonneConto, stileTotale, d, muri, f, finitura, stampaPdf,
              scarica, numeroIt, euro };
   },
@@ -262,7 +264,8 @@ export const SchedaPlanimetria = defineComponent({
         <Avviso v-if="p.scala_persa" tipo="attenzione">↩️ Tornando indietro è stata annullata anche <b>la scala</b>:
           questa planimetria non è più calibrata, quindi le misure non sono in metri finché non la reimposti con lo
           strumento ↔️. Le aree disegnate restano dove sono.</Avviso>
-        <p v-if="p.mpp" class="didascalia">✅ Scala impostata — le misure sono in metri reali.</p>
+        <p v-if="p.mpp" class="didascalia">✅ Scala impostata<template v-if="p.scale.misure.length > 1"> dalla
+          media di <b>{{ p.scale.misure.length }} misure note</b></template> — le misure sono in metri reali.</p>
         <Avviso v-else tipo="attenzione">⚠️ Scala non impostata per questa planimetria: scegli <b>Scala</b> nella
           barra sul disegno, poi <b>clicca l'inizio e la fine</b> di una misura nota (es. un lato quotato). Zooma con
           la rotellina per essere preciso: lo zoom non altera le misure.</Avviso>
@@ -276,8 +279,51 @@ export const SchedaPlanimetria = defineComponent({
         <div v-if="p.tela.scala_temp" class="colonne fondo resta" style="margin-bottom:16px">
           <CampoNumero style="flex:2" etichetta="Quanto misura in metri, nella realtà, il segmento nero tracciato?"
                        :valore="metriScala" :decimali="2" @cambia="metriScala = $event" />
-          <button class="bottone primario" style="flex:1" @click="impostaScala">📏 Imposta scala</button>
+          <button class="bottone primario" style="flex:1" @click="impostaScala">📏 {{ p.scale.misure.length
+            ? 'Aggiungi alla scala' : 'Imposta scala' }}</button>
           <button class="bottone" style="flex:1" @click="g('annulla_scala')">Annulla</button>
+        </div>
+
+        <!-- le misure note su cui è tarata la scala: restano sul disegno,
+             numerate come qui, e si tolgono una per una -->
+        <div v-if="p.scale.misure.length" style="margin-bottom:16px">
+          <p style="margin-bottom:8px"><b>📏 Misure note della scala</b></p>
+          <div class="griglia-scorre">
+            <table class="griglia">
+              <thead><tr>
+                <th style="width:56px">N.</th>
+                <th class="num">Quota scritta</th>
+                <th v-if="confrontoScale" class="num"
+                    title="Quanto misura il segmento con la scala di tutte le misure insieme">Con la scala media</th>
+                <th v-if="confrontoScale" class="num">Scarto</th>
+                <th style="width:120px"></th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="m in p.scale.misure" :key="m.id">
+                  <td class="sola-lettura">{{ m.segno }}</td>
+                  <td class="sola-lettura num">{{ numeroIt(m.metri, 2) }} m</td>
+                  <td v-if="confrontoScale" class="sola-lettura num">{{ numeroIt(m.misurati, 2) }} m</td>
+                  <td v-if="confrontoScale" class="sola-lettura num" :class="{rosso: m.non_torna}">
+                    {{ scarto(m.scarto) }}{{ m.non_torna ? ' ⚠' : '' }}</td>
+                  <td><button class="bottone" style="width:100%;min-height:34px"
+                              title="Toglie questa misura: la scala si rifà con quelle che restano"
+                              @click="g('togli_misura_scala', {misura: m.id})">🗑 Togli</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="didascalia">Per affinare la scala traccia altre misure note con lo strumento ↔️: la scala è la
+            media di tutte, pesata sulla lunghezza, quindi un segmento lungo conta più di uno corto.
+            <template v-if="confrontoScale">Lo scarto dice quanto ogni quota si allontana dalle altre.</template></p>
+          <Avviso v-if="p.scale.misure.some(m => m.non_torna)" tipo="attenzione">⚠️ Le misure segnate si allontanano
+            dalle altre di oltre il {{ numeroIt(p.scale.soglia * 100, 0) }}%: un capo cliccato fuori posto, una quota
+            letta male o un disegno deformato dalla scansione. Controllale sul disegno (sono in rosso) e togli quella
+            sbagliata.</Avviso>
+        </div>
+        <div v-else-if="p.scale.senza_misure" class="colonne centro resta" style="margin-bottom:16px">
+          <p class="didascalia" style="flex:3;margin:0">📏 Questa scala è stata impostata prima che le misure note
+            restassero sul disegno, e il suo segmento non c'è più. La prima misura nota che aggiungi la sostituisce.</p>
+          <button class="bottone" style="flex:1" @click="g('togli_scala_senza_misure')">🗑 Togli questa scala</button>
         </div>
 
         <template v-if="p.zona_sel">

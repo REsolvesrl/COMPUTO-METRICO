@@ -17,6 +17,7 @@ let scale = 1, tx = 0, ty = 0, fitScale = 1;
 
 let mode = "sposta";
 let zone = [], pareti = [], scalaTemp = null;
+let misureScala = [];        // le misure note su cui è tarata la scala
 let coloreAttivo = "#E57373", mpp = 0, fontPx = 14;
 let tipoParete = "demolire";  // che muro si sta per tracciare (dal server)
 
@@ -53,6 +54,7 @@ let editor = null;           // <input> di rinomina sovrapposto all'etichetta
 
 const COL_SCALA = "#111111";       // nero — vettore di scala
 const COL_MISURA = "#3D9BE9";      // azzurro — misure al volo
+const COL_SCALA_STORTA = "#D32F2F"; // rosso — una misura nota che non torna
 
 // ------------------------------------------------------------- conversioni
 function img2scr(p) { return [p[0] * scale + tx, p[1] * scale + ty]; }
@@ -468,6 +470,11 @@ function render() {
     drawVettore(p.p1, p.p2, false, p.colore || "#C9A96A", 5,
                 p.id === selParete, p.tipo || "esistente");
   }
+  // le misure note restano sul disegno: si vede su cosa è tarata la scala
+  for (const s of misureScala) {
+    drawVettore(s.p1, s.p2, false, s.non_torna ? COL_SCALA_STORTA : COL_SCALA,
+                3.5, false, "scala");
+  }
   for (const m of misure) {
     drawVettore(m.p1, m.p2, false, COL_MISURA, 3.5, false, "misura");
   }
@@ -534,6 +541,10 @@ function render() {
       ? fmtMetri(dist(p.p1, p.p2)) : p.etichetta;
     const r = drawLabel(pos, testo, Math.max(10, fontPx - 2), false);
     if (r) labelRects.push({ r: r, el: "parete", obj: p });
+  }
+  for (const s of misureScala) {
+    const c = img2scr([(s.p1[0] + s.p2[0]) / 2, (s.p1[1] + s.p2[1]) / 2]);
+    drawLabel([c[0], c[1] - 18], s.etichetta, Math.max(10, fontPx - 2), false);
   }
   for (const m of misure) {
     const c = img2scr([(m.p1[0] + m.p2[0]) / 2, (m.p1[1] + m.p2[1]) / 2]);
@@ -1160,6 +1171,7 @@ function applicaArgs(a) {
     pareti = a.pareti || [];
   }
   scalaTemp = a.scala_temp || null;
+  misureScala = a.scale || [];
   coloreAttivo = a.colore_attivo || "#E57373";
   mpp = a.mpp || 0;
   fontPx = a.font_px || 14;

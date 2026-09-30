@@ -9,6 +9,7 @@ from planimetria import (
     calibra_da_due_punti,
     distanza_pixel,
     metri_per_pixel,
+    mpp_da_scale,
     perimetro_poligono_pixel,
     perimetro_reale_m,
     posiziona_etichette,
@@ -21,6 +22,7 @@ from planimetria import (
     superficie_calpestabile,
     voci_da_riscrivere,
     riepilogo_superfici,
+    scarti_scale,
     superficie_commerciale,
 )
 
@@ -46,6 +48,23 @@ def test_allunga_segmento_tiene_fermo_il_primo_capo_e_la_direzione():
 def test_allunga_segmento_senza_direzione_non_inventa_niente():
     assert allunga_segmento([5, 5], [5, 5], 10) is None
     assert allunga_segmento([0, 0], [3, 4], 0) is None
+
+
+def test_la_scala_da_piu_misure_e_la_media_pesata_sulla_lunghezza():
+    scale = [{"p1": [0, 0], "p2": [100, 0], "metri": 1.2},    # 1,2 cm/px
+             {"p1": [0, 0], "p2": [0, 300], "metri": 3.0}]    # 1,0 cm/px
+    # non la media semplice (1,1 cm), ma 4,2 m su 400 px: pesa il lungo
+    assert mpp_da_scale(scale) == pytest.approx(0.0105)
+    assert mpp_da_scale([]) is None
+
+
+def test_lo_scarto_dice_quanto_la_scala_media_si_allontana_dalla_quota():
+    scale = [{"p1": [0, 0], "p2": [100, 0], "metri": 1.2},
+             {"p1": [0, 0], "p2": [0, 300], "metri": 3.0}]
+    corta, lunga = scarti_scale(scale, mpp_da_scale(scale))
+    assert corta["misurati"] == pytest.approx(1.05)
+    assert corta["scarto"] == pytest.approx(-0.125)
+    assert lunga["scarto"] == pytest.approx(0.05)
 
 
 def test_metri_per_pixel_lunghezza_nulla():

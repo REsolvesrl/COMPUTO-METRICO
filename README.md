@@ -233,6 +233,25 @@ commerciale** del fabbricato, riportabile nel computo con un clic.
 La geometria (calibrazione, formula di Gauss per l'area, riepilogo
 superfici) vive in `planimetria.py` ed è coperta dai test.
 
+### La scala da più misure note
+
+La scala si può tarare su **più misure note**: ogni segmento tracciato con
+↔️ resta sul disegno, numerato (①, ②…) con la sua quota, e sotto il disegno
+c'è l'elenco con un **🗑 Togli** per ognuno. La scala è la **media pesata
+sulla lunghezza**, cioè metri totali diviso pixel totali: l'errore del clic
+è di un pixel o due su qualunque segmento, e su uno lungo pesa meno.
+
+Con due misure o più l'elenco dice, per ognuna, quanto la misura la scala
+di tutte insieme e lo **scarto** dalla quota scritta. Oltre il 2% la misura
+diventa rossa sul disegno: un capo cliccato fuori posto, una quota letta
+male o una scansione deformata. Si toglie quella sbagliata e la scala si
+rifà con le altre; aree e muri si ricalcolano da soli.
+
+⚠️ Fino al 30/09/2026 la scala era una sola e il segmento spariva appena
+impostato: una seconda misura **sostituiva** la prima. Nei progetti di
+prima la scala c'è ma senza segmento, e la prima misura nota aggiunta la
+sostituisce (non se ne conosce il peso).
+
 ### Dal disegno al computo
 
 Con l'interruttore **🔗 Tieni il computo agganciato al disegno** le quantità

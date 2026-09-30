@@ -4,7 +4,8 @@
 in streamlit_app.py (gestisci_evento, registra_storia, annulla_ultima,
 carica_immagini, pdf_planimetrie_bytes…), senza Streamlit. Le piante
 stanno in `dati["piante"]` nel formato del file — nome, mpp, zone, pareti,
-immagine in base64 — e tutto il resto (la zona selezionata, la scala in
+immagine in base64, e le misure note della scala — e tutto il resto (la
+zona selezionata, la scala in
 attesa, l'annulla, l'anteprima della pulizia) vive solo finché il banco è
 aperto, come nella sessione del vecchio.
 """
@@ -90,6 +91,31 @@ def etichetta_parete(parete, mpp):
     return f"{numero_it(metri, 2)} m"
 
 
+def numero_misura(n):
+    """①, ②, ③…: lo stesso segno sulla tela e nell'elenco sotto."""
+    return chr(0x2460 + n - 1) if 1 <= n <= 20 else f"({n})"
+
+
+def misure_scala(pianta):
+    """Le misure note della pianta, numerate, con lo scarto di ognuna dalla
+    scala di tutte insieme. Lo scarto conta solo se le misure sono due o più:
+    con una sola la scala è lei, e lo scarto è zero per costruzione."""
+    scale = pianta["scale"]
+    fuori = []
+    for n, (s, c) in enumerate(zip(scale, planimetria.scarti_scale(
+            scale, pianta["mpp"])), start=1):
+        confronto = len(scale) > 1
+        fuori.append({"id": s["id"], "n": n, "segno": numero_misura(n),
+                      "p1": s["p1"], "p2": s["p2"], "metri": c["metri"],
+                      "misurati": c["misurati"] if confronto else None,
+                      "scarto": c["scarto"] if confronto else None,
+                      # arrotondato: un 2,0% esatto non deve far scattare
+                      # la soglia del 2% per un'inezia di virgola mobile
+                      "non_torna": confronto and round(abs(c["scarto"]), 6)
+                      > planimetria.SCARTO_SCALA})
+    return fuori
+
+
 class DisegnoMixin:
     """I gesti della scheda planimetria. Il Banco la eredita."""
 
@@ -153,7 +179,8 @@ class DisegnoMixin:
         primo = len(self.dati["piante"])
         for n, img in enumerate(immagini):
             nome = base if len(immagini) == 1 else f"{base} · pag. {n + 1}"
-            self.dati["piante"].append({"nome": nome, "mpp": None, "zone": [],
+            self.dati["piante"].append({"nome": nome, "mpp": None,
+                                        "scale": [], "zone": [],
                                         "pareti": [],
                                         "immagine": immagine_b64(img)})
         self.pianta_idx = primo
@@ -191,7 +218,8 @@ class DisegnoMixin:
     def registra_storia(self, descrizione):
         """Da chiamare PRIMA di modificare zone, muri o scala."""
         self.storia.append({"descrizione": descrizione, "piante": [
-            {"mpp": p["mpp"], "zone": copy.deepcopy(p["zone"]),
+            {"mpp": p["mpp"], "scale": copy.deepcopy(p["scale"]),
+             "zone": copy.deepcopy(p["zone"]),
              "pareti": copy.deepcopy(p["pareti"])}
             for p in self.dati["piante"]]})
         del self.storia[:-PASSI_STORIA]
@@ -210,6 +238,7 @@ class DisegnoMixin:
             if pianta["mpp"] and not salvata["mpp"]:
                 self.scala_persa = True
             pianta["mpp"] = salvata["mpp"]
+            pianta["scale"] = copy.deepcopy(salvata["scale"])
             pianta["zone"] = copy.deepcopy(salvata["zone"])
             pianta["pareti"] = copy.deepcopy(salvata["pareti"])
         self.sel_zona = self.sel_parete = self.scala_temp = None
@@ -281,18 +310,58 @@ class DisegnoMixin:
 
     # --------------------------------------------------------------- scala
 
+    # Una pianta può avere più misure note: restano sul disegno, ognuna col
+    # suo segmento, e la scala è la loro media pesata sulla lunghezza
+    # (planimetria.mpp_da_scale). Fino al 30/09/2026 ce n'era una sola e il
+    # segmento spariva: la seconda prendeva il posto della prima, e non si
+    # vedeva più su cosa fosse stata tarata.
+
+    def _ricalcola_scala(self, pianta):
+        pianta["mpp"] = planimetria.mpp_da_scale(pianta["scale"])
+
     def imposta_scala(self, metri):
+        """Aggiunge la misura nota appena tracciata e ricalcola la scala.
+
+        Una scala dei file di prima non ha il segmento, e non si sa quanto
+        pesi: la prima misura nuova la sostituisce.
+        """
         pianta = self._pianta()
         if not self.scala_temp:
             raise ErroreDisegno("Traccia prima il segmento della scala.")
         metri = float(metri or 0.0)
         if metri <= 0:
             raise ErroreDisegno("Scrivi la misura reale in metri (> 0).")
-        dist = planimetria.distanza_pixel(tuple(self.scala_temp["p1"]),
-                                          tuple(self.scala_temp["p2"]))
+        p1, p2 = self.scala_temp["p1"], self.scala_temp["p2"]
+        if planimetria.distanza_pixel(p1, p2) <= 0:
+            raise ErroreDisegno("Il segmento della scala ha i due capi nello "
+                                "stesso punto: tracciane uno più lungo.")
         self.registra_storia("impostazione della scala")
-        pianta["mpp"] = planimetria.metri_per_pixel(dist, metri)
+        ids = [s["id"] for s in pianta["scale"]]
+        pianta["scale"].append({"id": (max(ids) + 1) if ids else 1,
+                                "p1": [float(p1[0]), float(p1[1])],
+                                "p2": [float(p2[0]), float(p2[1])],
+                                "metri": metri})
+        self._ricalcola_scala(pianta)
         self.scala_temp = None
+
+    def togli_misura_scala(self, ident):
+        """Toglie una misura nota; la scala si rifà con quelle che restano.
+        Tolta l'ultima, la pianta resta senza scala."""
+        pianta = self._pianta()
+        ident = int(ident)
+        if not any(s["id"] == ident for s in pianta["scale"]):
+            raise ErroreDisegno("Questa misura della scala non c'è più.")
+        self.registra_storia("eliminazione di una misura della scala")
+        pianta["scale"] = [s for s in pianta["scale"] if s["id"] != ident]
+        self._ricalcola_scala(pianta)
+
+    def togli_scala_senza_misure(self):
+        """Toglie la scala di un file di prima, che non ha il segmento."""
+        pianta = self._pianta()
+        if pianta["scale"] or not pianta["mpp"]:
+            return
+        self.registra_storia("eliminazione della scala")
+        pianta["mpp"] = None
 
     def annulla_scala(self):
         self.scala_temp = None
@@ -414,6 +483,8 @@ class DisegnoMixin:
             parete["p1"], parete["p2"] = sposta(parete["p1"]), sposta(parete["p2"])
             if parete.get("etichetta_pos"):
                 parete["etichetta_pos"] = sposta(parete["etichetta_pos"])
+        for misura in pianta["scale"]:
+            misura["p1"], misura["p2"] = sposta(misura["p1"]), sposta(misura["p2"])
 
     def ritaglia(self, x0, y0, x1, y1):
         """Taglia via i margini del foglio (cartiglio, bordi, quote fuori).
@@ -601,6 +672,11 @@ class DisegnoMixin:
                 "etichetta_pos": p.get("etichetta_pos"),
             } for p in pianta["pareti"]],
             "scala_temp": self.scala_temp,
+            "scale": [{"id": m["id"], "p1": m["p1"], "p2": m["p2"],
+                       "non_torna": m["non_torna"],
+                       "etichetta": (f"{m['segno']} {numero_it(m['metri'], 2)} m"
+                                     + (" ⚠" if m["non_torna"] else ""))}
+                      for m in misure_scala(pianta)],
             "colore_attivo": colori.get(attiva, PALETTE_ZONE[0]),
             "mpp": float(pianta["mpp"] or 0.0),
             "font_px": int(et["font"]),

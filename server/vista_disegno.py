@@ -8,7 +8,7 @@ le voci che il disegno porta nel computo — ricavato dal banco.
 from __future__ import annotations
 
 import planimetria as geo
-from banco_disegno import etichetta_parete
+from banco_disegno import etichetta_parete, misure_scala
 from costanti import (CATEGORIE_INVOLUCRO, CATEGORIE_SOLO_COMPUTO,
                       TIPI_PARETE, TIPI_PARETE_SCELTA)
 from formato import numero_it
@@ -199,6 +199,12 @@ def vista_planimetria(b):
     fuori["tela"]["src"] = (f"/api/piante/{i}/immagine"
                             f"?v={b.impronta_immagine(i)}")
     fuori["mpp"] = mpp
+    fuori["scale"] = {
+        "misure": misure_scala(pianta),
+        # una scala dei file di prima: c'è, ma senza il segmento
+        "senza_misure": bool(mpp) and not pianta["scale"],
+        "soglia": geo.SCARTO_SCALA,
+    }
     zona = next((z for z in pianta["zone"] if z["id"] == b.sel_zona), None)
     if zona is not None:
         fuori["zona_sel"] = {

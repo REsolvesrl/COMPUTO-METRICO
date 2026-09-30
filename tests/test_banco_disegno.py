@@ -1,5 +1,6 @@
 """La scheda planimetria nel banco: piante, gesti della tela, scala, annulla."""
 import io
+import json
 
 import pytest
 from PIL import Image
@@ -50,6 +51,58 @@ def test_la_scala_si_imposta_dal_segmento(b):
     b.imposta_scala(5)
     assert b.dati["piante"][0]["mpp"] == pytest.approx(0.05)
     assert b.scala_temp is None
+
+
+def test_le_misure_note_restano_e_la_scala_e_la_media_pesata(b):
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
+    b.imposta_scala(1)                               # 1 cm al pixel
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[0, 300])
+    b.imposta_scala(3.03)                            # 1,01 cm al pixel
+    pianta = b.dati["piante"][0]
+    assert [s["metri"] for s in pianta["scale"]] == [1, 3.03]
+    # 4,03 m su 400 px: il segmento lungo pesa tre volte il corto
+    assert pianta["mpp"] == pytest.approx(4.03 / 400)
+    segni = b.argomenti_tela()["scale"]
+    assert [s["etichetta"] for s in segni] == ["① 1,00 m", "② 3,03 m"]
+
+
+def test_una_misura_che_non_torna_con_le_altre_si_segna(b):
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
+    b.imposta_scala(1)
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[0, 100])
+    b.imposta_scala(1.2)                             # 20% in piu'
+    segni = b.argomenti_tela()["scale"]
+    assert [s["non_torna"] for s in segni] == [True, True]
+    assert segni[0]["etichetta"] == "① 1,00 m ⚠"
+
+
+def test_togliere_una_misura_rifa_la_scala_con_le_altre(b):
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
+    b.imposta_scala(1)
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[0, 200])
+    b.imposta_scala(4)
+    prima, seconda = b.dati["piante"][0]["scale"]
+    b.togli_misura_scala(prima["id"])
+    assert b.dati["piante"][0]["mpp"] == pytest.approx(0.02)
+    b.togli_misura_scala(seconda["id"])
+    assert b.dati["piante"][0]["mpp"] is None
+    assert b.annulla_disegno() == "eliminazione di una misura della scala"
+    assert b.dati["piante"][0]["mpp"] == pytest.approx(0.02)
+    assert [s["id"] for s in b.dati["piante"][0]["scale"]] == [seconda["id"]]
+
+
+def test_la_scala_di_un_file_di_prima_si_sostituisce_con_la_prima_misura(b):
+    pianta = b.dati["piante"][0]
+    pianta["mpp"] = 0.5                              # senza segmento
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
+    b.imposta_scala(2)
+    assert pianta["mpp"] == pytest.approx(0.02) and len(pianta["scale"]) == 1
+
+
+def test_la_scala_di_un_file_di_prima_si_puo_togliere(b):
+    b.dati["piante"][0]["mpp"] = 0.5
+    b.togli_scala_senza_misure()
+    assert b.dati["piante"][0]["mpp"] is None
 
 
 def test_una_scala_a_zero_non_si_imposta(b):
@@ -137,6 +190,7 @@ def test_il_ritaglio_sposta_il_disegno_e_non_cambia_le_misure(b):
     prima = b.grandezze()
     b.ritaglia(150, 50, 700, 550)
     pianta = b.dati["piante"][0]
+    assert pianta["scale"][0]["p1"] == [-150, -50]
     assert b.immagine(0).size == (550, 500)
     assert pianta["zone"][0]["punti"][0] == [50.0, 50.0]
     assert pianta["pareti"][0]["p2"] == [350.0, 50.0]
@@ -183,3 +237,11 @@ def test_la_superficie_reale_e_calpestabile_piu_pertinenze(b):
     s = vista_planimetria(b)["superfici"]
     assert s["totale"] == pytest.approx(25 + 4 + 9)
     assert s["commerciale"] > 36 + 4 * 0.30      # i giardini qui contano
+
+
+def test_le_misure_note_si_ritrovano_riaprendo_il_progetto(b):
+    _gesto(b, tipo="scala", p1=[0, 0], p2=[100, 0])
+    b.imposta_scala(1)
+    dati, _ = banco.normalizza(json.loads(json.dumps(b.dati)))
+    assert dati["piante"][0]["scale"] == b.dati["piante"][0]["scale"]
+    assert dati["piante"][0]["mpp"] == pytest.approx(0.01)
