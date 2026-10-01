@@ -11,7 +11,28 @@ const img = new Image();
 let pronto = false;          // immagine caricata e vista adattata
 let curSrc = null;
 
-const MAXH = 560, MINH = 260;
+// L'altezza della tela non e' piu' un numero fisso: 560 px erano mezzo
+// monitor su uno schermo grande, con sotto una striscia di aria. Si prende
+// quello che la finestra concede — la tela sta dentro un iframe, quindi si
+// guarda la pagina che la contiene — lasciando il posto alla fila dei
+// campioni e ai comandi sotto. Sotto i 420 px non si scende: a quel punto
+// il disegno non si lavora piu'.
+const MINH = 260;
+const SPAZIO_COMANDI = 240;   // la fila dei campioni sotto il disegno, e un dito d'aria
+
+function altezzaMassima() {
+  // ⚠️ Si guarda SOLO la finestra, non quanto sta sopra la tela: provato,
+  // e con un avviso aperto la tela si stringeva invece di crescere — il
+  // contrario di quello che serve. Chi disegna preferisce una tela grande
+  // e scorrere un dito, che una tela piccola e tutto in pagina.
+  let finestra = 0;
+  try {
+    finestra = (window.parent && window.parent !== window)
+      ? window.parent.innerHeight : window.innerHeight;
+  } catch (err) { finestra = 0; }          // pagina di un'altra origine
+  if (!finestra) return 560;
+  return Math.max(480, Math.min(1100, Math.round(finestra - SPAZIO_COMANDI)));
+}
 let contH = 420;
 let scale = 1, tx = 0, ty = 0, fitScale = 1;
 
@@ -164,8 +185,10 @@ function fit(reimposta) {
   // l'osservatore quando la scheda riappare.
   if (!cont.clientWidth) return;
   const w = Math.max(200, cont.clientWidth);
-  let s = Math.min(w / img.naturalWidth, MAXH / img.naturalHeight);
-  const nuovaH = Math.max(MINH, Math.min(MAXH, Math.round(img.naturalHeight * s)));
+  const massima = altezzaMassima();
+  let s = Math.min(w / img.naturalWidth, massima / img.naturalHeight);
+  const nuovaH = Math.max(MINH, Math.min(massima,
+                                         Math.round(img.naturalHeight * s)));
   s = Math.min(w / img.naturalWidth, nuovaH / img.naturalHeight);
   fitScale = s;
   const primaVolta = !vistaImpostata;
@@ -1345,8 +1368,15 @@ function init() {
   // la salvava il fit() che scattava a ogni risposta del server; tolto
   // quello (azzerava lo zoom), serve un controllo che non dipenda da nessun
   // evento. Costa un confronto fra due numeri ogni tre decimi di secondo.
+  let massimaVista = altezzaMassima();
   setInterval(function () {
-    if (pronto && cont.clientWidth && cont.clientWidth !== vistaW) fit(false);
+    if (!pronto || !cont.clientWidth) return;
+    // la finestra della pagina e' cresciuta o rimpicciolita: anche la tela
+    const massima = altezzaMassima();
+    if (cont.clientWidth !== vistaW || massima !== massimaVista) {
+      massimaVista = massima;
+      fit(false);
+    }
   }, 300);
 
   Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);

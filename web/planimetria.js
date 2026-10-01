@@ -224,7 +224,7 @@ export const SchedaPlanimetria = defineComponent({
              daImportare, opzioniImporta, importaAree, scarica, numeroIt, euro };
   },
   template: `
-  <div>
+  <div class="scheda-disegno">
     <template v-if="!p.piante.length">
       <CampioneVuoto titolo="Il banco è sgombro"
         testo="Porta qui la planimetria — una foto, una scansione o il PDF del progetto — e da lì si misurano le superfici, si contano i muri e le quantità passano nel computo. Un PDF di più pagine diventa una planimetria per foglio: piano terra, piano primo, e così via." />
@@ -232,9 +232,9 @@ export const SchedaPlanimetria = defineComponent({
         <input type="file" accept=".png,.jpg,.jpeg,.pdf" @change="carica"></div>
     </template>
     <template v-else>
-    <div class="colonne" style="gap:2rem">
+    <div class="colonne" style="gap:1.1rem">
       <!-- le planimetrie del progetto -->
-      <div class="col-piante" style="flex:0.55">
+      <div class="col-piante" style="flex:0.42">
         <p><b>Planimetrie</b></p>
         <div v-for="pi in p.piante" :key="pi.indice + pi.impronta" style="margin-bottom:12px">
           <div class="colonne centro resta" style="gap:6px;margin-bottom:6px">
@@ -270,14 +270,20 @@ export const SchedaPlanimetria = defineComponent({
             <template v-if="p.storia">Ultima operazione: <b>{{ p.storia.ultima }}</b> · si può tornare indietro di
               {{ p.storia.passi }} pass{{ p.storia.passi === 1 ? 'o' : 'i' }}</template>
             <span v-else class="grigio">Niente da annullare: non hai ancora modificato il disegno in questa sessione.</span>
+            <!-- la scala sta su questa riga, non su una sua: due righe da
+                 ventidue pixel l'una, per dire due cose brevi, sono
+                 quarantaquattro pixel tolti al disegno -->
+            <template v-if="p.mpp"> · ✅ Scala impostata<template v-if="p.scale.misure.length > 1"> dalla media di
+              <b>{{ p.scale.misure.length }} misure note</b></template> — misure in metri reali</template>
           </p>
         </div>
         <Avviso v-if="p.scala_persa" tipo="attenzione">↩️ Tornando indietro è stata annullata anche <b>la scala</b>:
           questa planimetria non è più calibrata, quindi le misure non sono in metri finché non la reimposti con lo
           strumento ↔️. Le aree disegnate restano dove sono.</Avviso>
-        <p v-if="p.mpp" class="didascalia">✅ Scala impostata<template v-if="p.scale.misure.length > 1"> dalla
-          media di <b>{{ p.scale.misure.length }} misure note</b></template> — le misure sono in metri reali.</p>
-        <Avviso v-else tipo="attenzione">⚠️ Scala non impostata per questa planimetria: scegli <b>Scala</b> nella
+        <!-- ⚠️ Era un «v-else» della riga «✅ Scala impostata», che ora sta
+             accanto all'annulla: rimasto senza il suo «se», l'avviso usciva
+             anche su una pianta tarata. La condizione va scritta per intero. -->
+        <Avviso v-else-if="!p.mpp" tipo="attenzione">⚠️ Scala non impostata per questa planimetria: scegli <b>Scala</b> nella
           barra sul disegno, poi <b>clicca l'inizio e la fine</b> di una misura nota (es. un lato quotato). Zooma con
           la rotellina per essere preciso: lo zoom non altera le misure.</Avviso>
 
@@ -370,6 +376,7 @@ export const SchedaPlanimetria = defineComponent({
         </div>
 
         <template v-if="p.zona_sel">
+          <div class="zona-sel">
           <p style="margin-bottom:8px"><b>Zona selezionata</b></p>
           <div class="colonne fondo resta" style="margin-bottom:8px">
             <CampoTesto style="flex:2" etichetta="Nome (facoltativo)" :valore="p.zona_sel.nome"
@@ -383,11 +390,13 @@ export const SchedaPlanimetria = defineComponent({
           </div>
           <p v-if="p.zona_sel.area !== null" class="didascalia">Superficie <b>{{ numeroIt(p.zona_sel.area, 2) }} m²</b> ·
             Perimetro <b>{{ numeroIt(p.zona_sel.perimetro, 2) }} m</b></p>
+          </div>
         </template>
 
         <template v-if="p.parete_sel">
+          <div class="zona-sel">
           <p style="margin-bottom:8px"><b>Parete selezionata</b></p>
-          <div class="colonne fondo resta" style="margin-bottom:16px">
+          <div class="colonne fondo resta" style="margin-bottom:8px">
             <Tendina style="flex:2" etichetta="Tipo di intervento" :valore="p.parete_sel.tipo"
                      :opzioni="p.tipi_parete.map(t => ({valore: t.codice, testo: t.nome}))"
                      @cambia="g('tipo_parete_sel', {codice: $event})" />
@@ -397,6 +406,7 @@ export const SchedaPlanimetria = defineComponent({
                         @cambia="g('lunghezza_parete', {metri: $event})" />
             <Metrica v-else style="flex:1" nome="Lunghezza" :valore="p.parete_sel.etichetta" />
             <button class="bottone" style="flex:1" @click="g('elimina_parete')">🗑 Elimina</button>
+          </div>
           </div>
         </template>
 

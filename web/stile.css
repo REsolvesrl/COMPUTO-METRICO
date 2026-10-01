@@ -834,3 +834,26 @@ table.griglia .scelta.cella:focus-visible .scelta-freccia { opacity: .75; }
 @media (prefers-reduced-motion: reduce) {
   .tendina-enter-active, .tendina-leave-active { transition: none; }
 }
+
+/* ------------------------------------------------- la scheda del disegno
+   Il disegno comanda, e qui tutto il resto gli fa spazio: la fila dei
+   campioni, le tendine e il pannello della zona selezionata stavano su
+   un'altezza che spingeva la tela fuori dallo schermo — si disegnava
+   guardando una finestra alta mezzo monitor mentre sotto c'era aria.
+   Si stringe SOLO in questa scheda: altrove i campioni restano quelli. */
+.scheda-disegno .tela { padding: .35rem; margin-bottom: .5rem; }
+.scheda-disegno .totali-tela { margin-bottom: 10px !important; }
+.scheda-disegno .totali-tela .metrica { padding: .3rem .5rem .35rem; }
+.scheda-disegno .totali-tela .metrica .valore { font-size: 1.25rem; padding-bottom: 0; }
+.scheda-disegno .totali-tela .metrica .nome { font-size: .6rem; line-height: 1.3; }
+.scheda-disegno .pannello { margin-bottom: 8px; }
+.scheda-disegno .pannello-testa { min-height: 32px; padding: 2px 12px; }
+.scheda-disegno .avviso { padding: 10px 12px; margin-bottom: 10px; }
+.scheda-disegno .avviso p { margin-bottom: .4rem; }
+/* il pannello della zona (o della parete) selezionata: una riga di campi,
+   non un capitolo */
+.scheda-disegno .zona-sel { margin-bottom: 10px; }
+.scheda-disegno .zona-sel > p:first-child { margin-bottom: 6px; }
+.scheda-disegno .zona-sel .campo { margin-bottom: 0; }
+.scheda-disegno .zona-sel .didascalia { margin: 6px 0 0; }
+.scheda-disegno .campo { margin-bottom: 8px; }
