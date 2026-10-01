@@ -349,7 +349,7 @@ export const SchedaPlanimetria = defineComponent({
             <button class="bottone" style="flex:1"
                     :title="p.scale.mostra ? 'I segmenti spariscono dal disegno: la scala resta tarata su di loro, e restano qui in elenco.' : 'Rimette i segmenti sul disegno, ognuno col suo numero.'"
                     @click="g('mostra_scale', {acceso: !p.scale.mostra})">
-              {{ p.scale.mostra ? '🙈 Nascondi i segmenti sul disegno' : '👁 Mostra i segmenti sul disegno' }}</button>
+              {{ p.scale.mostra ? 'Nascondi i segmenti sul disegno' : 'Mostra i segmenti sul disegno' }}</button>
             <span style="flex:2"></span>
           </div>
           <p class="didascalia">Per affinare la scala traccia altre misure note con lo strumento ↔️: la scala è la
