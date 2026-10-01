@@ -165,12 +165,23 @@ def test_non_si_importa_da_se_stessa_ne_dal_vuoto(b):
 
 # ------------------- i segmenti delle misure note si possono spegnere
 
-def test_i_segmenti_della_scala_si_nascondono_dal_disegno(b):
-    assert len(b.argomenti_tela()["scale"]) == 1      # la misura nota c'è
-    b.mostra_le_scale(False)
+def test_i_segmenti_della_scala_nascono_nascosti(b):
+    """All'apertura la scala è già tarata: quei tratti neri sono solo
+    righe ferme in mezzo al disegno."""
     assert b.argomenti_tela()["scale"] == []          # sul disegno, niente
     # ma la scala resta tarata, e la misura resta in elenco
     assert b.dati["piante"][0]["mpp"]
     assert len(b.dati["piante"][0]["scale"]) == 1
     b.mostra_le_scale(True)
     assert len(b.argomenti_tela()["scale"]) == 1
+    b.mostra_le_scale(False)
+    assert b.argomenti_tela()["scale"] == []
+
+
+def test_una_quota_che_non_torna_si_vede_anche_da_nascosta(b):
+    """L'avviso dice «controllale sul disegno, sono in rosso»: se restassero
+    nascoste manderebbe a cercare una cosa che non c'è."""
+    _gesto(b, tipo="scala", p1=[0, 200], p2=[100, 200])
+    b.imposta_scala(3)                 # tre metri dove la prima ne diceva uno
+    assert any(m["non_torna"] for m in b.argomenti_tela()["scale"])
+    assert len(b.argomenti_tela()["scale"]) == 2

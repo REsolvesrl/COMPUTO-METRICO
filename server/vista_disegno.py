@@ -206,7 +206,7 @@ def vista_planimetria(b):
     fuori["mpp"] = mpp
     fuori["scale"] = {
         "misure": misure_scala(pianta),
-        "mostra": b.mostra_scale,
+        "mostra": b.scale_sul_disegno(pianta),
         # una scala dei file di prima: c'è, ma senza il segmento
         "senza_misure": bool(mpp) and not pianta["scale"],
         "soglia": geo.SCARTO_SCALA,

@@ -149,7 +149,11 @@ class DisegnoMixin:
         self.ritagli = {}            # indice della pianta → ritagli da annullare
         self.scala_persa = False
         self.importate = None        # le aree appena importate, da spostare
-        self.mostra_scale = True     # i segmenti delle misure note sul disegno
+        # I segmenti delle misure note nascono SPENTI: a progetto aperto la
+        # scala e' gia' tarata e quei tratti neri sono righe ferme in mezzo
+        # al disegno, sopra i muri da tracciare. Si riaccendono dalla
+        # tendina «Misure note della scala», che e' anche dove si tolgono.
+        self.mostra_scale = False
         self._immagini = {}          # cache: impronta → PIL
 
     # ------------------------------------------------------------ immagini
@@ -666,6 +670,19 @@ class DisegnoMixin:
         self.sel_zona = self.sel_parete = None
         return len(nuovi)
 
+    def scale_sul_disegno(self, pianta=None):
+        """Se i segmenti delle misure note vanno disegnati.
+
+        Di norma comanda la spunta. Ma quando una quota non torna con le
+        altre, l'avviso dice «controllale sul disegno, sono in rosso»: se
+        restassero nascoste, quella riga manderebbe a cercare una cosa che
+        non c'e'. In quel caso si vedono comunque.
+        """
+        if self.mostra_scale:
+            return True
+        pianta = pianta or self._pianta()
+        return any(m["non_torna"] for m in misure_scala(pianta))
+
     def mostra_le_scale(self, acceso):
         """Accende o spegne i segmenti delle misure note sul disegno."""
         self.mostra_scale = bool(acceso)
@@ -833,7 +850,7 @@ class DisegnoMixin:
             # tarata sono righe nere ferme in mezzo al disegno, e quando
             # cadono sopra un muro da tracciare o un'area da chiudere danno
             # fastidio. Restano nella tendina, e si riaccendono da lì.
-            "scale": [] if not self.mostra_scale else
+            "scale": [] if not self.scale_sul_disegno(pianta) else
                      [{"id": m["id"], "p1": m["p1"], "p2": m["p2"],
                        "non_torna": m["non_torna"],
                        "etichetta": (f"{m['segno']} {numero_it(m['metri'], 2)} m"

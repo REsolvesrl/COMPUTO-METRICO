@@ -62,6 +62,9 @@ def test_le_misure_note_restano_e_la_scala_e_la_media_pesata(b):
     assert [s["metri"] for s in pianta["scale"]] == [1, 3.03]
     # 4,03 m su 400 px: il segmento lungo pesa tre volte il corto
     assert pianta["mpp"] == pytest.approx(4.03 / 400)
+    # i segmenti nascono NASCOSTI (1/10/2026): si accendono per guardarli
+    assert b.argomenti_tela()["scale"] == []
+    b.mostra_le_scale(True)
     segni = b.argomenti_tela()["scale"]
     assert [s["etichetta"] for s in segni] == ["① 1,00 m", "② 3,03 m"]
 
