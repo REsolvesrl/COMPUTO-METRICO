@@ -294,6 +294,14 @@ def vista_planimetria(b):
     }
 
     # ------------------------------------------------ locali e finiture
+    # da quale planimetria arrivano le misure del computo: con due fogli
+    # dello stesso immobile sommarli e' quasi sempre sbagliato
+    fuori["pianta_computo"] = {
+        "scelta": d.get("pianta_computo"),
+        "piante": [{"indice": k, "nome": p["nome"], "zone": len(p["zone"]),
+                    "pareti": len(p["pareti"])}
+                   for k, p in enumerate(d["piante"])],
+    }
     locali, senza_scala_loc = b.locali()
     f = d["finiture"]
     fuori["altezza"] = d["altezza_locali"]

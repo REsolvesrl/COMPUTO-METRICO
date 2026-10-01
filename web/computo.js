@@ -456,13 +456,29 @@ const SalvaEsporta = defineComponent({
 // ============================================================ la scheda
 export const SchedaComputo = defineComponent({
   components: { DatiProgetto, SchedaCategoria, AggiungiVoce, Pool, MioListino, Riepilogo,
-                SalvaEsporta, Interruttore, Avviso, Popover },
+                SalvaEsporta, Interruttore, Avviso, Popover, Tendina },
   setup() {
     const v = computed(() => stato.vista);
     const c = computed(() => stato.vista.computo);
+    // Da quale planimetria arrivano le misure: la scelta si fa QUI, dove si
+    // guardano le quantità, non nella scheda del disegno. Compare solo con
+    // più di una pianta — con una sola non c'è niente da scegliere.
+    const pc = computed(() => v.value.planimetria && v.value.planimetria.pianta_computo);
+    const piuPiante = computed(() => !!pc.value && pc.value.piante.length > 1);
+    const opzioniPiante = computed(() => (pc.value ? [{ valore: "", testo: "Tutte le planimetrie (somma)" }]
+      .concat(pc.value.piante.map((p) => ({
+        valore: String(p.indice),
+        testo: `${p.nome} — ${p.zone} ${p.zone === 1 ? "area" : "aree"}, ${p.pareti} ${p.pareti === 1 ? "muro" : "muri"}`,
+      }))) : []));
+    const piantaScelta = computed(() => (pc.value && pc.value.scelta !== null
+      ? String(pc.value.scelta) : ""));
+    function scegliPianta(valore) {
+      gesto("pianta_computo", { indice: valore === "" ? null : Number(valore) }, { zitto: true });
+    }
     async function annulla() { await gesto("annulla_computo"); }
     function facoltativo(nome, acceso) { gesto("facoltativo", { categoria: nome, acceso }, { zitto: true }); }
-    return { v, c, annulla, facoltativo, gesto, dataIt };
+    return { v, c, annulla, facoltativo, gesto, dataIt,
+             piuPiante, opzioniPiante, piantaScelta, scegliPianta };
   },
   template: `
   <div>
@@ -487,6 +503,18 @@ export const SchedaComputo = defineComponent({
           <p class="didascalia" style="flex:3;margin:0">Ultima operazione sul computo: <b>{{ c.storia.ultima }}</b></p>
         </div>
         <MioListino />
+        <div v-if="piuPiante" class="colonne fondo resta" style="margin-bottom:16px">
+          <Tendina style="flex:2" etichetta="📐 Misure dal disegno: da quale planimetria"
+                   :valore="piantaScelta" :opzioni="opzioniPiante"
+                   aiuto="Pavimenti, battiscopa, tinteggiature e muri arrivano da questa pianta. Con due fogli dello stesso immobile — lo stato attuale e quello di progetto — sommarli vorrebbe dire pagare due volte le stesse lavorazioni. La superficie commerciale resta invece il conto di tutto il fabbricato, e guarda tutte le planimetrie."
+                   @cambia="scegliPianta($event)" />
+          <p class="didascalia" style="flex:3;margin:0">
+            <template v-if="piantaScelta === ''">⚠️ Le misure di <b>tutte</b> le planimetrie si sommano: se sono due
+              fogli dello stesso immobile, scegline una.</template>
+            <template v-else>Le altre planimetrie restano disegnate e misurate: semplicemente non alimentano il
+              computo.</template>
+          </p>
+        </div>
         <div class="colonne centro resta" style="margin-bottom:16px">
           <p class="didascalia" style="flex:1.6;margin:0">Lavori che non ci sono in ogni cantiere:</p>
           <div v-for="f in c.facoltative" :key="f.nome" style="flex:1">

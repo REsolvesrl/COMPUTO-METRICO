@@ -845,7 +845,8 @@
       }
      ]
     }
-   ]
+   ],
+   "pianta_computo": null
   },
   "metriche": [
    [
@@ -2060,7 +2061,8 @@
      }
     ]
    },
-   "piante": []
+   "piante": [],
+   "pianta_computo": null
   }
  },
  "appartamento": {
@@ -3953,7 +3955,8 @@
       }
      ]
     }
-   ]
+   ],
+   "pianta_computo": null
   },
   "metriche": [
    [
@@ -5970,7 +5973,8 @@
       }
      ]
     }
-   ]
+   ],
+   "pianta_computo": null
   },
   "metriche": [
    [
@@ -7987,7 +7991,8 @@
       }
      ]
     }
-   ]
+   ],
+   "pianta_computo": null
   },
   "metriche": [
    [
@@ -10005,7 +10010,8 @@
       }
      ]
     }
-   ]
+   ],
+   "pianta_computo": null
   },
   "metriche": [
    [
@@ -12026,7 +12032,8 @@
       }
      ]
     }
-   ]
+   ],
+   "pianta_computo": null
   },
   "metriche": [
    [
@@ -12508,7 +12515,8 @@
      }
     ]
    },
-   "piante": []
+   "piante": [],
+   "pianta_computo": null
   }
  }
 }

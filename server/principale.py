@@ -204,6 +204,7 @@ GESTI_DISEGNO = {
     "riporta_etichette": lambda b: b.riporta_etichette(),
     "superficie_al_computo": _superficie_al_computo,
     "altezza": lambda b, metri: b.imposta_altezza(metri),
+    "pianta_computo": lambda b, indice: b.scegli_pianta_computo(indice),
     "spunta_locale": lambda b, pianta, zona, campo, valore:
         b.spunta_locale(pianta, zona, campo, valore),
     "finitura": lambda b, campo, valore: b.imposta_finitura(campo, valore),

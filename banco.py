@@ -329,6 +329,16 @@ def normalizza(dati):
         "percento": bool(et.get("percento", True)),
         "perimetro": bool(et.get("perimetro", True))}
     fuori["altezza_locali"] = float(dati.get("altezza_locali", 2.70))
+    # Da quale planimetria arrivano le misure del COMPUTO: None = tutte,
+    # altrimenti l'indice della pianta. Con due fogli dello stesso immobile
+    # — lo stato attuale e quello di progetto, o un piano e il suo gemello —
+    # sommarli e' quasi sempre sbagliato: si pagherebbero due volte gli
+    # stessi pavimenti (1/10/2026).
+    pianta_computo = dati.get("pianta_computo")
+    fuori["pianta_computo"] = (int(pianta_computo)
+                               if isinstance(pianta_computo, (int, float))
+                               and 0 <= int(pianta_computo) < len(piante)
+                               else None)
     fin = dati.get("finiture") or {}
     fuori["finiture"] = {
         k: (int(fin.get(k, v)) if isinstance(v, int) else float(fin.get(k, v)))
@@ -967,6 +977,33 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         """Le piante come le vogliono le funzioni di planimetria.py."""
         return [dict(p, uid=i) for i, p in enumerate(self.dati["piante"])]
 
+    def piante_del_computo(self):
+        """Le piante da cui il COMPUTO prende pavimenti, muri e tinteggi.
+
+        La superficie commerciale resta un conto di tutto il fabbricato e
+        guarda tutte le piante; le lavorazioni no. Due fogli dello stesso
+        appartamento — lo stato attuale e lo stato di progetto — sommati
+        darebbero il doppio dei pavimenti.
+
+        L'uid resta l'indice VERO della pianta nel progetto: lo usano le
+        spunte dei locali per ritrovare la zona.
+        """
+        scelta = self.dati.get("pianta_computo")
+        piante = self.piante_calcolo()
+        if scelta is None:
+            return piante
+        return [p for p in piante if p["uid"] == scelta]
+
+    def scegli_pianta_computo(self, indice):
+        """Quale planimetria alimenta il computo (None = tutte)."""
+        if indice is None or indice == "":
+            self.dati["pianta_computo"] = None
+            return
+        indice = int(indice)
+        if not 0 <= indice < len(self.dati["piante"]):
+            raise ErroreBanco("Questa planimetria non c'è più.")
+        self.dati["pianta_computo"] = indice
+
     def percentuali(self):
         return mappa_percentuali(self.dati["categorie"])
 
@@ -984,7 +1021,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         """
         perc = self.percentuali()
         righe, _ = planimetria.riepilogo_locali(
-            self.piante_calcolo(), escludi=CATEGORIE_INVOLUCRO)
+            self.piante_del_computo(), escludi=CATEGORIE_INVOLUCRO)
         for r in righe:
             zona = self._zona(r["uid"], r["id"])
             if zona is None:
@@ -1002,7 +1039,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
     def locali(self):
         """I locali con le loro spunte, per la tabella e per i conti."""
         righe, senza_scala = planimetria.riepilogo_locali(
-            self.piante_calcolo(), escludi=CATEGORIE_INVOLUCRO)
+            self.piante_del_computo(), escludi=CATEGORIE_INVOLUCRO)
         fuori = []
         for r in righe:
             zona = self._zona(r["uid"], r["id"])
@@ -1047,7 +1084,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
     def muri(self):
         """I muri per tipo, al netto delle aperture dichiarate."""
         riep, senza_scala = planimetria.riepilogo_pareti(
-            self.piante_calcolo(), self.dati["altezza_locali"])
+            self.piante_del_computo(), self.dati["altezza_locali"])
         if not riep:
             return None, senza_scala
         f = self.dati["finiture"]
