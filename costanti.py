@@ -225,6 +225,15 @@ TIPI_PARETE = {
 
 TIPI_PARETE_SCELTA = ["demolire", "costruire", "cartongesso"]
 
+# Lo spessore dei muri NUOVI, in metri. Un tramezzo in forati da 8+2 di
+# intonaco, un muro da 12+3, una parete portante leggera da 18: sul disegno
+# la differenza si vede, e in un corridoio stretto decide se una porta ci
+# sta. Il cartongesso ha i suoi: lastra doppia su orditura da 50 o da 75.
+# Un muro da demolire non ha spessore da scegliere — quello che c'è, c'è.
+SPESSORI_PARETE = (0.10, 0.15, 0.18)
+SPESSORE_PARETE_PREDEFINITO = 0.10
+TIPI_CON_SPESSORE = ("costruire", "cartongesso")
+
 FILTRO_TUTTI = "Tutti gli stati"
 
 UNITA_MISURA = ["m²", "ml", "m³", "cad", "punto", "a corpo"]

@@ -249,7 +249,14 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None, mpp=None):
     for parete in pareti:
         p1, p2 = tuple(parete["p1"]), tuple(parete["p2"])
         colore = _rgb(parete.get("colore"))
-        disegno.line([p1, p2], fill=colore + (255,), width=SPESSORE_PARETE)
+        # I muri nuovi hanno uno spessore vero (10, 15, 18 cm): sul foglio
+        # si disegnano grossi quanto sono, come sullo schermo. Gli altri —
+        # un muro da demolire, uno di un progetto di prima — restano al
+        # tratto di sempre: dire 6 px e' meglio che inventare un 12.
+        spessore = parete.get("spessore") or 0.0
+        grossezza = (max(SPESSORE_PARETE, round(spessore / mpp))
+                     if spessore and mpp else SPESSORE_PARETE)
+        disegno.line([p1, p2], fill=colore + (255,), width=grossezza)
 
     # Le etichette per ultime: devono stare SOPRA a tutte le campiture, se no
     # una zona disegnata dopo ne coprirebbe una scritta prima.

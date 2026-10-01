@@ -30,6 +30,9 @@ from costanti import (
     DA_ANNULLARE,
     PALETTE_ZONE,
     PASSI_STORIA,
+    SPESSORE_PARETE_PREDEFINITO,
+    SPESSORI_PARETE,
+    TIPI_CON_SPESSORE,
     TIPI_PARETE,
     TIPI_PARETE_SCELTA,
     VOCI_DA_SUPERFICI,
@@ -116,6 +119,16 @@ def misure_scala(pianta):
     return fuori
 
 
+def _spessore_valido(metri):
+    """Lo spessore piu' vicino fra quelli previsti: il disegno non deve
+    diventare il posto dove si inventano misure che nessuno costruisce."""
+    try:
+        valore = float(metri)
+    except (TypeError, ValueError):
+        raise ErroreDisegno(f"Spessore non valido: {metri}") from None
+    return min(SPESSORI_PARETE, key=lambda s: abs(s - valore))
+
+
 class DisegnoMixin:
     """I gesti della scheda planimetria. Il Banco la eredita."""
 
@@ -130,6 +143,7 @@ class DisegnoMixin:
         self.storia = []
         self.cat_attiva = None
         self.tipo_parete = "demolire"
+        self.spessore_parete = SPESSORE_PARETE_PREDEFINITO
         self.anteprima_pulizia = None
         self.originali = {}          # indice della pianta → immagine di prima
         self.ritagli = {}            # indice della pianta → ritagli da annullare
@@ -306,10 +320,14 @@ class DisegnoMixin:
                     elemento["etichetta_pos"] = [float(ev["pos"][0]),
                                                  float(ev["pos"][1])]
         elif tipo == "parete":
-            pianta["pareti"].append({"id": self._nuovo_id(pianta),
-                                     "p1": list(ev["p1"]),
-                                     "p2": list(ev["p2"]),
-                                     "tipo": self.tipo_parete})
+            nuova = {"id": self._nuovo_id(pianta),
+                     "p1": list(ev["p1"]), "p2": list(ev["p2"]),
+                     "tipo": self.tipo_parete}
+            # lo spessore lo portano solo i muri NUOVI: di uno da demolire
+            # si sa gia' quanto e' grosso, e non lo si sceglie
+            if self.tipo_parete in TIPI_CON_SPESSORE:
+                nuova["spessore"] = self.spessore_parete
+            pianta["pareti"].append(nuova)
         elif tipo == "parete_modificata":
             for parete in pianta["pareti"]:
                 if parete["id"] == ev.get("id"):
@@ -433,11 +451,32 @@ class DisegnoMixin:
         pianta["zone"] = [z for z in pianta["zone"] if z["id"] != zona["id"]]
         self.sel_zona = None
 
+    def scegli_spessore_parete(self, metri):
+        """Lo spessore dei muri che si tracceranno da adesso."""
+        self.spessore_parete = _spessore_valido(metri)
+
+    def spessore_parete_sel(self, metri):
+        """Lo spessore del muro selezionato: cambia anche il suo segno sul
+        disegno, che e' spesso quanto il muro."""
+        _, parete = self._parete_sel()
+        nuovo = _spessore_valido(metri)
+        if parete.get("tipo") not in TIPI_CON_SPESSORE:
+            raise ErroreDisegno("Lo spessore si sceglie sui muri nuovi.")
+        if nuovo != parete.get("spessore"):
+            self.registra_storia("cambio di spessore del muro")
+            parete["spessore"] = nuovo
+
     def tipo_parete_sel(self, codice):
         _, parete = self._parete_sel()
         if codice != parete.get("tipo", "demolire"):
             self.registra_storia("cambio di tipo del muro")
             parete["tipo"] = codice
+            # diventa un muro nuovo: porta con se' uno spessore, quello
+            # scelto per i prossimi; torna a demolire e lo perde
+            if codice in TIPI_CON_SPESSORE:
+                parete.setdefault("spessore", self.spessore_parete)
+            else:
+                parete.pop("spessore", None)
 
     def lunghezza_parete(self, metri):
         """Il muro si allunga o si accorcia dal capo di arrivo."""
@@ -781,6 +820,9 @@ class DisegnoMixin:
             "pareti": [{
                 "id": p["id"], "p1": p["p1"], "p2": p["p2"],
                 "tipo": p.get("tipo", "esistente"),
+                # in metri: la tela lo disegna grosso quanto e', non con un
+                # tratto sempre uguale
+                "spessore": p.get("spessore") or 0.0,
                 "colore": TIPI_PARETE.get(p.get("tipo", "esistente"),
                                           TIPI_PARETE["esistente"])["colore"],
                 "etichetta": etichetta_parete(p, pianta["mpp"]),
@@ -801,6 +843,9 @@ class DisegnoMixin:
             "mpp": float(pianta["mpp"] or 0.0),
             "font_px": int(et["font"]),
             "tipo_parete": self.tipo_parete,
+            "spessore_parete": (self.spessore_parete
+                                if self.tipo_parete in TIPI_CON_SPESSORE
+                                else 0.0),
             "seq_applicato": self.ultimo_seq,
         }
 
@@ -828,6 +873,7 @@ class DisegnoMixin:
                        "colore": TIPI_PARETE.get(
                            p.get("tipo", "esistente"),
                            TIPI_PARETE["esistente"])["colore"],
+                       "spessore": p.get("spessore") or 0.0,
                        "etichetta": etichetta_parete(p, pianta["mpp"]),
                        "etichetta_pos": p.get("etichetta_pos")}
                       for p in pianta["pareti"]]

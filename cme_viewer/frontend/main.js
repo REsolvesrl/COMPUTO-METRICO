@@ -41,6 +41,7 @@ let zone = [], pareti = [], scalaTemp = null;
 let misureScala = [];        // le misure note su cui è tarata la scala
 let coloreAttivo = "#E57373", mpp = 0, fontPx = 14;
 let tipoParete = "demolire";  // che muro si sta per tracciare (dal server)
+let spessoreParete = 0;      // in metri, 0 se quel muro non ha spessore
 
 let drawing = [];            // poligono in corso (coord. immagine)
 let cursorPos = null;        // mouse in coord. immagine (per il rubber band)
@@ -331,8 +332,16 @@ function seg(ax, ay, bx, by) {
 //   costruire → linea piena con i giunti dei mattoni
 // spessore è in px schermo: viene diviso per lo zoom, così il segno resta
 // dello stesso peso a qualunque ingrandimento.
-function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile) {
-  const lw = (spessore || 5) / scale;
+//
+// spessoreReale, invece, è in METRI: è il muro vero. Dove c'è (i muri nuovi,
+// 10, 15 o 18 cm) il tratto si disegna largo quanto il muro — un 18 si vede
+// che è un 18 — e si ingrossa e assottiglia con lo zoom come il resto del
+// disegno. Dove non c'è (un muro da demolire, una quota, una misura) resta
+// il tratto di sempre, che a ogni ingrandimento pesa uguale.
+function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile,
+                     spessoreReale) {
+  const banda = (spessoreReale > 0 && mpp > 0) ? spessoreReale / mpp : 0;
+  const lw = banda || (spessore || 5) / scale;
   const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
   const L = Math.hypot(dx, dy) || 1;
   const ux = dx / L, uy = dy / L;          // versore lungo il segmento
@@ -365,6 +374,17 @@ function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile) {
   seg(p1[0], p1[1], p2[0], p2[1]);
   ctx.stroke();
   tratteggio(false);
+
+  // --- i due fianchi del muro, dove il muro ha uno spessore vero
+  if (banda) {
+    const h = banda / 2;
+    ctx.strokeStyle = colore;
+    ctx.lineWidth = Math.max(1.2 / scale, banda * 0.09);
+    ctx.beginPath();
+    seg(p1[0] + nx * h, p1[1] + ny * h, p2[0] + nx * h, p2[1] + ny * h);
+    seg(p1[0] - nx * h, p1[1] - ny * h, p2[0] - nx * h, p2[1] - ny * h);
+    ctx.stroke();
+  }
 
   // --- segno caratteristico
   ctx.lineWidth = Math.max(1.6 / scale, lw * 0.55);
@@ -500,7 +520,7 @@ function render() {
 
   for (const p of pareti) {
     drawVettore(p.p1, p.p2, false, p.colore || "#C9A96A", 5,
-                p.id === selParete, p.tipo || "esistente");
+                p.id === selParete, p.tipo || "esistente", p.spessore);
   }
   // le misure note restano sul disegno: si vede su cosa è tarata la scala
   for (const s of misureScala) {
@@ -520,7 +540,8 @@ function render() {
       : (mode === "misura") ? COL_MISURA : coloreParete();
     const stile = (mode === "parete") ? (tipoParete || "demolire") : mode;
     drawVettore(vecStart, vecEnd, false, col,
-                mode === "scala" ? 4.5 : 4, false, stile);
+                mode === "scala" ? 4.5 : 4, false, stile,
+                mode === "parete" ? spessoreParete : 0);
     if (vettoreAperto) {          // pallino sul punto già fissato
       ctx.beginPath();
       ctx.arc(vecStart[0], vecStart[1], 4.5 / scale, 0, Math.PI * 2);
@@ -655,10 +676,15 @@ function render() {
     ctx.stroke();
   }
 
-  // misura "live" vicino al cursore (solo metri)
+  // La misura "live" vicino al cursore, in metri. Si vede mentre si tira il
+  // segmento — qualunque sia il modo di tirarlo: tenendo premuto, oppure
+  // clic sul primo capo e clic sul secondo. In quel secondo modo prima non
+  // compariva niente e il numero arrivava solo a segmento finito: si
+  // cliccava alla cieca e, se non andava bene, si rifaceva.
   if (cursorPos) {
     let testo = null;
-    if (drag && drag.kind === "vector" && vecStart && vecEnd) {
+    if (vecStart && vecEnd &&
+        (vettoreAperto || (drag && drag.kind === "vector"))) {
       testo = fmtMetri(dist(vecStart, vecEnd));
     } else if (mode === "disegna" && drawing.length && mpp > 0) {
       testo = fmtMetri(dist(drawing[drawing.length - 1], cursorPos));
@@ -1252,6 +1278,7 @@ function applicaArgs(a) {
   mpp = a.mpp || 0;
   fontPx = a.font_px || 14;
   tipoParete = a.tipo_parete || "demolire";
+  spessoreParete = a.spessore_parete || 0;
 
   if (selZona != null && !zone.some(function (z) { return z.id === selZona; })) {
     selZona = null;

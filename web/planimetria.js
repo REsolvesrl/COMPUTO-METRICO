@@ -261,6 +261,12 @@ export const SchedaPlanimetria = defineComponent({
                    aiuto="Da demolire = rosso · Da costruire = giallo · In cartongesso = verde"
                    :opzioni="p.tipi_parete.map(t => ({valore: t.codice, testo: t.nome}))"
                    @cambia="g('tipo_parete', {codice: $event})" />
+          <!-- lo spessore riguarda solo i muri NUOVI: di uno da demolire si
+               sa gia' quanto e' grosso -->
+          <Tendina v-if="p.con_spessore" style="flex:1" etichetta="Spessore" :valore="String(p.spessore_parete)"
+                   aiuto="Quanto e' grosso il muro: sul disegno il tratto si allarga di conseguenza, e in un corridoio stretto si vede subito se la porta ci sta."
+                   :opzioni="p.spessori_parete.map(s => ({valore: String(s.valore), testo: s.nome}))"
+                   @cambia="g('spessore_parete', {metri: Number($event)})" />
         </div>
         <div class="colonne centro resta" style="margin-bottom:12px">
           <button class="bottone" style="flex:1" :disabled="!p.storia" @click="g('annulla_disegno', {}, false)"
@@ -400,6 +406,10 @@ export const SchedaPlanimetria = defineComponent({
             <Tendina style="flex:2" etichetta="Tipo di intervento" :valore="p.parete_sel.tipo"
                      :opzioni="p.tipi_parete.map(t => ({valore: t.codice, testo: t.nome}))"
                      @cambia="g('tipo_parete_sel', {codice: $event})" />
+            <Tendina v-if="p.parete_sel.con_spessore" style="flex:1" etichetta="Spessore"
+                     :valore="String(p.parete_sel.spessore)"
+                     :opzioni="p.spessori_parete.map(s => ({valore: String(s.valore), testo: s.nome}))"
+                     @cambia="g('spessore_parete_sel', {metri: Number($event)})" />
             <CampoPassi v-if="p.parete_sel.lunghezza !== null" style="flex:1" etichetta="Lunghezza (m)"
                         :valore="p.parete_sel.lunghezza" :passo="0.05" :minimo="0.01" :decimali="2"
                         aiuto="Scrivi la misura giusta: il muro si allunga o si accorcia dal capo di arrivo. Sulla tela, in Modifica, puoi anche trascinarne i capi."

@@ -173,6 +173,8 @@ GESTI_DISEGNO = {
     "rinomina_pianta": lambda b, nome: b.rinomina_pianta(nome),
     "categoria_nuove": lambda b, nome: b.scegli_categoria_nuove(nome),
     "tipo_parete": lambda b, codice: b.scegli_tipo_parete(codice),
+    "spessore_parete": lambda b, metri: b.scegli_spessore_parete(metri),
+    "spessore_parete_sel": lambda b, metri: b.spessore_parete_sel(metri),
     "evento_tela": lambda b, evento: b.evento_tela(evento),
     "annulla_disegno": _annulla_disegno,
     "imposta_scala": lambda b, metri: b.imposta_scala(metri),

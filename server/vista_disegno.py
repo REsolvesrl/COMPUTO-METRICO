@@ -10,7 +10,8 @@ from __future__ import annotations
 import planimetria as geo
 from banco_disegno import etichetta_parete, misure_scala
 from costanti import (CATEGORIE_INVOLUCRO, CATEGORIE_SOLO_COMPUTO,
-                      TIPI_PARETE, TIPI_PARETE_SCELTA)
+                      SPESSORI_PARETE, TIPI_CON_SPESSORE, TIPI_PARETE,
+                      TIPI_PARETE_SCELTA)
 from formato import numero_it
 
 
@@ -180,6 +181,10 @@ def vista_planimetria(b):
         "tipi_parete": [{"codice": c, **TIPI_PARETE[c]}
                         for c in TIPI_PARETE_SCELTA],
         "tipo_parete": b.tipo_parete,
+        "spessori_parete": [{"valore": s, "nome": f"{numero_it(s * 100, 0)} cm"}
+                            for s in SPESSORI_PARETE],
+        "spessore_parete": b.spessore_parete,
+        "con_spessore": b.tipo_parete in TIPI_CON_SPESSORE,
         "storia": ({"passi": len(b.storia),
                     "ultima": b.storia[-1]["descrizione"]}
                    if b.storia else None),
@@ -220,6 +225,8 @@ def vista_planimetria(b):
     if parete is not None:
         fuori["parete_sel"] = {
             "id": parete["id"], "tipo": parete.get("tipo", "demolire"),
+            "spessore": parete.get("spessore") or 0.0,
+            "con_spessore": parete.get("tipo") in TIPI_CON_SPESSORE,
             "lunghezza": (geo.distanza_pixel(parete["p1"], parete["p2"]) * mpp
                           if mpp else None),
             "etichetta": etichetta_parete(parete, mpp)}
