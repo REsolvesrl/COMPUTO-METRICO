@@ -197,6 +197,18 @@ export const SchedaPlanimetria = defineComponent({
       await g("imposta_scala", { metri: metriScala.value }, false);
     }
     const confrontoScale = computed(() => p.value.scale && p.value.scale.misure.length > 1);
+    const opzioniPianteComputo = computed(() => (p.value.pianta_computo
+      ? [{ valore: "", testo: "Tutte le planimetrie (somma)" }].concat(
+        p.value.pianta_computo.piante.map((q) => ({
+          valore: String(q.indice),
+          testo: `${q.nome} — ${q.zone} ${q.zone === 1 ? "area" : "aree"}`,
+        }))) : []));
+    const nomePiantaComputo = computed(() => {
+      const pc = p.value.pianta_computo;
+      if (!pc || pc.scelta === null) return "";
+      const scelta = pc.piante.find((q) => q.indice === pc.scelta);
+      return scelta ? scelta.nome : "";
+    });
     const scarto = (x) => (x >= 0 ? "+" : "−") + numeroIt(Math.abs(x) * 100, 1) + " %";
     const colonneSup = ["Pianta", "Categoria", "Zone", "m² reali", "%", "m² commerciali", "Serve a"]
       .map((c) => ({ chiave: c, titolo: c, num: ["Zone", "m² reali", "%", "m² commerciali"].includes(c) }));
@@ -221,7 +233,8 @@ export const SchedaPlanimetria = defineComponent({
     }
     return { p, caricamento, carica, g, opzioniCat, nomeAttiva, metriScala, impostaScala, confrontoScale, scarto, forza,
              orizzontale, colonneSup, colonneConto, stileTotale, d, muri, f, finitura, stampaPdf,
-             daImportare, opzioniImporta, importaAree, scarica, numeroIt, euro };
+             daImportare, opzioniImporta, importaAree, opzioniPianteComputo, nomePiantaComputo,
+             scarica, numeroIt, euro };
   },
   template: `
   <div class="scheda-disegno">
@@ -514,7 +527,22 @@ export const SchedaPlanimetria = defineComponent({
         ↩️ Riporta le etichette fuori dal disegno ({{ p.etichette_spostate }} spostate)</button>
     </Pannello>
 
-    <h3 class="sottotitolo">🧮 Superfici commerciali (tutte le planimetrie)</h3>
+    <h3 class="sottotitolo">🧮 Superfici commerciali<template v-if="nomePiantaComputo"> — {{ nomePiantaComputo }}</template><template v-else> (tutte le planimetrie)</template></h3>
+    <!-- la stessa scelta della scheda Computo: le superfici si guardano qui,
+         e qui si cambia pianta senza andarla a cercare di la' -->
+    <div v-if="p.pianta_computo && p.pianta_computo.piante.length > 1"
+         class="colonne fondo resta" style="margin-bottom:12px">
+      <Tendina style="flex:2" etichetta="📐 Misure e superfici: da quale planimetria"
+               :valore="p.pianta_computo.scelta === null ? '' : String(p.pianta_computo.scelta)"
+               :opzioni="opzioniPianteComputo"
+               aiuto="Vale sia per le superfici commerciali sia per le quantità del computo. Due fogli dello stesso immobile, sommati, raddoppiano superficie e lavorazioni."
+               @cambia="g('pianta_computo', {indice: $event === '' ? null : Number($event)})" />
+      <p class="didascalia" style="flex:3;margin:0">
+        <template v-if="p.pianta_computo.scelta === null">⚠️ Le planimetrie si <b>sommano</b>: va bene per i piani di
+          uno stesso fabbricato, non per due fogli dello stesso appartamento.</template>
+        <template v-else>Le altre planimetrie restano disegnate e misurate: solo, non entrano in questi conti.</template>
+      </p>
+    </div>
     <Avviso v-if="p.superfici.senza_scala.length" tipo="attenzione">Escluse dal totale perché <b>senza scala</b>:
       {{ p.superfici.senza_scala.join(', ') }}</Avviso>
     <Avviso v-if="p.superfici.manca_perimetro" tipo="attenzione">Hai disegnato le superfici interne ma <b>nessun

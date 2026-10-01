@@ -1160,14 +1160,20 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
             {c: self.quantita(c) for c, _ in selezionate}, escluse=a_mano)
 
     def mq_da_planimetria(self):
+        # ⚠️ Anche la superficie commerciale segue la pianta scelta. Era il
+        # conto di TUTTE le piante, e ha senso su un fabbricato a piani: il
+        # terra piu' il primo fanno una superficie sola. Ma due fogli dello
+        # stesso immobile — lo stato attuale e la catastale nuova — la
+        # raddoppiavano, e quella cifra va nel business plan e nel prezzo di
+        # vendita (1/10/2026, deciso dal committente).
         _, _, mq, _ = planimetria.riepilogo_superfici(
-            self.piante_calcolo(), self.percentuali(),
+            self.piante_del_computo(), self.percentuali(),
             escludi=CATEGORIE_SOLO_COMPUTO)
         return mq
 
     def mq_calpestabili(self):
         mq, _ = planimetria.superficie_calpestabile(
-            self.piante_calcolo(), self.percentuali(),
+            self.piante_del_computo(), self.percentuali(),
             escludi=CATEGORIE_INVOLUCRO)
         return mq
 

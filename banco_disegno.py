@@ -753,7 +753,7 @@ class DisegnoMixin:
 
     def superficie_commerciale_al_computo(self):
         _, _, tot_comm, _ = planimetria.riepilogo_superfici(
-            self.piante_calcolo(), self.percentuali(),
+            self.piante_del_computo(), self.percentuali(),
             escludi=CATEGORIE_SOLO_COMPUTO)
         self.aggiungi_voce(
             "Superfici", "Superficie commerciale — "

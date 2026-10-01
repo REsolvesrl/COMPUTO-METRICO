@@ -80,17 +80,22 @@ def test_i_muri_seguono_la_stessa_scelta(b):
     assert b.muri()[0]["demolire"]["ml"] == pytest.approx(5.0)
 
 
-def test_la_superficie_commerciale_guarda_sempre_tutto_il_fabbricato(b):
-    """È il conto dell'immobile, non delle lavorazioni: un piano terra e un
-    piano primo fanno una superficie sola."""
+def test_anche_la_superficie_commerciale_segue_la_pianta_scelta(b):
+    """Due fogli dello stesso immobile raddoppiavano la superficie
+    vendibile, e quella cifra va nel business plan (1/10/2026)."""
     b.scegli_categoria_nuove("Superficie commerciale")
     for i in (0, 1):
         b.scegli_pianta(i)
         _gesto(b, tipo="zona_chiusa",
                punti=[[0, 0], [300, 0], [300, 300], [0, 300]])    # 9 m²
-    prima = b.mq_da_planimetria()
+    assert b.mq_da_planimetria() == pytest.approx(18.0)   # tutte: si sommano
     b.scegli_pianta_computo(0)
-    assert b.mq_da_planimetria() == prima == pytest.approx(18.0)
+    assert b.mq_da_planimetria() == pytest.approx(9.0)
+    # e i metri calpestabili, che dividono il costo dei lavori, con lei
+    b.scegli_pianta_computo(None)
+    tutte = b.mq_calpestabili()
+    b.scegli_pianta_computo(1)
+    assert b.mq_calpestabili() == pytest.approx(tutte / 2)
 
 
 def test_la_scelta_si_salva_nel_progetto(b, tmp_path, monkeypatch):

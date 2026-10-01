@@ -255,7 +255,9 @@ def vista_planimetria(b):
     }
 
     # ------------------------------------------- superfici commerciali
-    piante = b.piante_calcolo()
+    # anche queste seguono la pianta scelta per il computo: due fogli dello
+    # stesso immobile raddoppiavano la superficie vendibile
+    piante = b.piante_del_computo()
     perc = b.percentuali()
     righe_sup, tot_sup, tot_comm, senza_scala = geo.riepilogo_superfici(
         piante, perc, escludi=CATEGORIE_SOLO_COMPUTO)
