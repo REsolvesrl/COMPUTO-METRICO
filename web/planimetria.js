@@ -313,9 +313,14 @@ export const SchedaPlanimetria = defineComponent({
         </div>
 
         <!-- le misure note su cui è tarata la scala: restano sul disegno,
-             numerate come qui, e si tolgono una per una -->
-        <div v-if="p.scale.misure.length" style="margin-bottom:16px">
-          <p style="margin-bottom:8px"><b>📏 Misure note della scala</b></p>
+             numerate come qui, e si tolgono una per una. Stanno in una
+             tendina: a scala tarata non si guardano quasi mai, e aperte
+             spingevano il disegno fuori dallo schermo. Si apre da sola se
+             una quota non torna — quella va vista. -->
+        <Pannello v-if="p.scale.misure.length" style="margin-bottom:16px"
+                  :aperto="p.scale.misure.some(m => m.non_torna)"
+                  :titolo="'📏 Misure note della scala (' + p.scale.misure.length + ')'
+                           + (p.scale.mostra ? '' : ' — nascoste sul disegno')">
           <div class="griglia-scorre">
             <table class="griglia">
               <thead><tr>
@@ -340,14 +345,23 @@ export const SchedaPlanimetria = defineComponent({
               </tbody>
             </table>
           </div>
+          <div class="colonne resta" style="margin-bottom:8px">
+            <button class="bottone" style="flex:1"
+                    :title="p.scale.mostra ? 'I segmenti spariscono dal disegno: la scala resta tarata su di loro, e restano qui in elenco.' : 'Rimette i segmenti sul disegno, ognuno col suo numero.'"
+                    @click="g('mostra_scale', {acceso: !p.scale.mostra})">
+              {{ p.scale.mostra ? '🙈 Nascondi i segmenti sul disegno' : '👁 Mostra i segmenti sul disegno' }}</button>
+            <span style="flex:2"></span>
+          </div>
           <p class="didascalia">Per affinare la scala traccia altre misure note con lo strumento ↔️: la scala è la
             media di tutte, pesata sulla lunghezza, quindi un segmento lungo conta più di uno corto.
             <template v-if="confrontoScale">Lo scarto dice quanto ogni quota si allontana dalle altre.</template></p>
-          <Avviso v-if="p.scale.misure.some(m => m.non_torna)" tipo="attenzione">⚠️ Le misure segnate si allontanano
-            dalle altre di oltre il {{ numeroIt(p.scale.soglia * 100, 0) }}%: un capo cliccato fuori posto, una quota
-            letta male o un disegno deformato dalla scansione. Controllale sul disegno (sono in rosso) e togli quella
-            sbagliata.</Avviso>
-        </div>
+        </Pannello>
+        <!-- l'avviso resta FUORI dalla tendina: dice che una quota non torna,
+             e dentro una tendina chiusa non lo leggerebbe nessuno -->
+        <Avviso v-if="p.scale.misure.some(m => m.non_torna)" tipo="attenzione">⚠️ Le misure segnate si allontanano
+          dalle altre di oltre il {{ numeroIt(p.scale.soglia * 100, 0) }}%: un capo cliccato fuori posto, una quota
+          letta male o un disegno deformato dalla scansione. Aprile qui sopra, controllale sul disegno (sono in rosso)
+          e togli quella sbagliata.</Avviso>
         <div v-else-if="p.scale.senza_misure" class="colonne centro resta" style="margin-bottom:16px">
           <p class="didascalia" style="flex:3;margin:0">📏 Questa scala è stata impostata prima che le misure note
             restassero sul disegno, e il suo segmento non c'è più. La prima misura nota che aggiungi la sostituisce.</p>

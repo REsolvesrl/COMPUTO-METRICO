@@ -161,3 +161,16 @@ def test_non_si_importa_da_se_stessa_ne_dal_vuoto(b):
     b.scegli_pianta(0)
     with pytest.raises(Exception):
         b.importa_zone(1)                  # non ha aree
+
+
+# ------------------- i segmenti delle misure note si possono spegnere
+
+def test_i_segmenti_della_scala_si_nascondono_dal_disegno(b):
+    assert len(b.argomenti_tela()["scale"]) == 1      # la misura nota c'è
+    b.mostra_le_scale(False)
+    assert b.argomenti_tela()["scale"] == []          # sul disegno, niente
+    # ma la scala resta tarata, e la misura resta in elenco
+    assert b.dati["piante"][0]["mpp"]
+    assert len(b.dati["piante"][0]["scale"]) == 1
+    b.mostra_le_scale(True)
+    assert len(b.argomenti_tela()["scale"]) == 1

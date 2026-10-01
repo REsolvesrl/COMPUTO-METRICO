@@ -74,6 +74,37 @@ if errorlevel 1 (
     python -m pip install -r requirements.txt
 )
 
+rem ===================================================================
+rem  IL MOTORE E' GIA' APERTO?
+rem  Uvicorn non puo' prendere una porta gia' occupata: fallisce con
+rem  "error while attempting to bind on address", una riga in mezzo a
+rem  dieci di traceback, e la finestra resta li'. Intanto il browser
+rem  mostra il motore VECCHIO, quello rimasto aperto, e un aggiornamento
+rem  appena scaricato sembra non essere arrivato: e' successo davvero
+rem  (1/10/2026, tre finestre nere aperte insieme e due che non
+rem  partivano). Meglio accorgersene prima e dirlo in italiano.
+rem ===================================================================
+netstat -ano | findstr /r /c:":8504 .*LISTENING" >nul 2>&1
+if not errorlevel 1 (
+    echo.
+    echo   ================================================
+    echo   CME E' GIA' APERTO su questo computer.
+    echo.
+    echo   C'e' un'altra finestra nera come questa, aperta
+    echo   da prima: e' quella che risponde al browser, e
+    echo   se nel frattempo e' arrivato un aggiornamento,
+    echo   LEI NON CE L'HA.
+    echo.
+    echo   Per ripartire pulito: salva il lavoro dal
+    echo   browser, chiudi TUTTE le finestre nere e riapri
+    echo   questo collegamento una volta sola.
+    echo   ================================================
+    echo.
+    start "" /b python -c "import webbrowser; webbrowser.open('http://127.0.0.1:8504')"
+    pause
+    exit /b 1
+)
+
 echo.
 echo   Avvio di CME. Tra pochi secondi si apre il browser da solo.
 echo.

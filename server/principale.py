@@ -179,6 +179,7 @@ GESTI_DISEGNO = {
     "annulla_scala": lambda b: b.annulla_scala(),
     "togli_misura_scala": lambda b, misura: b.togli_misura_scala(misura),
     "togli_scala_senza_misure": lambda b: b.togli_scala_senza_misure(),
+    "mostra_scale": lambda b, acceso: b.mostra_le_scale(acceso),
     "nome_zona": lambda b, nome: b.nome_zona(nome),
     "categoria_zona": lambda b, categoria: b.categoria_zona(categoria),
     "zona_al_computo": _zona_al_computo,

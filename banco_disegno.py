@@ -135,6 +135,7 @@ class DisegnoMixin:
         self.ritagli = {}            # indice della pianta → ritagli da annullare
         self.scala_persa = False
         self.importate = None        # le aree appena importate, da spostare
+        self.mostra_scale = True     # i segmenti delle misure note sul disegno
         self._immagini = {}          # cache: impronta → PIL
 
     # ------------------------------------------------------------ immagini
@@ -626,6 +627,10 @@ class DisegnoMixin:
         self.sel_zona = self.sel_parete = None
         return len(nuovi)
 
+    def mostra_le_scale(self, acceso):
+        """Accende o spegne i segmenti delle misure note sul disegno."""
+        self.mostra_scale = bool(acceso)
+
     def fine_importazione(self):
         """Le aree importate restano dove sono: il gruppo si scioglie."""
         self.importate = None
@@ -782,10 +787,15 @@ class DisegnoMixin:
                 "etichetta_pos": p.get("etichetta_pos"),
             } for p in pianta["pareti"]],
             "scala_temp": self.scala_temp,
-            "scale": [{"id": m["id"], "p1": m["p1"], "p2": m["p2"],
+            # I segmenti delle misure note si possono spegnere: a scala
+            # tarata sono righe nere ferme in mezzo al disegno, e quando
+            # cadono sopra un muro da tracciare o un'area da chiudere danno
+            # fastidio. Restano nella tendina, e si riaccendono da lì.
+            "scale": [] if not self.mostra_scale else
+                     [{"id": m["id"], "p1": m["p1"], "p2": m["p2"],
                        "non_torna": m["non_torna"],
                        "etichetta": (f"{m['segno']} {numero_it(m['metri'], 2)} m"
-                                     + (" ⚠" if m["non_torna"] else ""))}
+                                       + (" ⚠" if m["non_torna"] else ""))}
                       for m in misure_scala(pianta)],
             "colore_attivo": colori.get(attiva, PALETTE_ZONE[0]),
             "mpp": float(pianta["mpp"] or 0.0),
