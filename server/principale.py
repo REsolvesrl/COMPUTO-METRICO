@@ -143,6 +143,16 @@ def _usa_pulizia(b):
     return "Planimetria pulita ✔"
 
 
+def _importa_zone(b, da):
+    n = b.importa_zone(da)
+    return f"{n} aree importate: trascinane una per spostarle tutte ✔"
+
+
+def _annulla_importazione(b):
+    n = b.annulla_importazione()
+    return f"{n} aree importate tolte ↩️" if n else None
+
+
 def _rileva(b):
     return f"Trovate {b.rileva_stanze()} stanze ✔"
 
@@ -180,6 +190,9 @@ GESTI_DISEGNO = {
     "usa_pulizia": _usa_pulizia,
     "scarta_pulizia": lambda b: b.scarta_pulizia(),
     "ripristina_originale": lambda b: b.ripristina_originale(),
+    "importa_zone": _importa_zone,
+    "fine_importazione": lambda b: b.fine_importazione(),
+    "annulla_importazione": _annulla_importazione,
     "rileva_stanze": _rileva,
     "ritaglia": lambda b, x0, y0, x1, y1: b.ritaglia(x0, y0, x1, y1),
     "annulla_ritaglio": lambda b: b.annulla_ritaglio(),

@@ -173,6 +173,7 @@ export const SchedaPlanimetria = defineComponent({
     const caricamento = ref(null);
     const metriScala = ref(0);
     const forza = ref(1);
+    const daImportare = ref(null);
     const orizzontale = ref(false);
 
     async function carica(ev) {
@@ -208,9 +209,19 @@ export const SchedaPlanimetria = defineComponent({
     const f = computed(() => p.value.finiture);
     function finitura(campo, valore) { g("finitura", { campo, valore }); }
     function stampaPdf() { scarica(orizzontale.value ? "pdf_planimetrie_orizzontale" : "pdf_planimetrie"); }
+    const opzioniImporta = computed(() => (p.value.importa ? p.value.importa.piante.map((q) => ({
+      valore: String(q.indice),
+      testo: `${q.nome} — ${q.zone} ${q.zone === 1 ? "area" : "aree"}${q.scala ? "" : " (senza scala)"}`,
+    })) : []));
+    async function importaAree() {
+      const da = daImportare.value === null ? opzioniImporta.value[0] && opzioniImporta.value[0].valore
+                                            : daImportare.value;
+      if (da === null || da === undefined) return;
+      await g("importa_zone", { da: Number(da) }, false);
+    }
     return { p, caricamento, carica, g, opzioniCat, nomeAttiva, metriScala, impostaScala, confrontoScale, scarto, forza,
              orizzontale, colonneSup, colonneConto, stileTotale, d, muri, f, finitura, stampaPdf,
-             scarica, numeroIt, euro };
+             daImportare, opzioniImporta, importaAree, scarica, numeroIt, euro };
   },
   template: `
   <div>
@@ -270,6 +281,23 @@ export const SchedaPlanimetria = defineComponent({
           barra sul disegno, poi <b>clicca l'inizio e la fine</b> di una misura nota (es. un lato quotato). Zooma con
           la rotellina per essere preciso: lo zoom non altera le misure.</Avviso>
 
+        <!-- il gruppo appena importato: l'avviso sta QUI, sopra il disegno, non
+             dentro il pannello dell'importazione — che si richiude, e con esso
+             sparirebbe l'unica riga che spiega perché quelle aree si muovono
+             tutte insieme -->
+        <Avviso v-if="p.importa && p.importa.gruppo" tipo="attenzione"><b>{{ p.importa.gruppo }}</b>
+          {{ p.importa.gruppo === 1 ? 'area importata' : 'aree importate' }} da «{{ p.importa.da }}», col contorno
+          bianco tratteggiato: trascinane una sul disegno e <b>si spostano tutte insieme</b>, finché non premi
+          «✔ Lasciale qui».
+          <template v-if="p.importa.senza_scala"> ⚠️ Una delle due planimetrie non ha la scala: i punti sono stati
+            copiati come stavano, quindi <b>le misure qui non tornano</b> finché non tari la scala.</template>
+          <span class="colonne resta" style="display:flex;gap:8px;margin-top:8px">
+            <button class="bottone" @click="g('fine_importazione')"
+                    title="Le aree restano dove le hai messe e tornano indipendenti: da qui in poi si spostano una per una.">
+              ✔ Lasciale qui</button>
+            <button class="bottone" @click="g('annulla_importazione', {}, false)">↩️ Togli le aree importate</button>
+          </span>
+        </Avviso>
         <div class="tela"><Tela :argomenti="p.tela" /></div>
         <div v-if="p.vicino.length" class="colonne resta totali-tela" style="margin-bottom:16px">
           <Metrica v-for="m in p.vicino" :key="m.nome" style="flex:1" :nome="m.nome"
@@ -390,6 +418,22 @@ export const SchedaPlanimetria = defineComponent({
               </div>
             </template>
           </template>
+        </Pannello>
+
+        <Pannello v-if="p.importa && (p.importa.piante.length || p.importa.gruppo)"
+                  titolo="📋 Importa le aree da un'altra planimetria">
+          <p class="didascalia">Copia qui tutte le aree di un'altra pianta del progetto — categoria, nome e spunte
+            comprese — lasciando dov'è l'originale. Le <b>misure reali non cambiano</b>: i punti si convertono con le
+            due scale, così un locale di 20 m² resta di 20 m² anche se questo foglio è disegnato più grande. Le aree
+            arrivano nella stessa posizione che avevano sull'altro foglio e restano <b>attaccate fra loro</b>:
+            trascinandone una le sposti tutte, finché non le lasci lì.</p>
+          <div class="colonne fondo resta">
+            <Tendina v-if="p.importa.piante.length" style="flex:2" etichetta="Prendi le aree da"
+                     :valore="daImportare === null ? String(p.importa.piante[0].indice) : daImportare"
+                     :opzioni="opzioniImporta" @cambia="daImportare = $event" />
+            <button v-if="p.importa.piante.length" class="bottone primario" style="flex:1" @click="importaAree">
+              📋 Importa le aree</button>
+          </div>
         </Pannello>
 
         <Pannello titolo="🪄 Rileva stanze automaticamente (beta)">

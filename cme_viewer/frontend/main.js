@@ -434,8 +434,8 @@ function render() {
       // solo il contorno, tratteggiato: si vede che è un ingombro e non
       // un locale, e non copre quello che c'è sotto
       ctx.setLineDash([12 / scale, 7 / scale]);
-      ctx.strokeStyle = sel ? "#FFFFFF" : z.colore;
-      ctx.lineWidth = (sel ? 3.6 : 2.6) / scale;
+      ctx.strokeStyle = (sel || z.gruppo) ? "#FFFFFF" : z.colore;
+      ctx.lineWidth = (sel || z.gruppo ? 3.6 : 2.6) / scale;
       ctx.stroke();
       ctx.setLineDash([]);
       continue;
@@ -449,6 +449,15 @@ function render() {
       ctx.strokeStyle = z.colore;
       ctx.lineWidth = 1.4 / scale;
       ctx.stroke();
+    }
+    if (z.gruppo) {
+      // appena importata: contorno bianco tratteggiato, lo stesso su tutte
+      // quelle del gruppo, per far vedere che si muovono insieme
+      ctx.setLineDash([9 / scale, 6 / scale]);
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = 2.6 / scale;
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -900,9 +909,18 @@ function onDown(e) {
     }
     const z = hitZona(p);
     if (z) {
-      if (z.id === selZona) {
+      if (z.id === selZona || z.gruppo) {
+        // Un'area appena importata si trascina SUBITO, senza doverla prima
+        // selezionare, e si porta dietro tutto il gruppo: appena arrivate
+        // vanno quasi sempre spostate tutte insieme, e chiedere un clic in
+        // più per ciascuna sarebbe chiedere dodici clic in più.
+        const insieme = z.gruppo ? zone.filter(function (q) { return q.gruppo; })
+                                 : [z];
         drag = { kind: "move", z: z, start: p, moved: false,
-                 orig: z.punti.map(function (q) { return q.slice(); }) };
+                 gruppo: z.gruppo ? insieme : null,
+                 orig: insieme.map(function (q) {
+                   return q.punti.map(function (r) { return r.slice(); });
+                 }) };
       } else {
         selZona = z.id;
         selParete = null;
@@ -945,7 +963,12 @@ function onMove(e) {
       const dx = cursorPos[0] - drag.start[0];
       const dy = cursorPos[1] - drag.start[1];
       if (Math.hypot(dx, dy) * scale > 3) drag.moved = true;
-      drag.z.punti = drag.orig.map(function (q) { return [q[0] + dx, q[1] + dy]; });
+      const mosse = drag.gruppo || [drag.z];
+      mosse.forEach(function (z, i) {
+        z.punti = drag.orig[i].map(function (q) { return [q[0] + dx, q[1] + dy]; });
+      });
+      drag.dx = dx;
+      drag.dy = dy;
     } else if (drag.kind === "wallEnd") {
       // Di norma il capo scorre lungo il muro: si cambia la lunghezza e la
       // direzione resta quella disegnata. Con Maiusc va dove si vuole.
@@ -1005,6 +1028,9 @@ function onUp() {
   if (d.kind === "pan") {
     if (mode === "sposta") cv.style.cursor = "grab";
     salvaVista();
+  } else if (d.kind === "move" && d.moved && d.gruppo) {
+    send({ tipo: "gruppo_spostato",
+           dx: Math.round(d.dx * 10) / 10, dy: Math.round(d.dy * 10) / 10 });
   } else if ((d.kind === "vertex" || d.kind === "move") && d.moved) {
     send({ tipo: "zona_modificata", id: d.z.id, punti: arrotonda(d.z.punti) });
   } else if ((d.kind === "wallEnd" || d.kind === "wallMove") && d.moved) {

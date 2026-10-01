@@ -134,6 +134,7 @@ class DisegnoMixin:
         self.originali = {}          # indice della pianta → immagine di prima
         self.ritagli = {}            # indice della pianta → ritagli da annullare
         self.scala_persa = False
+        self.importate = None        # le aree appena importate, da spostare
         self._immagini = {}          # cache: impronta → PIL
 
     # ------------------------------------------------------------ immagini
@@ -185,12 +186,14 @@ class DisegnoMixin:
                                         "immagine": immagine_b64(img)})
         self.pianta_idx = primo
         self.sel_zona = self.sel_parete = self.scala_temp = None
+        self.importate = None
         return len(immagini)
 
     def scegli_pianta(self, i):
         self._pianta(i)
         self.pianta_idx = int(i)
         self.sel_zona = self.sel_parete = self.scala_temp = None
+        self.importate = None
 
     def togli_pianta(self, i):
         self._pianta(i)
@@ -200,6 +203,7 @@ class DisegnoMixin:
         self.pianta_idx = max(0, min(self.pianta_idx,
                                      len(self.dati["piante"]) - 1))
         self.sel_zona = self.sel_parete = self.scala_temp = None
+        self.importate = None
 
     def rinomina_pianta(self, nome):
         pianta = self._pianta()
@@ -242,6 +246,7 @@ class DisegnoMixin:
             pianta["zone"] = copy.deepcopy(salvata["zone"])
             pianta["pareti"] = copy.deepcopy(salvata["pareti"])
         self.sel_zona = self.sel_parete = self.scala_temp = None
+        self.importate = None
         self.ultimo_rilevamento = None
         return passo["descrizione"]
 
@@ -271,6 +276,19 @@ class DisegnoMixin:
                 if zona["id"] == ev.get("id"):
                     zona["punti"] = [[float(x), float(y)]
                                      for x, y in ev.get("punti", [])]
+        elif tipo == "gruppo_spostato":
+            # Le aree appena importate si spostano INSIEME: trascinandone una
+            # si muove tutto il gruppo, finché non lo si lascia dov'è. Due
+            # fogli dello stesso immobile non sono mai inquadrati uguali, e
+            # rimettere a posto dodici aree una per una scoraggia
+            # dall'importarle (1/10/2026).
+            dx, dy = float(ev.get("dx") or 0.0), float(ev.get("dy") or 0.0)
+            for zona in pianta["zone"]:
+                if zona["id"] in self._ids_importate():
+                    zona["punti"] = [[x + dx, y + dy] for x, y in zona["punti"]]
+                    if zona.get("etichetta_pos"):
+                        zona["etichetta_pos"] = [zona["etichetta_pos"][0] + dx,
+                                                 zona["etichetta_pos"][1] + dy]
         elif tipo == "zona_eliminata":
             pianta["zone"] = [z for z in pianta["zone"]
                               if z["id"] != ev.get("id")]
@@ -535,6 +553,95 @@ class DisegnoMixin:
         self.scala_temp = None
         self.anteprima_pulizia = None
 
+    # ------------------------------------- importare le aree da un'altra
+
+    def _ids_importate(self):
+        """Gli id delle aree importate, se il gruppo è di QUESTA pianta."""
+        r = self.importate
+        return set(r["ids"]) if r and r["indice"] == self.pianta_idx else set()
+
+    def importa_zone(self, da):
+        """Copia qui tutte le aree di un'altra planimetria.
+
+        Le aree arrivano con la loro categoria, il loro nome e le loro
+        spunte, ma con un id nuovo: le originali restano dove sono.
+
+        Le MISURE REALI non cambiano. I punti sono in pixel, e un pixel non
+        vale lo stesso su due fogli: si convertono con le due scale (pixel
+        di qui = pixel di là × mpp di là ÷ mpp di qui), così un locale di
+        20 m² resta di 20 m² anche se il secondo foglio è disegnato più
+        grande. Se una delle due piante non ha la scala non c'è niente da
+        convertire: i punti si copiano come sono, e le misure andranno
+        riviste dopo aver tarato la scala.
+
+        Il gruppo arriva centrato dove stava sul foglio di partenza (stessa
+        posizione relativa) e resta «attaccato»: si trascina tutto insieme
+        finché non lo si lascia lì (`fine_importazione`).
+        """
+        da = int(da)
+        if da == self.pianta_idx:
+            raise ErroreDisegno("È la planimetria su cui stai lavorando.")
+        sorgente = self._pianta(da)
+        destinazione = self._pianta()
+        zone = [z for z in sorgente["zone"] if len(z.get("punti") or []) >= 3]
+        if not zone:
+            raise ErroreDisegno(
+                f"«{sorgente['nome']}» non ha aree da importare.")
+
+        mpp_da, mpp_a = sorgente.get("mpp"), destinazione.get("mpp")
+        fattore = (mpp_da / mpp_a) if (mpp_da and mpp_a) else 1.0
+        img_da = self.immagine(da)
+        img_a = self.immagine(self.pianta_idx)
+        punti_tutti = [p for z in zone for p in z["punti"]]
+        cx = sum(p[0] for p in punti_tutti) / len(punti_tutti)
+        cy = sum(p[1] for p in punti_tutti) / len(punti_tutti)
+        # stessa posizione relativa sul foglio: se i due disegni sono la
+        # stessa pianta inquadrata uguale, le aree cadono già a posto
+        dx = cx / img_da.width * img_a.width
+        dy = cy / img_da.height * img_a.height
+
+        self.registra_storia("importazione delle aree")
+        nuovi = []
+        for z in zone:
+            zid = self._nuovo_id(destinazione)
+            nuova = {
+                "id": zid,
+                "categoria": z.get("categoria"),
+                "nome": z.get("nome"),
+                "punti": [[round(dx + (x - cx) * fattore, 1),
+                           round(dy + (y - cy) * fattore, 1)]
+                          for x, y in z["punti"]],
+            }
+            # le spunte del locale seguono l'area: erano state messe a mano
+            for chiave in ("pavimento", "battiscopa", "pittura", "rivestito"):
+                if z.get(chiave) is not None:
+                    nuova[chiave] = bool(z[chiave])
+            # l'etichetta no: era posata su un altro foglio, qui la rimette
+            # al suo posto posiziona_etichette
+            destinazione["zone"].append(nuova)
+            nuovi.append(zid)
+        self.importate = {"indice": self.pianta_idx, "ids": nuovi,
+                          "da": sorgente["nome"],
+                          "senza_scala": not (mpp_da and mpp_a)}
+        self.sel_zona = self.sel_parete = None
+        return len(nuovi)
+
+    def fine_importazione(self):
+        """Le aree importate restano dove sono: il gruppo si scioglie."""
+        self.importate = None
+
+    def annulla_importazione(self):
+        """Toglie le aree appena importate, tutte insieme."""
+        ids = self._ids_importate()
+        if not ids:
+            return 0
+        pianta = self._pianta()
+        self.registra_storia("importazione delle aree")
+        pianta["zone"] = [z for z in pianta["zone"] if z["id"] not in ids]
+        self.importate = None
+        self.sel_zona = None
+        return len(ids)
+
     def rileva_stanze(self):
         import rilevamento
         pianta = self._pianta()
@@ -653,9 +760,12 @@ class DisegnoMixin:
         nomi = [c["nome"] for c in self.dati["categorie"]]
         attiva = self.cat_attiva if self.cat_attiva in nomi else \
             (nomi[0] if nomi else "Superficie interna")
+        gruppo = self._ids_importate()
         return {
             "zone": [{
                 "id": z["id"], "punti": z["punti"],
+                # le aree appena importate si trascinano tutte insieme
+                "gruppo": z["id"] in gruppo,
                 "colore": colori.get(z["categoria"], "#9E9E9E"),
                 "senza_sfondo": z["categoria"] in CATEGORIE_INVOLUCRO,
                 "etichetta": etichetta_zona(z, pianta["mpp"], perc,

@@ -233,6 +233,18 @@ def vista_planimetria(b):
                          "annullabili": len(b.ritagli.get(i, []))}
     r = b.ultimo_rilevamento
     fuori["rilevamento"] = len(r["ids"]) if r and r["indice"] == i else 0
+    imp = b.importate
+    fuori["importa"] = {
+        # le altre piante: da quale si possono prendere le aree
+        "piante": [{"indice": k, "nome": p["nome"],
+                    "zone": len(p["zone"]), "scala": bool(p["mpp"])}
+                   for k, p in enumerate(d["piante"])
+                   if k != i and p["zone"]],
+        "gruppo": (len(imp["ids"]) if imp and imp["indice"] == i else 0),
+        "da": imp["da"] if imp and imp["indice"] == i else "",
+        "senza_scala": bool(imp and imp["indice"] == i
+                            and imp["senza_scala"]),
+    }
 
     # ------------------------------------------- superfici commerciali
     piante = b.piante_calcolo()

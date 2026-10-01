@@ -280,4 +280,5 @@ DA_ANNULLARE = {
     "parete_modificata": "modifica del muro",
     "parete_eliminata": "eliminazione del muro",
     "rinomina": "rinomina del locale",
+    "gruppo_spostato": "spostamento delle aree importate",
 }
