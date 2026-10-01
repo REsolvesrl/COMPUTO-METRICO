@@ -349,7 +349,15 @@ function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile,
   const T = 11 / scale;                    // sbraccio delle tacche
   const capo = 13 / scale;
 
-  ctx.lineCap = "round";
+  // ⚠️ I MURI HANNO I CAPI NETTI, non arrotondati. Il capo tondo sporge di
+  // mezzo spessore oltre il punto cliccato: su un muro da 18 cm sono 9 cm
+  // di qua e 9 di la', e il tratto disegnato risultava lungo 18 cm piu' del
+  // numero scritto sopra — «1,02 m» su un segno che ne misurava 1,20. Da
+  // segmento a segmento la misura e' quella fra i due puntini, e adesso lo
+  // e' anche il disegno. Quote e misure al volo tengono il capo tondo: non
+  // hanno spessore, e li' il tondo e' solo un tratto piu' morbido.
+  const muro = (stile !== "scala" && stile !== "misura");
+  ctx.lineCap = muro ? "butt" : "round";
   ctx.lineJoin = "round";
 
   if (evidenzia) {                        // selezione: alone extra
@@ -415,10 +423,12 @@ function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile,
       seg(cx - (ux - nx) * c, cy - (uy - ny) * c,
           cx + (ux - nx) * c, cy + (uy - ny) * c);
     }
-    seg(p1[0] - nx * T * 0.7, p1[1] - ny * T * 0.7,
-        p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
-    seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
-        p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
+    if (!banda) {
+      seg(p1[0] - nx * T * 0.7, p1[1] - ny * T * 0.7,
+          p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
+      seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
+          p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
+    }
   } else if (stile === "costruire" || stile === "cartongesso") {
     // «costruire» sono i giunti dei mattoni: trattini trasversali a passo
     // regolare. Il CARTONGESSO no — è una lastra, non una muratura: due
@@ -429,10 +439,16 @@ function drawVettore(p1, p2, dashed, colore, spessore, evidenzia, stile,
       const cx = p1[0] + ux * d, cy = p1[1] + uy * d;
       seg(cx - nx * h, cy - ny * h, cx + nx * h, cy + ny * h);
     }
-    seg(p1[0] - nx * T * 0.7, p1[1] - ny * T * 0.7,
-        p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
-    seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
-        p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
+    // Le barrette che chiudono il muro servono quando il tratto e' una
+    // linea sottile: dicono dove finisce. Su un muro con uno spessore vero
+    // sono spesse quanto lui e sporgono oltre il capo — la stessa confusione
+    // del capo tondo, in piccolo. La banda squadrata si chiude da sola.
+    if (!banda) {
+      seg(p1[0] - nx * T * 0.7, p1[1] - ny * T * 0.7,
+          p1[0] + nx * T * 0.7, p1[1] + ny * T * 0.7);
+      seg(p2[0] - nx * T * 0.7, p2[1] - ny * T * 0.7,
+          p2[0] + nx * T * 0.7, p2[1] + ny * T * 0.7);
+    }
   } else {
     seg(p1[0] - nx * T, p1[1] - ny * T, p1[0] + nx * T, p1[1] + ny * T);
     seg(p2[0] - nx * T, p2[1] - ny * T, p2[0] + nx * T, p2[1] + ny * T);
@@ -697,10 +713,11 @@ function render() {
 }
 
 function coloreParete() {
-  // stesso colore che avrà una volta salvata (rosso demolire, giallo
-  // costruire), così durante il tracciamento si vede già cosa si sta facendo
-  if (tipoParete === "demolire") return "#E53935";
-  if (tipoParete === "costruire") return "#FFD400";
+  // stesso colore che avrà una volta salvata — giallo le demolizioni, rosso
+  // le costruzioni, la convenzione dei disegni edilizi — così durante il
+  // tracciamento si vede già cosa si sta facendo
+  if (tipoParete === "demolire") return "#FFD400";
+  if (tipoParete === "costruire") return "#E53935";
   if (tipoParete === "cartongesso") return "#43A047";
   return "#C9A96A";
 }
@@ -805,7 +822,8 @@ function aggiornaSuggerimento() {
           "aggiungerne uno · doppio clic su un punto per toglierlo";
     } else if (selParete != null) {
       testo = "Trascina un capo per allungare o accorciare il muro (con " +
-              "Maiusc lo sposti liberamente) · trascina il muro per spostarlo";
+              "Maiusc lo sposti liberamente) · trascina il muro per spostarlo " +
+              "· le frecce lo spostano di 1 cm, con Maiusc di 10";
     } else {
       testo = "Clicca un'area o un muro per modificarlo";
     }
@@ -1211,7 +1229,42 @@ function onDbl(e) {
   if (q && q.el === "zona") apriEditor(q.obj, q.r);
 }
 
+// Le frecce spostano il muro selezionato. Trascinarlo col mouse va bene per
+// portarlo dov'e' l'idea; per appoggiarlo al filo di un altro muro serve un
+// passo piccolo e ripetibile, e il mouse a quel punto e' un impiccio: un
+// centimetro per pressione, dieci con Maiusc. Senza scala si lavora in
+// pixel, che e' l'unica cosa che si sappia.
+const FRECCE = {
+  ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+};
+let timerFrecce = null;
+
+function spostaParete(e) {
+  const w = pareti.find(function (q) { return q.id === selParete; });
+  if (!w) return false;
+  const [sx, sy] = FRECCE[e.key];
+  const passo = (mpp > 0) ? (e.shiftKey ? 0.10 : 0.01) / mpp
+                          : (e.shiftKey ? 10 : 1);
+  w.p1 = [w.p1[0] + sx * passo, w.p1[1] + sy * passo];
+  w.p2 = [w.p2[0] + sx * passo, w.p2[1] + sy * passo];
+  render();
+  // Tenendo premuta la freccia arrivano venti pressioni al secondo: al
+  // server si manda la posizione di arrivo, una volta sola, quando la mano
+  // si ferma. Altrimenti sono venti giri di pagina per un centimetro.
+  clearTimeout(timerFrecce);
+  timerFrecce = setTimeout(function () {
+    w.p1 = arrotonda([w.p1])[0];
+    w.p2 = arrotonda([w.p2])[0];
+    send({ tipo: "parete_modificata", id: w.id, p1: w.p1, p2: w.p2 });
+    render();
+  }, 250);
+  return true;
+}
+
 function onKey(e) {
+  if (FRECCE[e.key] && mode === "modifica" && selParete != null) {
+    if (spostaParete(e)) { e.preventDefault(); return; }
+  }
   if (e.key === "Escape") {
     if (vertSel != null) vertSel = null;   // prima si lascia il punto scelto
     else if (vettoreAperto) annullaVettore();   // poi si annulla il segmento

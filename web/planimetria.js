@@ -258,7 +258,7 @@ export const SchedaPlanimetria = defineComponent({
           <Tendina style="flex:2" etichetta="Categoria per le nuove aree (colore e %)" :valore="p.cat_attiva"
                    :opzioni="opzioniCat" @cambia="g('categoria_nuove', {nome: $event})" />
           <Tendina style="flex:2" etichetta="Tipo per le nuove pareti 🧱" :valore="p.tipo_parete"
-                   aiuto="Da demolire = rosso · Da costruire = giallo · In cartongesso = verde"
+                   aiuto="Da demolire = giallo · Da costruire = rosso · In cartongesso = verde (la convenzione dei disegni edilizi)"
                    :opzioni="p.tipi_parete.map(t => ({valore: t.codice, testo: t.nome}))"
                    @cambia="g('tipo_parete', {codice: $event})" />
           <!-- lo spessore riguarda solo i muri NUOVI: di uno da demolire si

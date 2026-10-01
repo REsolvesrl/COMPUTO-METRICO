@@ -214,8 +214,11 @@ CATEGORIA_STANZE = "Superficie interna"
 
 TIPI_PARETE = {
     "esistente": {"nome": "Esistente", "colore": "#C9A96A"},
-    "demolire": {"nome": "Da demolire", "colore": "#E53935"},
-    "costruire": {"nome": "Da costruire", "colore": "#FFD400"},
+    # ⚠️ GIALLO le demolizioni, ROSSO le costruzioni: e' la convenzione dei
+    # disegni edilizi, quella che un'impresa legge senza che nessuno glielo
+    # spieghi. Fino all'1/10/2026 erano invertiti.
+    "demolire": {"nome": "Da demolire", "colore": "#FFD400"},
+    "costruire": {"nome": "Da costruire", "colore": "#E53935"},
     # Il cartongesso è un'altra lavorazione dal muro in forati: altro
     # prezzo, altra impresa spesso, e sul disegno si distingue a colpo
     # d'occhio — verde.
