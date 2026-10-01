@@ -812,6 +812,21 @@ function hitParete(s) {
   return vicino;
 }
 
+function zoneImportate() {
+  return zone.filter(function (z) { return z.gruppo; });
+}
+
+// Il trascinamento di un'area: da sola, o con tutto il gruppo appena
+// importato se fa parte di quello.
+function iniziaMovimentoGruppo(z, p) {
+  const insieme = z.gruppo ? zoneImportate() : [z];
+  return { kind: "move", z: z, start: p, moved: false,
+           gruppo: z.gruppo ? insieme : null,
+           orig: insieme.map(function (q) {
+             return q.punti.map(function (r) { return r.slice(); });
+           }) };
+}
+
 function iniziaDragEtichetta(q, s, p) {
   // posizione attuale dell'etichetta (personalizzata o predefinita)
   const c = (q.el === "zona") ? posEtichettaZona(q.obj)
@@ -845,6 +860,18 @@ function onDown(e) {
   }
 
   if (mode === "sposta") {
+    // Le aree appena importate si spostano anche da qui, non solo in
+    // Modifica: appena arrivano si prova a trascinarle con la mano, ed è il
+    // gesto giusto — solo che in Sposta la mano muove la vista, e sembrava
+    // che il gruppo fosse incollato al disegno (1/10/2026). Partendo da
+    // DENTRO una di loro si muove il gruppo; dal resto del foglio la vista,
+    // come sempre.
+    const zG = zoneImportate().length ? hitZona(p) : null;
+    if (zG && zG.gruppo) {
+      drag = iniziaMovimentoGruppo(zG, p);
+      render();
+      return;
+    }
     drag = { kind: "pan", sx: e.clientX, sy: e.clientY, tx0: tx, ty0: ty };
     cv.style.cursor = "grabbing";
 
@@ -914,13 +941,7 @@ function onDown(e) {
         // selezionare, e si porta dietro tutto il gruppo: appena arrivate
         // vanno quasi sempre spostate tutte insieme, e chiedere un clic in
         // più per ciascuna sarebbe chiedere dodici clic in più.
-        const insieme = z.gruppo ? zone.filter(function (q) { return q.gruppo; })
-                                 : [z];
-        drag = { kind: "move", z: z, start: p, moved: false,
-                 gruppo: z.gruppo ? insieme : null,
-                 orig: insieme.map(function (q) {
-                   return q.punti.map(function (r) { return r.slice(); });
-                 }) };
+        drag = iniziaMovimentoGruppo(z, p);
       } else {
         selZona = z.id;
         selParete = null;
@@ -1007,6 +1028,12 @@ function onMove(e) {
     render();
   } else if (mode === "disegna" && drawing.length) {
     render();
+  } else if (mode === "sposta") {
+    // sopra un'area appena importata il cursore dice che lì si sposta lei,
+    // non la vista
+    const sopra = zoneImportate().length && hitZona(cursorPos);
+    const c = (sopra && sopra.gruppo) ? "move" : "grab";
+    if (cv.style.cursor !== c) cv.style.cursor = c;
   } else if (mode === "modifica") {
     // il cursore dice che cosa succede se si preme qui
     const wSel = pareti.find(function (q) { return q.id === selParete; });

@@ -287,8 +287,9 @@ export const SchedaPlanimetria = defineComponent({
              tutte insieme -->
         <Avviso v-if="p.importa && p.importa.gruppo" tipo="attenzione"><b>{{ p.importa.gruppo }}</b>
           {{ p.importa.gruppo === 1 ? 'area importata' : 'aree importate' }} da «{{ p.importa.da }}», col contorno
-          bianco tratteggiato: trascinane una sul disegno e <b>si spostano tutte insieme</b>, finché non premi
-          «✔ Lasciale qui».
+          bianco tratteggiato: <b>trascinane una</b> partendo da dentro e <b>si spostano tutte insieme</b> — con la
+          mano ✋ Sposta o con ➤ Modifica, come preferisci — finché non premi «✔ Lasciale qui». Trascinando il
+          foglio fuori da loro, invece, si muove la vista come sempre.
           <template v-if="p.importa.senza_scala"> ⚠️ Una delle due planimetrie non ha la scala: i punti sono stati
             copiati come stavano, quindi <b>le misure qui non tornano</b> finché non tari la scala.</template>
           <span class="colonne resta" style="display:flex;gap:8px;margin-top:8px">
