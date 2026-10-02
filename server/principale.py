@@ -442,9 +442,12 @@ def scarica(che_cosa: str):
         if che_cosa == "csv":
             return _file(esporta.csv_computo(b), b.nome_file("csv"),
                          "text/csv")
-        if che_cosa in ("pdf_planimetrie", "pdf_planimetrie_orizzontale"):
+        if che_cosa.startswith("pdf_planimetrie"):
+            # pdf_planimetrie[_orizzontale][_sola]: il foglio steso e la
+            # stampa della sola planimetria aperta
             return _file(b.pdf_planimetrie(
-                orizzontale=che_cosa.endswith("orizzontale")),
+                orizzontale="orizzontale" in che_cosa,
+                solo_questa=che_cosa.endswith("_sola")),
                 b.nome_file("pdf").replace(".pdf", "_planimetrie.pdf"),
                 "application/pdf")
         if che_cosa == "allegato_materiali":

@@ -866,8 +866,13 @@ class DisegnoMixin:
             "seq_applicato": self.ultimo_seq,
         }
 
-    def pdf_planimetrie(self, orizzontale=False):
+    def pdf_planimetrie(self, orizzontale=False, solo_questa=False):
         """Le piante disegnate, con le misure principali sulla prima.
+
+        Si comincia dalla planimetria APERTA, non dalla prima del progetto:
+        si preme «Stampa» guardando un disegno, e il foglio che esce deve
+        essere quello — con sopra le misure. Le altre seguono. Con
+        `solo_questa` esce lei e basta.
 
         Il perimetro commerciale resta FUORI: su una tavola che va in
         cantiere sarebbe una linea che gira attorno a tutto senza dire niente.
@@ -877,8 +882,13 @@ class DisegnoMixin:
         et = self.dati["etichette"]
         impostazioni = {"nome": et["nome"], "m2": et["m2"], "percento": False,
                         "perimetro": et["perimetro"]}
+        aperta = self.pianta_idx if self.dati["piante"] else 0
+        ordine = ([aperta] if solo_questa
+                  else [aperta] + [k for k in range(len(self.dati["piante"]))
+                                   if k != aperta])
         tavole = []
-        for i, pianta in enumerate(self.dati["piante"]):
+        for i in ordine:
+            pianta = self.dati["piante"][i]
             zone = [{"punti": z["punti"],
                      "colore": colori.get(z["categoria"], "#9E9E9E"),
                      "etichetta": etichetta_zona(z, pianta["mpp"], perc,
@@ -894,8 +904,9 @@ class DisegnoMixin:
                        "etichetta": etichetta_parete(p, pianta["mpp"]),
                        "etichetta_pos": p.get("etichetta_pos")}
                       for p in pianta["pareti"]]
-            disegnata = tavola.disegna(self.immagine(i), zone, pareti,
-                                       mpp=pianta["mpp"])
+            # sul foglio il bianco attorno e' pianta in meno: si taglia
+            disegnata = tavola.senza_bordi_bianchi(tavola.disegna(
+                self.immagine(i), zone, pareti, mpp=pianta["mpp"]))
             buffer = io.BytesIO()
             disegnata.save(buffer, format="PNG")
             tipi = {m.get("tipo") or "esistente" for m in pianta["pareti"]}

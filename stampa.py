@@ -143,13 +143,13 @@ def _pie_tavola(canvas, documento):
     canvas.saveState()
     canvas.setFont("Helvetica", 6.5)
     canvas.setFillColor(CEMENTO)
-    canvas.drawString(MARGINE_TAVOLA, 4.5 * mm, documento.titolo_corrente)
-    canvas.drawRightString(larghezza - MARGINE_TAVOLA, 4.5 * mm,
+    canvas.drawString(MARGINE_TAVOLA, 4 * mm, documento.titolo_corrente)
+    canvas.drawRightString(larghezza - MARGINE_TAVOLA, 4 * mm,
                            f"pagina {canvas.getPageNumber()}")
     canvas.setStrokeColor(OTTONE)
     canvas.setLineWidth(0.4)
-    canvas.line(MARGINE_TAVOLA, 6.8 * mm,
-                larghezza - MARGINE_TAVOLA, 6.8 * mm)
+    canvas.line(MARGINE_TAVOLA, 6.5 * mm,
+                larghezza - MARGINE_TAVOLA, 6.5 * mm)
     canvas.restoreState()
 
 
@@ -444,8 +444,8 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     elementi.extend(_riga_luogo_data(progetto))
     elementi.extend(_gruppo_firma())
 
-    documento.build(elementi, onFirstPage=_pie_tavola,
-                    onLaterPages=_pie_tavola)
+    documento.build(elementi, onFirstPage=_pie_di_pagina,
+                    onLaterPages=_pie_di_pagina)
     return buffer.getvalue()
 
 
@@ -830,7 +830,10 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
     documento = TavolaDoc(
         buffer, pagesize=foglio,
         leftMargin=MARGINE_TAVOLA, rightMargin=MARGINE_TAVOLA,
-        topMargin=MARGINE_TAVOLA, bottomMargin=8 * mm,
+        # ⚠️ Sotto ci passa il filo del piè di pagina: con 8 mm la legenda
+        # dei muri gli finiva sopra, e «Da demolire» si leggeva sovrapposto
+        # al nome del progetto. Dieci bastano, e il disegno non se ne accorge.
+        topMargin=MARGINE_TAVOLA, bottomMargin=10 * mm,
         title=f"Planimetrie — {progetto.get('nome') or 'senza nome'}",
         author="CME — Computo Metrico Estimativo",
     )
@@ -903,6 +906,6 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
         elementi.extend(chiave)
         elementi.extend(riga)
 
-    documento.build(elementi, onFirstPage=_pie_di_pagina,
-                    onLaterPages=_pie_di_pagina)
+    documento.build(elementi, onFirstPage=_pie_tavola,
+                    onLaterPages=_pie_tavola)
     return buffer.getvalue()

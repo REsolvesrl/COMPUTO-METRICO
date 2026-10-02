@@ -14,7 +14,7 @@ conversione da rifare — ed è il motivo per cui il disegno stampato combacia
 con quello a video invece di somigliargli.
 """
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 # Il carattere: si prova a prenderne uno vero dal sistema, in ordine di
 # preferenza. Senza, PIL ripiega su una bitmap minuscola che su una
@@ -291,3 +291,33 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None, mpp=None):
                      metri_barra, mpp, carattere)
 
     return Image.alpha_composite(base, strato).convert("RGB")
+
+
+def senza_bordi_bianchi(immagine, tolleranza=8, respiro=6):
+    """Il foglio ritagliato su quello che c'e' disegnato davvero.
+
+    Lo chiama la STAMPA, non `disegna`: a video la tavola deve restare
+    grande quanto l'immagine, che le coordinate delle zone e dei muri sono
+    quelle: ritagliando, un ritaglio dopo l'altro, non si saprebbe piu'
+    dove sta niente. Sul foglio invece conta solo quello che si vede.
+
+    Attorno alla pianta resta sempre del bianco: i margini della scansione
+    e lo spazio che si e' lasciato alle targhette, calcolato sul caso
+    peggiore e quasi mai usato tutto. Sul foglio stampato quel bianco e'
+    pianta in meno — su un progetto vero erano il 16% dell'area, cioe' un
+    disegno piu' piccolo del 15% a parita' di foglio.
+
+    tolleranza: quanto lontano dal bianco puro conta come disegno (una
+    scansione non ha mai il fondo a 255 pieno). respiro: i pixel di
+    margine che restano, perche' il disegno non tocchi il bordo.
+    """
+    sfondo = Image.new("RGB", immagine.size, (255, 255, 255))
+    differenza = ImageChops.difference(immagine, sfondo).convert("L")
+    scatola = differenza.point(lambda v: 255 if v > tolleranza else 0).getbbox()
+    if not scatola:
+        return immagine                       # foglio bianco: niente da fare
+    sinistra = max(0, scatola[0] - respiro)
+    sopra = max(0, scatola[1] - respiro)
+    destra = min(immagine.size[0], scatola[2] + respiro)
+    sotto = min(immagine.size[1], scatola[3] + respiro)
+    return immagine.crop((sinistra, sopra, destra, sotto))

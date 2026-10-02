@@ -155,3 +155,26 @@ def test_le_targhette_sulla_pianta_sono_piu_piccole_e_lasciano_posto():
     # più largo: meno pianta, a parità di foglio stampato
     prima = tavola.disegna(pianta, zone, dimensione_testo=20)
     assert composta.size[0] < prima.size[0]
+
+
+def test_la_tavola_non_porta_in_giro_il_bianco_attorno_al_disegno():
+    """Attorno alla pianta resta il bianco della scansione e lo spazio che
+    si è lasciato alle targhette: sul foglio stampato è pianta in meno."""
+    from PIL import Image, ImageDraw
+    pianta = Image.new("RGB", (900, 650), "white")
+    ImageDraw.Draw(pianta).rectangle([300, 250, 600, 400], outline="black",
+                                     width=3)
+    composta = tavola.senza_bordi_bianchi(tavola.disegna(pianta))
+    assert composta.size[0] < 900 and composta.size[1] < 650
+    # il disegno c'è ancora tutto, col suo respiro attorno
+    assert composta.size[0] >= 300 + 2 * 6
+    assert composta.size[1] >= 150 + 2 * 6
+
+
+def test_un_foglio_tutto_bianco_resta_com_e():
+    """Niente da ritagliare: meglio una pagina vuota che un'immagine di
+    zero pixel, che ReportLab non sa stampare."""
+    from PIL import Image
+    composta = tavola.senza_bordi_bianchi(
+        tavola.disegna(Image.new("RGB", (400, 300), "white")))
+    assert composta.size == (400, 300)

@@ -118,3 +118,25 @@ def test_una_pianta_che_non_c_e_piu_torna_a_tutte(b):
     assert b.dati["pianta_computo"] is None
     with pytest.raises(Exception):
         b.scegli_pianta_computo(5)
+
+
+# ------------------- la stampa parte dalla planimetria aperta (2/10/2026)
+
+def test_la_stampa_comincia_dalla_planimetria_aperta(b):
+    import fitz
+    b.scegli_pianta(1)
+    doc = fitz.open(stream=b.pdf_planimetrie(), filetype="pdf")
+    assert doc.page_count == 2
+    assert "STATO DI PROGETTO" in doc[0].get_text()
+    assert "STATO ATTUALE" in doc[1].get_text()
+    b.scegli_pianta(0)
+    doc = fitz.open(stream=b.pdf_planimetrie(), filetype="pdf")
+    assert "STATO ATTUALE" in doc[0].get_text()
+
+
+def test_si_puo_stampare_la_sola_planimetria_aperta(b):
+    import fitz
+    b.scegli_pianta(1)
+    doc = fitz.open(stream=b.pdf_planimetrie(solo_questa=True), filetype="pdf")
+    assert doc.page_count == 1
+    assert "STATO DI PROGETTO" in doc[0].get_text()

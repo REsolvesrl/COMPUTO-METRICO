@@ -220,7 +220,11 @@ export const SchedaPlanimetria = defineComponent({
     const muri = computed(() => p.value.muri);
     const f = computed(() => p.value.finiture);
     function finitura(campo, valore) { g("finitura", { campo, valore }); }
-    function stampaPdf() { scarica(orizzontale.value ? "pdf_planimetrie_orizzontale" : "pdf_planimetrie"); }
+    const solaPianta = ref(false);
+    function stampaPdf() {
+      scarica("pdf_planimetrie" + (orizzontale.value ? "_orizzontale" : "")
+              + (solaPianta.value ? "_sola" : ""));
+    }
     const opzioniImporta = computed(() => (p.value.importa ? p.value.importa.piante.map((q) => ({
       valore: String(q.indice),
       testo: `${q.nome} — ${q.zone} ${q.zone === 1 ? "area" : "aree"}${q.scala ? "" : " (senza scala)"}`,
@@ -234,6 +238,7 @@ export const SchedaPlanimetria = defineComponent({
     return { p, caricamento, carica, g, opzioniCat, nomeAttiva, metriScala, impostaScala, confrontoScale, scarto, forza,
              orizzontale, colonneSup, colonneConto, stileTotale, d, muri, f, finitura, stampaPdf,
              daImportare, opzioniImporta, importaAree, opzioniPianteComputo, nomePiantaComputo,
+             solaPianta,
              scarica, numeroIt, euro };
   },
   template: `
@@ -763,8 +768,11 @@ export const SchedaPlanimetria = defineComponent({
         <label class="spunta" style="margin-bottom:8px"
                title="Il foglio steso: la pianta più grande, e le misure principali in colonna a destra invece che sotto.">
           <input type="checkbox" v-model="orizzontale"> Foglio orizzontale</label>
+        <label class="spunta" style="margin-bottom:8px"
+               title="Stampa solo la planimetria che stai guardando. Spenta, le stampa tutte — ma sempre partendo da questa, che è quella con le misure.">
+          <input type="checkbox" v-model="solaPianta"> Solo la planimetria aperta</label>
         <button class="bottone largo" @click="stampaPdf"
-                title="Le piante disegnate, con le misure delle zone e dei muri, e con la prima le quantità principali.">
+                title="Le piante disegnate, con le misure delle zone e dei muri. Si comincia da quella aperta: è la sua pagina a portare le quantità principali.">
           🖨️ Stampa planimetrie (PDF)</button>
       </div>
       <div style="flex:2;display:flex;align-items:flex-end">
