@@ -202,10 +202,15 @@ def disegna(immagine, zone=(), pareti=(), dimensione_testo=None, mpp=None):
     """
     pianta = immagine.convert("RGBA")
     # Il corpo si misura sulla pianta, non sul foglio: una scansione grande
-    # e una piccola devono stampare etichette della stessa grandezza. Il
-    # rapporto è tarato perché su un A4 escano circa sette punti — sotto,
-    # in fotocopia, i metri quadri non si leggono più.
-    corpo = dimensione_testo or max(15, round(pianta.size[0] / 45))
+    # e una piccola devono stampare etichette della stessa grandezza.
+    #
+    # ⚠️ Era tarato su sette punti sull'A4. Adesso su sei: le targhette
+    # stanno FUORI dal disegno, e il margine che si prendono è margine tolto
+    # alla pianta — su un progetto vero la pianta era il 57% della tavola, e
+    # a sei punti diventa il 60%, con tutto il resto del foglio che cresce
+    # insieme. Sotto i sei punti, in fotocopia, i metri quadri non si
+    # leggono più: quello resta il fondo.
+    corpo = dimensione_testo or max(13, round(pianta.size[0] / 55))
     carattere = _carattere(corpo)
 
     # ⚠️ LE ETICHETTE STANNO FUORI DALL'IMMAGINE, e non per sbaglio: l'app

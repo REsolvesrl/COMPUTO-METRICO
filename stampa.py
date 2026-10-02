@@ -23,10 +23,14 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
+    BaseDocTemplate,
+    Frame,
     Image as ImmaginePDF,
     KeepTogether,
     PageBreak,
+    PageTemplate,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -50,6 +54,13 @@ STILE_TITOLO = ParagraphStyle(
     textColor=ARDESIA, spaceAfter=2)
 STILE_ETICHETTA = ParagraphStyle(
     "etichetta", fontName="Helvetica-Bold", fontSize=7, leading=10,
+    textColor=CEMENTO)
+# sulle tavole il testo e' servizio: piccolo, per lasciare il foglio al disegno
+STILE_TAVOLA_TESTATA = ParagraphStyle(
+    "tavola_testata", fontName="Helvetica", fontSize=7, leading=8.5,
+    textColor=CEMENTO)
+STILE_TAVOLA_NOME = ParagraphStyle(
+    "tavola_nome", fontName="Helvetica-Bold", fontSize=6.5, leading=7.5,
     textColor=CEMENTO)
 STILE_DATO = ParagraphStyle(
     "dato", fontName="Helvetica", fontSize=9, leading=12, textColor=ARDESIA)
@@ -119,6 +130,55 @@ def _pie_di_pagina(canvas, documento):
     canvas.setLineWidth(0.5)
     canvas.line(MARGINE, 13 * mm, A4[0] - MARGINE, 13 * mm)
     canvas.restoreState()
+
+
+def _pie_tavola(canvas, documento):
+    """Il piè di pagina delle TAVOLE: la stessa riga, ma rasente il bordo.
+
+    ⚠️ Largo quanto il foglio VERO: `_pie_di_pagina` misura su A4[0], che
+    sul foglio steso sono 210 mm invece di 297 — il filo si fermava a tre
+    quarti di pagina e il numero stava in mezzo al disegno.
+    """
+    larghezza = documento.pagesize[0]
+    canvas.saveState()
+    canvas.setFont("Helvetica", 6.5)
+    canvas.setFillColor(CEMENTO)
+    canvas.drawString(MARGINE_TAVOLA, 4.5 * mm, documento.titolo_corrente)
+    canvas.drawRightString(larghezza - MARGINE_TAVOLA, 4.5 * mm,
+                           f"pagina {canvas.getPageNumber()}")
+    canvas.setStrokeColor(OTTONE)
+    canvas.setLineWidth(0.4)
+    canvas.line(MARGINE_TAVOLA, 6.8 * mm,
+                larghezza - MARGINE_TAVOLA, 6.8 * mm)
+    canvas.restoreState()
+
+
+def _testata_tavola(progetto, titolo, larghezza):
+    """Il cartiglio delle tavole, su UNA riga.
+
+    Sul computo la testata è un cartiglio con tre righe di dati e un titolo
+    da 17 punti: è un documento che si legge. Una tavola no — la si guarda,
+    e ogni millimetro speso in intestazione è un millimetro tolto al
+    disegno. Qui le stesse cose stanno in una riga sola da sette punti, e
+    alla pianta restano quattro centimetri in più di foglio.
+    """
+    pezzi = [f"<b>{titolo.upper()}</b>"]
+    for etichetta, valore in (("", progetto.get("nome")),
+                              ("Committente", progetto.get("committente")),
+                              ("Oggetto", progetto.get("oggetto")),
+                              ("Data", progetto.get("data"))):
+        if not valore:
+            continue
+        pezzi.append(f"{etichetta} <b>{valore}</b>" if etichetta
+                     else f"<b>{valore}</b>")
+    riga = Paragraph(" · ".join(pezzi), STILE_TAVOLA_TESTATA)
+    filo = Table([[""]], colWidths=[larghezza], rowHeights=[0.4])
+    filo.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, -1), 0.5, OTTONE),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return [riga, Spacer(1, 1 * mm), filo, Spacer(1, 1.5 * mm)]
 
 
 def _testata(progetto, titolo="Computo metrico estimativo", occhiello=None,
@@ -384,8 +444,8 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     elementi.extend(_riga_luogo_data(progetto))
     elementi.extend(_gruppo_firma())
 
-    documento.build(elementi, onFirstPage=_pie_di_pagina,
-                    onLaterPages=_pie_di_pagina)
+    documento.build(elementi, onFirstPage=_pie_tavola,
+                    onLaterPages=_pie_tavola)
     return buffer.getvalue()
 
 
@@ -522,15 +582,15 @@ def pdf_materiali(progetto, righe):
 # La tavola vuole tutto il foglio: margini quasi azzerati, perché un disegno
 # si legge dalla dimensione. Il computo no — quello è un documento di testo
 # e i suoi margini restano quelli di prima (MARGINE).
-MARGINE_TAVOLA = 8 * mm
+MARGINE_TAVOLA = 5 * mm
 LARGHEZZA_TAVOLA = A4[0] - 2 * MARGINE_TAVOLA
 
 # Quanto si porta via la colonna delle misure, in orizzontale: il foglio
 # steso è largo, e questa fetta di lato costa alla pianta molto meno di
 # quanto le costerebbe in altezza una fila sotto (in orizzontale l'altezza
 # è la misura scarsa).
-COLONNA_MISURE = 46 * mm
-STACCO_COLONNA = 5 * mm
+COLONNA_MISURE = 33 * mm
+STACCO_COLONNA = 3 * mm
 
 # quello che si lascia libero sotto il disegno, per gli arrotondamenti
 RESPIRO = 4
@@ -538,8 +598,38 @@ RESPIRO = 4
 # ⚠️ Il riquadro di SimpleDocTemplate ha 6 punti di imbottitura per lato
 # OLTRE ai margini, e `documento.width/height` non li tolgono: erano i dodici
 # punti che facevano scivolare la pianta alla pagina dopo, lasciando due
-# fogli bianchi in mezzo al fascicolo.
+# fogli bianchi in mezzo al fascicolo. Sulle TAVOLE quell'imbottitura si
+# azzera (TavolaDoc): dodici punti in larghezza e dodici in altezza, su un
+# foglio dove il disegno arriva gia' al bordo, sono mezzo centimetro di
+# pianta in piu'.
 IMBOTTITURA = 6
+
+
+class TavolaDoc(SimpleDocTemplate):
+    """Come SimpleDocTemplate, ma la cornice non ha imbottitura.
+
+    Un disegno si legge dalla dimensione, e qui ogni punto di margine e'
+    tolto alla pianta. Il testo attorno e' poco e sta largo lo stesso.
+    """
+
+    def build(self, flowables, onFirstPage=None, onLaterPages=None,
+              canvasmaker=Canvas):
+        # Le stesse due pagine-tipo di SimpleDocTemplate (la prima e le
+        # altre: la classe madre passa a «Later» dopo la prima), con la sola
+        # differenza dell'imbottitura a zero.
+        self._calc()
+        nulla = (lambda canvas, documento: None)
+        cornice = Frame(self.leftMargin, self.bottomMargin,
+                        self.width, self.height, id="normal",
+                        leftPadding=0, rightPadding=0,
+                        topPadding=0, bottomPadding=0)
+        self.addPageTemplates([
+            PageTemplate(id="First", frames=cornice,
+                         onPage=onFirstPage or nulla, pagesize=self.pagesize),
+            PageTemplate(id="Later", frames=cornice,
+                         onPage=onLaterPages or nulla, pagesize=self.pagesize),
+        ])
+        BaseDocTemplate.build(self, flowables, canvasmaker=canvasmaker)
 
 
 def _altezza(flowables, larghezza):
@@ -578,7 +668,9 @@ def _riga_misure(misure, larghezza=None):
     larghezza = LARGHEZZA_TAVOLA if larghezza is None else larghezza
     etichette = [e.upper() for e, _ in misure]
     valori = [v for _, v in misure]
-    corpo_etichetta, corpo_valore = 7.5, 13.0
+    # ⚠️ Piccoli: sono il contorno del disegno, non il documento. Prima
+    # erano 7,5 e 13 punti e la fila si mangiava due centimetri di foglio.
+    corpo_etichetta, corpo_valore = 6.0, 9.5
     for _ in range(20):
         larghezze = [
             max(pdfmetrics.stringWidth(e, "Helvetica-Bold", corpo_etichetta),
@@ -611,7 +703,7 @@ def _riga_misure(misure, larghezza=None):
         ("LINEABOVE", (0, 0), (-1, 0), 0.75, OTTONE),
         ("LINEBELOW", (0, 1), (-1, 1), 0.25, colors.HexColor("#D6D2C8")),
     ]))
-    return [Spacer(1, 4 * mm), tabella]
+    return [Spacer(1, 2 * mm), tabella]
 
 
 def _legenda_muri(legenda):
@@ -627,7 +719,7 @@ def _legenda_muri(legenda):
     """
     if not legenda:
         return []
-    corpo = 7.0
+    corpo = 6.0
     celle, stile = [], [
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -655,7 +747,7 @@ def _legenda_muri(legenda):
     tabella.hAlign = "LEFT"
     # sotto ci passa il filo del piè di pagina: senza respiro la legenda
     # gli si appoggia sopra, e sul foglio steso si toccano
-    return [Spacer(1, 2 * mm), tabella, Spacer(1, 2 * mm)]
+    return [Spacer(1, 1.2 * mm), tabella, Spacer(1, 1 * mm)]
 
 
 def _colonna_misure(misure, larghezza, altezza):
@@ -671,7 +763,7 @@ def _colonna_misure(misure, larghezza, altezza):
         return None
     etichette = [e.upper() for e, _ in misure]
     valori = [v for _, v in misure]
-    corpo_etichetta, corpo_valore = 7.5, 13.0
+    corpo_etichetta, corpo_valore = 6.0, 9.5
     for _ in range(20):
         # riga etichetta + riga valore per ogni misura, con i loro margini
         alta = len(misure) * (corpo_etichetta * 1.35 + corpo_valore * 1.2 + 7)
@@ -735,19 +827,20 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
     """
     foglio = landscape(A4) if orizzontale else A4
     buffer = io.BytesIO()
-    documento = SimpleDocTemplate(
+    documento = TavolaDoc(
         buffer, pagesize=foglio,
         leftMargin=MARGINE_TAVOLA, rightMargin=MARGINE_TAVOLA,
-        topMargin=MARGINE_TAVOLA, bottomMargin=12 * mm,
+        topMargin=MARGINE_TAVOLA, bottomMargin=8 * mm,
         title=f"Planimetrie — {progetto.get('nome') or 'senza nome'}",
         author="CME — Computo Metrico Estimativo",
     )
     documento.titolo_corrente = str(progetto.get("nome")
                                     or "Progetto senza nome")
-    utile_x = documento.width - 2 * IMBOTTITURA
-    utile_y = documento.height - 2 * IMBOTTITURA
+    # la cornice delle tavole non ha imbottitura: il foglio e' tutto qui
+    utile_x = documento.width
+    utile_y = documento.height
 
-    testata = _testata(progetto, titolo="Planimetrie quotate")
+    testata = _testata_tavola(progetto, "Planimetrie quotate", utile_x)
     elementi = list(testata)
     if not tavole:
         elementi.append(Paragraph(
@@ -760,8 +853,8 @@ def pdf_planimetrie(progetto, tavole, misure=(), orizzontale=False):
             elementi.append(PageBreak())
         intestazione = [
             Paragraph(str(tavola.get("nome") or "Planimetria").upper(),
-                      STILE_ETICHETTA),
-            Spacer(1, 1.5 * mm)]
+                      STILE_TAVOLA_NOME),
+            Spacer(1, 0.8 * mm)]
         elementi.extend(intestazione)
 
         # quanto foglio resta al disegno, misurato e non indovinato
