@@ -248,3 +248,47 @@ def test_le_misure_note_si_ritrovano_riaprendo_il_progetto(b):
     dati, _ = banco.normalizza(json.loads(json.dumps(b.dati)))
     assert dati["piante"][0]["scale"] == b.dati["piante"][0]["scale"]
     assert dati["piante"][0]["mpp"] == pytest.approx(0.01)
+
+
+# Un punto nuovo su un lato arriva dalla tela in due pezzi: appena nasce a
+# metà lato e poi dove la mano lo lascia. Fino all'1/10/2026 arrivava solo
+# alla fine, e un trascinamento che non si chiudeva come si deve — il
+# rilascio fuori dalla finestra, Esc, un tasto che cambia strumento — lo
+# faceva sparire senza che nessuno se ne accorgesse: la risposta successiva
+# del server riportava l'area com'era prima. Il secondo pezzo porta
+# «seguito», così da annullare resta un gesto solo.
+
+def _area_quadrata(b):
+    _gesto(b, tipo="zona_chiusa",
+           punti=[[0, 0], [100, 0], [100, 100], [0, 100]])
+    return b.dati["piante"][0]["zone"][0]
+
+
+def test_il_punto_nuovo_resta_anche_se_il_trascinamento_si_perde(b):
+    zona = _area_quadrata(b)
+    # solo la nascita: la mano non ha mai lasciato il mouse
+    _gesto(b, tipo="zona_modificata", id=zona["id"],
+           punti=[[0, 0], [50, 0], [100, 0], [100, 100], [0, 100]])
+    assert len(b.dati["piante"][0]["zone"][0]["punti"]) == 5
+
+
+def test_nascita_e_arrivo_del_punto_sono_un_solo_annulla(b):
+    zona = _area_quadrata(b)
+    passi = len(b.storia)
+    _gesto(b, tipo="zona_modificata", id=zona["id"],
+           punti=[[0, 0], [50, 0], [100, 0], [100, 100], [0, 100]])
+    _gesto(b, tipo="zona_modificata", id=zona["id"], seguito=True,
+           punti=[[0, 0], [50, -40], [100, 0], [100, 100], [0, 100]])
+    assert len(b.storia) == passi + 1
+    assert b.dati["piante"][0]["zone"][0]["punti"][1] == [50, -40]
+    # un solo Annulla e il punto non c'è più: l'area torna quadrata
+    assert b.annulla_disegno() == "modifica dell'area"
+    assert len(b.dati["piante"][0]["zone"][0]["punti"]) == 4
+
+
+def test_una_modifica_qualunque_resta_da_annullare(b):
+    zona = _area_quadrata(b)
+    passi = len(b.storia)
+    _gesto(b, tipo="zona_modificata", id=zona["id"],
+           punti=[[0, 0], [120, 0], [100, 100], [0, 100]])
+    assert len(b.storia) == passi + 1

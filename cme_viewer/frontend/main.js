@@ -977,7 +977,19 @@ function onDown(e) {
           // clic secco lo lascia lì, ed è già un punto in più
           zSel.punti.splice(m.i + 1, 0, m.p.slice());
           vertSel = m.i + 1;
-          drag = { kind: "vertex", z: zSel, vi: m.i + 1, moved: true };
+          drag = { kind: "vertex", z: zSel, vi: m.i + 1, moved: true,
+                   nato: true };
+          // ⚠️ Il punto si dice al server SUBITO, appena nasce, e non solo
+          // quando si lascia il mouse. Fino all'1/10/2026 viveva soltanto
+          // qui dentro finché non si rilasciava: se il rilascio si perdeva
+          // per strada — Esc, un tasto che cambia strumento, un
+          // trascinamento interrotto — il punto non era mai esistito per
+          // nessuno, e alla prima risposta del server spariva dal disegno
+          // senza lasciare traccia. Adesso il peggio che può capitare è che
+          // resti a metà lato, dov'è nato: da lì lo si sposta, non lo si
+          // rifà da capo.
+          send({ tipo: "zona_modificata", id: zSel.id,
+                 punti: arrotonda(zSel.punti) });
           render();
           return;
         }
@@ -1040,6 +1052,11 @@ function onMove(e) {
   if (!cv || !pronto) return;
   const s = scrOf(e);
   cursorPos = scr2img(s);
+  // Il tasto è già stato lasciato e noi non ce ne siamo accorti: capita
+  // quando il «su» finisce fuori dalla finestra, o lo mangia qualcos'altro.
+  // Senza questo il trascinamento restava aperto per sempre e quello che si
+  // era appena spostato non veniva mai spedito a nessuno.
+  if (drag && e.buttons === 0) { onUp(); return; }
   if (drag) {
     if (drag.kind === "pan") {
       tx = drag.tx0 + (e.clientX - drag.sx);
@@ -1126,7 +1143,10 @@ function onUp() {
     send({ tipo: "gruppo_spostato",
            dx: Math.round(d.dx * 10) / 10, dy: Math.round(d.dy * 10) / 10 });
   } else if ((d.kind === "vertex" || d.kind === "move") && d.moved) {
-    send({ tipo: "zona_modificata", id: d.z.id, punti: arrotonda(d.z.punti) });
+    // «seguito»: per un punto appena nato questa è la seconda metà dello
+    // stesso gesto — dov'è andato a finire. Da annullare è uno solo.
+    send({ tipo: "zona_modificata", id: d.z.id, punti: arrotonda(d.z.punti),
+           seguito: !!d.nato });
   } else if ((d.kind === "wallEnd" || d.kind === "wallMove") && d.moved) {
     d.w.p1 = arrotonda([d.w.p1])[0];
     d.w.p2 = arrotonda([d.w.p2])[0];

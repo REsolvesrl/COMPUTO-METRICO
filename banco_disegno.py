@@ -279,7 +279,12 @@ class DisegnoMixin:
         self.ultimo_seq = seq
         pianta = self._pianta()
         tipo = ev.get("tipo")
-        if tipo in DA_ANNULLARE:
+        # «seguito» vuol dire: questo è il resto di un gesto già registrato.
+        # Un punto nuovo arriva due volte — appena nasce a metà lato e poi
+        # dove la mano lo lascia — perché fino al rilascio viveva solo nel
+        # browser e un trascinamento interrotto lo faceva sparire. Ma chi
+        # disegna ne ha fatto uno solo, e Annulla deve vederne uno solo.
+        if tipo in DA_ANNULLARE and not ev.get("seguito"):
             self.registra_storia(DA_ANNULLARE[tipo])
         if tipo == "zona_chiusa":
             punti = [[float(x), float(y)] for x, y in ev.get("punti", [])]
