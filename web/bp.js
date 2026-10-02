@@ -177,6 +177,8 @@ const Spese = defineComponent({
       { chiave: "oggetto", titolo: "Oggetto", tipo: "testo", larghezza: 250 },
       { chiave: "categoria", titolo: "Categoria", tipo: "scelta", larghezza: 155, opzioni: s.value.categorie },
       { chiave: "note", titolo: "Note", tipo: "testo", larghezza: 130 },
+      { chiave: "file", titolo: "Fattura", tipo: "allegato", base: "/api/fattura/", larghezza: 80,
+        aiuto: "Il documento messo da parte quando hai caricato la fattura: si apre da qui. Le righe scritte a mano non ce l'hanno." },
     ]);
     const colPrev = computed(() => [
       { chiave: "oggetto", titolo: "Oggetto", tipo: "testo", larghezza: 190 },
@@ -186,6 +188,13 @@ const Spese = defineComponent({
       { chiave: "categoria", titolo: "Categoria", tipo: "scelta", larghezza: 150, opzioni: s.value.categorie },
       { chiave: "note", titolo: "Note", tipo: "testo", larghezza: 110 },
     ]);
+    // Nell'anteprima il file c'e' ma non e' ancora in archivio: il nome si
+    // legge — serve per sapere quale riga viene da quale documento — ma non
+    // c'e' niente da aprire finche' non si conferma.
+    const colAnteprima = computed(() => colSostenute.value
+      .filter((c) => c.chiave !== "iva_eur")
+      .map((c) => (c.chiave === "file"
+        ? { ...c, tipo: "testo", sola_lettura: true, titolo: "File", larghezza: 170 } : c)));
     const anteprima = ref(null);
     async function leggi(ev) {
       const file = [...ev.target.files];
@@ -206,7 +215,7 @@ const Spese = defineComponent({
       anteprima.value = null;
     }
     const scrivi = (registro, righe) => gesto("spese", { registro, righe }, { zitto: true });
-    return { s, colSostenute, colPrev, leggi, aggiungi, anteprima, scrivi, gesto, euro, numeroIt };
+    return { s, colSostenute, colAnteprima, colPrev, leggi, aggiungi, anteprima, scrivi, gesto, euro, numeroIt };
   },
   template: `
   <div>
@@ -216,14 +225,18 @@ const Spese = defineComponent({
       architetto) può sostituire la ristrutturazione stimata nello studio di fattibilità.</p>
     <Pannello titolo="📎 Carica fatture (PDF o XML) e auto-compila">
       <p class="didascalia">Trascina una o più fatture: leggo importo, IVA, data, numero e fornitore. Controlla i dati,
-        scegli la <b>categoria</b> e aggiungile alle spese sostenute. I file restano sul computer, nessun dato esce.
+        scegli la <b>categoria</b> e aggiungile alle spese sostenute: il documento viene <b>messo da parte
+        nell'archivio di questo cantiere</b> e resta a portata di clic sulla riga. I file non escono dal computer.
         Funziona meglio con i PDF «di cortesia» della fattura elettronica e con gli XML; su PDF con layout insoliti
         alcuni campi potrebbero restare da completare a mano.</p>
       <input type="file" multiple accept=".pdf,.xml,.p7m" @change="leggi" aria-label="Fatture">
+      <p v-if="s.fatture_archivio.quante" class="didascalia grigio">📁 In archivio per questo cantiere:
+        <b>{{ s.fatture_archivio.quante }}</b> fattura/e — <code>{{ s.fatture_archivio.dove }}</code>.
+        Ogni cantiere ha la sua cartella, e il fermaglio nella colonna <b>Fattura</b> apre il documento della riga.</p>
       <template v-if="s.fatture_lette && s.fatture_lette.righe.length">
         <p style="margin:12px 0 4px"><b>{{ s.fatture_lette.righe.length }} fattura/e lette.</b> Correggi se serve e
           scegli la categoria:</p>
-        <Griglia :colonne="colSostenute.filter(c => c.chiave !== 'iva_eur')" :righe="s.fatture_lette.righe"
+        <Griglia :colonne="colAnteprima" :righe="s.fatture_lette.righe"
                  @cambia="anteprima = $event" />
         <div class="colonne resta">
           <button class="bottone primario" @click="aggiungi">➕ Aggiungi alle spese sostenute</button>

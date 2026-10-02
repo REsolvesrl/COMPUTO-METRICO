@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+import archivio_fatture
 import fattibilita
 import grafici
 from server.tema_grafici import con_tema
@@ -69,6 +70,13 @@ def _spese(b):
         "categorie": [{"valore": c, "testo": f"{EMOJI_CATEGORIA.get(c, '')} {c}".strip()}
                       for c in fattibilita.CATEGORIE_SPESE],
         "fatture_lette": b.fatture_lette,
+        # l'archivio dei documenti di QUESTO cantiere: quante fatture ci
+        # sono e dove stanno, perche' una cartella che non si sa dov'e' non
+        # e' un archivio, e' un posto dove le cose spariscono
+        "fatture_archivio": {
+            "quante": len(b.fatture_del_cantiere()),
+            "dove": str(archivio_fatture.cartella(b.nome_archivio())),
+        },
         "confronto": confronto,
     }
 

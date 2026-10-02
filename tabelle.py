@@ -35,7 +35,12 @@ COLONNE = COLONNE_TESTO + COLONNE_NUMERI
 # manda e' meta' dell'informazione. I progetti salvati prima non ce l'hanno:
 # la colonna nasce vuota, e la descrizione resta dov'era.
 COLONNE_SPESE = ["importo", "aliquota_iva", "data", "nr_fattura",
-                 "fornitore", "oggetto", "categoria", "note"]
+                 "fornitore", "oggetto", "categoria", "note", "file"]
+
+# «file» e' il nome della fattura messa da parte nell'archivio del cantiere
+# (archivio_fatture): solo il nome, mai il percorso — la cartella la dice il
+# progetto. Una riga scritta a mano non ce l'ha, e la colonna non compare nel
+# salvataggio: le spese di prima restano come sono.
 
 # L'IVA in euro NON e' qui dentro: si ricava da importo e aliquota, e un
 # valore derivato non si salva — si ricalcola. La colonna esiste solo nella
@@ -262,6 +267,10 @@ def spese_da_df(df):
             "categoria": cat_pulita(testo("categoria")) or "ALTRO",
             "note": testo("note"),
         })
+        # la fattura allegata solo dove c'e': una riga scritta a mano, e
+        # tutte le spese da sostenere, restano identiche a prima
+        if testo("file"):
+            righe[-1]["file"] = testo("file")
     return righe
 
 

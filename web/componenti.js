@@ -376,7 +376,12 @@ export const Grafico = defineComponent({
 // ------------------------------------------------- tabella modificabile
 // Al posto di st.data_editor. Colonne: {chiave, titolo, tipo, opzioni,
 // larghezza, sola_lettura, aiuto, decimali, formato}. tipo: testo, numero,
-// scelta, spunta, link.
+// scelta, spunta, link, allegato.
+//
+// «allegato»: un file messo da parte dal programma (una fattura
+// nell'archivio del cantiere). La cella non si scrive — il nome lo decide
+// l'archivio — e mostra un fermaglio che lo apre; dove non c'e' allegato
+// non c'e' niente da vedere.
 //
 // ⚠️ Una riga nuova resta QUI finché non ha la sua colonna obbligatoria
 // (la descrizione dei materiali, l'importo delle spese): è quello che il
@@ -477,7 +482,9 @@ export const Griglia = defineComponent({
         const riga = locali.value[i + di];
         celle.forEach((grezzo, dj) => {
           const col = props.colonne[j + dj];
-          if (!col || col.sola_lettura) return;
+          // l'allegato non si incolla: il nome del file lo decide
+          // l'archivio, e scriverlo a mano romperebbe il collegamento
+          if (!col || col.sola_lettura || col.tipo === "allegato") return;
           let v = grezzo;
           if (col.tipo === "numero") v = grezzo.trim() === "" ? null : numeroDaIt(grezzo);
           else if (col.tipo === "spunta") v = /^(1|s[iì]|vero|true|x)$/i.test(grezzo.trim());
@@ -556,7 +563,7 @@ export const Griglia = defineComponent({
       <thead><tr>
         <th class="scelta-riga"></th>
         <th v-for="c in colonne" :key="c.chiave" :class="{num: c.tipo==='numero'}" :title="c.aiuto">
-          <span class="icona-colonna" aria-hidden="true">{{ {testo: '≡', numero: '#', scelta: '▾', spunta: '☑', link: '🔗'}[c.tipo] }}</span>{{ c.titolo }}</th>
+          <span class="icona-colonna" aria-hidden="true">{{ {testo: '≡', numero: '#', scelta: '▾', spunta: '☑', link: '🔗', allegato: '📎'}[c.tipo] }}</span>{{ c.titolo }}</th>
       </tr></thead>
       <tbody>
         <tr v-for="(r, i) in locali" :key="i" :class="{selezionata: scelte.has(i), nuova: r.__bozza}">
@@ -568,6 +575,9 @@ export const Griglia = defineComponent({
                    @change="scrivi(r, c, $event.target.checked)" :aria-label="c.titolo">
             <Scelta v-else-if="c.tipo==='scelta'" classe="cella" :valore="r[c.chiave] ?? ''" :opzioni="c.opzioni"
                     vuota :etichetta="c.titolo" @cambia="scrivi(r, c, $event || null)" />
+            <a v-else-if="c.tipo==='allegato' && r[c.chiave]" :href="c.base + encodeURIComponent(r[c.chiave])"
+               target="_blank" rel="noopener" :title="r[c.chiave]">📎 apri</a>
+            <span v-else-if="c.tipo==='allegato'" class="grigio" aria-hidden="true">—</span>
             <div v-else-if="c.tipo==='link'" style="display:flex;align-items:center">
               <input class="cella" :value="r[c.chiave] ?? ''" @change="scrivi(r, c, $event.target.value)"
                      @paste="incolla($event, i, j)" :aria-label="c.titolo">

@@ -35,6 +35,7 @@ from fastapi.responses import FileResponse, Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+import archivio_fatture  # noqa: E402
 import archivio_locale  # noqa: E402
 import esporta  # noqa: E402
 from banco import Banco, ErroreBanco  # noqa: E402
@@ -354,6 +355,25 @@ async def carica_planimetria(file: UploadFile) -> dict:
             esito = {"tipo": "errore", "testo": str(errore)}
         BANCO.giro()
         return {"vista": _vista(), "esito": esito}
+
+
+@app.get("/api/fattura/{nome}")
+def apri_fattura(nome: str):
+    """Il documento di una riga di spesa, dall'archivio di QUESTO cantiere.
+
+    Il nome arriva dalla tabella, che si scrive anche a mano: la cartella la
+    decide il progetto aperto e archivio_fatture.percorso non lascia uscire
+    dalla sua (un «..» nel nome non apre niente).
+    """
+    with CHIAVE:
+        file = archivio_fatture.percorso(BANCO.nome_archivio(), nome)
+    if file is None:
+        raise HTTPException(404, f"«{nome}» non è nell'archivio di questo "
+                                 "cantiere.")
+    tipi = {".pdf": "application/pdf", ".xml": "application/xml"}
+    return FileResponse(file, filename=file.name,
+                        media_type=tipi.get(file.suffix.lower(),
+                                            "application/octet-stream"))
 
 
 @app.post("/api/fatture")

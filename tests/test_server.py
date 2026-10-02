@@ -140,3 +140,51 @@ def test_i_file_della_pagina_si_ricontrollano_sempre(client):
     """Senza, il browser teneva i moduli vecchi e le correzioni sparivano."""
     for indirizzo in ("/", "/statico/app.js", "/tela/main.js"):
         assert client.get(indirizzo).headers["cache-control"] == "no-cache"
+
+
+# ------------------------------------------------- le fatture del cantiere
+# Il documento caricato resta accanto al progetto che l'ha ricevuto, e la
+# riga di spesa lo riapre da qui (2/10/2026).
+
+FATTURA_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica xmlns:p="http://x">
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento>
+      <TipoDocumento>TD01</TipoDocumento><Data>2026-01-15</Data>
+      <Numero>123/2026</Numero>
+      <ImportoTotaleDocumento>122.00</ImportoTotaleDocumento>
+    </DatiGeneraliDocumento></DatiGenerali>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>"""
+
+
+def _carica_fattura(client, nome="fattura.xml"):
+    _gesto(client, "imposta_progetto", campo="nome", valore="Via Roma 12")
+    r = client.post("/api/fatture",
+                    files={"file": (nome, FATTURA_XML, "application/xml")})
+    assert r.status_code == 200, r.text
+    righe = r.json()["vista"]["bp"]["spese"]["fatture_lette"]["righe"]
+    return _gesto(client, "aggiungi_fatture", righe=righe)
+
+
+def test_la_fattura_caricata_si_riapre_dalla_sua_riga(client):
+    vista = _carica_fattura(client)["vista"]
+    spesa = vista["bp"]["spese"]["sostenute"][-1]
+    assert spesa["file"] == "fattura.xml"
+    assert vista["bp"]["spese"]["fatture_archivio"]["quante"] == 1
+    r = client.get("/api/fattura/fattura.xml")
+    assert r.status_code == 200
+    assert r.content.decode("utf-8") == FATTURA_XML
+
+
+def test_una_fattura_che_non_c_e_lo_dice_e_non_apre_niente(client):
+    _carica_fattura(client)
+    assert client.get("/api/fattura/mai vista.pdf").status_code == 404
+    # e un nome che prova a uscire dalla cartella del cantiere nemmeno
+    assert client.get("/api/fattura/..%2F..%2Fsegreto.json").status_code == 404
+
+
+def test_le_fatture_di_un_altro_cantiere_non_si_aprono(client):
+    _carica_fattura(client)
+    _gesto(client, "imposta_progetto", campo="nome", valore="Migliarina")
+    assert client.get("/api/fattura/fattura.xml").status_code == 404

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+import archivio_fatture
 import cantiere
 import fattibilita
 import fattura
@@ -65,6 +66,10 @@ class BusinessPlanMixin:
 
     def carica_bp(self):
         self.fatture_lette = None
+        # I byte delle fatture appena lette, in attesa di una risposta: si
+        # scrivono sul disco solo quando le righe vengono aggiunte alle
+        # spese. Chi scarta non lascia niente in archivio.
+        self.fatture_in_attesa = {}
 
     # --------------------------------------------------- fattibilità
 
@@ -136,14 +141,27 @@ class BusinessPlanMixin:
 
     def leggi_fatture(self, file):
         """[(nome, byte)] → le righe lette, da controllare prima di
-        aggiungerle, e i file che non si sono lasciati leggere."""
+        aggiungerle, e i file che non si sono lasciati leggere.
+
+        Il documento viaggia con la riga: ogni riga porta il nome del suo
+        file, e i byte restano qui in attesa. In archivio ci vanno dopo, se
+        le righe vengono aggiunte davvero (aggiungi_fatture).
+        """
         righe, non_letti = [], []
+        self.fatture_in_attesa = {}
         for nome, contenuto in file:
             dati = dati_fattura(nome, contenuto)
             numero = (dati or {}).get("nr_fattura")
             if dati and (dati.get("importo") is not None
                          or (numero and numero != fattura.NUMERO_MANCANTE)):
-                righe.append({col: dati.get(col) for col in COLONNE_SPESE})
+                riga = {col: dati.get(col) for col in COLONNE_SPESE}
+                # due file con lo stesso nome nella stessa infornata: la
+                # chiave deve restare distinta anche prima dell'archivio
+                chiave = archivio_fatture.nome_distinto(
+                    nome, self.fatture_in_attesa)
+                self.fatture_in_attesa[chiave] = contenuto
+                riga["file"] = chiave
+                righe.append(riga)
             else:
                 non_letti.append(nome)
         # le righe senza importo restano: sono da completare a mano
@@ -159,12 +177,40 @@ class BusinessPlanMixin:
         return len(lette)
 
     def aggiungi_fatture(self, righe):
+        """Le righe controllate entrano nelle spese, e i loro file in
+        archivio — nella cartella di QUESTO cantiere.
+
+        Si archivia qui e non alla lettura perché fino a questo momento la
+        fattura si poteva ancora scartare, e una cartella che si riempie di
+        documenti che nessuno ha voluto non è un archivio.
+
+        Se il file non si lascia scrivere (disco pieno, cartella in sola
+        lettura) la spesa entra lo stesso, senza allegato: i numeri del
+        business plan valgono più del collegamento al documento.
+        """
+        righe = [dict(r) for r in (righe or [])]
+        for riga in righe:
+            contenuto = self.fatture_in_attesa.get(riga.get("file"))
+            if contenuto is None:
+                riga.pop("file", None)
+                continue
+            try:
+                riga["file"] = archivio_fatture.salva(
+                    self.nome_archivio(), riga["file"], contenuto)
+            except OSError:
+                riga.pop("file", None)
         self.dati["spese"] = spese_da_df(df_spese_da_righe(
-            list(self.dati["spese"]) + list(righe or []), COLONNE_SPESE))
+            list(self.dati["spese"]) + righe, COLONNE_SPESE))
         self.fatture_lette = None
+        self.fatture_in_attesa = {}
 
     def scarta_fatture(self):
         self.fatture_lette = None
+        self.fatture_in_attesa = {}
+
+    def fatture_del_cantiere(self):
+        """I documenti messi da parte per il progetto aperto."""
+        return archivio_fatture.elenco(self.nome_archivio())
 
     # ---------------------------------------------------- il cantiere
 
