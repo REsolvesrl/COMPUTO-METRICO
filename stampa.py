@@ -715,7 +715,7 @@ def _legenda_muri(legenda):
 
     In cantiere la tavola la guarda chi non ha disegnato: quattro linee
     colorate senza didascalia sono quattro linee colorate, e il muro giallo
-    da tirare su somiglia parecchio a quello rosso da buttare giù.
+    da buttare giù somiglia parecchio a quello rosso da tirare su.
     """
     if not legenda:
         return []

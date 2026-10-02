@@ -355,7 +355,14 @@ def vista_planimetria(b):
             ("Battiscopa", grandezze.get("battiscopa"), "m"),
             ("Tinteggiatura", grandezze.get("tinteggiatura"), "m²"),
             ("Muri da demolire", grandezze.get("muri_demolire"), "m²"),
-            ("Muri da costruire", grandezze.get("muri_costruire"), "m²"))
+            ("Muri da costruire", grandezze.get("muri_costruire"), "m²"),
+            # Il cartongesso mancava da questa riga (corretto il 2/10/2026):
+            # nel computo ci andava, sulla tavola stampata pure, ma qui sotto
+            # il disegno no — e chi controllava i totali a colpo d'occhio
+            # trovava i muri da tirare su senza le pareti in cartongesso, che
+            # sono un'altra lavorazione ma sono muri uguali.
+            ("Muri in cartongesso",
+             grandezze.get("muri_cartongesso"), "m²"))
         if v]
     voci = b.voci_dal_disegno(grandezze)
     fuori["dal_disegno"] = {

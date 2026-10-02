@@ -697,10 +697,10 @@ export const SchedaPlanimetria = defineComponent({
       <div class="pannello-cemento">
         <div class="colonne resta">
           <CampoPassi style="flex:1" etichetta="Aperture nei muri da demolire" :valore="f.apert_dem_n" :massimo="200"
-                      aiuto="Quanti vani (porte, passaggi, finestre) ci sono nei muri rossi. I m² li fa l'app, con le misure qui accanto."
+                      aiuto="Quanti vani (porte, passaggi, finestre) ci sono nei muri gialli. I m² li fa l'app, con le misure qui accanto."
                       @cambia="finitura('apert_dem_n', $event)" />
           <CampoPassi style="flex:1" etichetta="Aperture nei muri da costruire" :valore="f.apert_cos_n" :massimo="200"
-                      aiuto="Vani previsti nei muri gialli: quella superficie non va murata." @cambia="finitura('apert_cos_n', $event)" />
+                      aiuto="Vani previsti nei muri rossi: quella superficie non va murata." @cambia="finitura('apert_cos_n', $event)" />
           <CampoPassi style="flex:1" etichetta="Aperture nei muri in cartongesso" :valore="f.apert_car_n" :massimo="200"
                       aiuto="Vani previsti nei muri verdi: quella superficie non va lastrata." @cambia="finitura('apert_car_n', $event)" />
           <CampoPassi style="flex:1" etichetta="Larghezza apertura (m)" :valore="f.apert_larg" :passo="0.05" :massimo="6" :decimali="2"
@@ -717,10 +717,10 @@ export const SchedaPlanimetria = defineComponent({
         {{ numeroIt(muri.costruire.aperture, 2) }} m², {{ f.apert_car_n }} in cartongesso =
         {{ numeroIt(muri.cartongesso.aperture, 2) }} m².</p>
       <div class="colonne resta muri" style="margin-bottom:16px">
-        <Metrica style="flex:1" :nome="'🔴 Da demolire (' + muri.demolire.n + ')'" :valore="numeroIt(muri.demolire.ml, 2) + ' m'" />
+        <Metrica style="flex:1" :nome="'🟡 Da demolire (' + muri.demolire.n + ')'" :valore="numeroIt(muri.demolire.ml, 2) + ' m'" />
         <Metrica style="flex:1" nome="→ superficie" :valore="numeroIt(muri.demolire.netto, 2) + ' m²'"
                  :delta="muri.demolire.aperture ? '−' + numeroIt(muri.demolire.aperture, 2) + ' m² aperture' : ''" />
-        <Metrica style="flex:1" :nome="'🟡 Da costruire (' + muri.costruire.n + ')'" :valore="numeroIt(muri.costruire.ml, 2) + ' m'" />
+        <Metrica style="flex:1" :nome="'🔴 Da costruire (' + muri.costruire.n + ')'" :valore="numeroIt(muri.costruire.ml, 2) + ' m'" />
         <Metrica style="flex:1" nome="→ superficie" :valore="numeroIt(muri.costruire.netto, 2) + ' m²'"
                  :delta="muri.costruire.aperture ? '−' + numeroIt(muri.costruire.aperture, 2) + ' m² aperture' : ''" />
       </div>
