@@ -196,8 +196,7 @@ const Spese = defineComponent({
       .map((c) => (c.chiave === "file"
         ? { ...c, tipo: "testo", sola_lettura: true, titolo: "File", larghezza: 170 } : c)));
     const anteprima = ref(null);
-    async function leggi(ev) {
-      const file = [...ev.target.files];
+    async function manda(file) {
       if (!file.length) return;
       const dati = new FormData();
       file.forEach((f) => dati.append("file", f));
@@ -207,7 +206,31 @@ const Spese = defineComponent({
         if (r.esito) toast(r.esito.testo, r.esito.tipo);
         anteprima.value = null;
       } catch (e) { toast(e.message, "errore"); }
+    }
+    async function leggi(ev) {
+      await manda([...ev.target.files]);
       ev.target.value = "";
+    }
+    // Le fatture si lasciano cadere su tutta la linguetta, non solo sul
+    // riquadro: chi manca il bersaglio di un dito si ritroverebbe il PDF
+    // aperto al posto del programma. Il contatore serve perche' dragleave
+    // scatta a ogni elemento figlio che il cursore attraversa.
+    const sopra = ref(0);
+    const portaFile = (ev) => [...(ev.dataTransfer?.types || [])].includes("Files");
+    function entra(ev) { if (portaFile(ev)) { ev.preventDefault(); sopra.value += 1; } }
+    function passa(ev) { if (portaFile(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; } }
+    function esce(ev) { if (portaFile(ev)) sopra.value = Math.max(0, sopra.value - 1); }
+    function lascia(ev) {
+      if (!portaFile(ev)) return;
+      ev.preventDefault();
+      sopra.value = 0;
+      const tutti = [...ev.dataTransfer.files];
+      const buoni = tutti.filter((f) => /\.(pdf|xml|p7m)$/i.test(f.name));
+      if (buoni.length < tutti.length) {
+        toast("Leggo solo PDF, XML e P7M: " + tutti.filter((f) => !buoni.includes(f))
+          .map((f) => f.name).join(", ") + " lasciati fuori.", "errore");
+      }
+      manda(buoni);
     }
     function aggiungi() {
       const righe = anteprima.value || s.value.fatture_lette.righe;
@@ -215,34 +238,39 @@ const Spese = defineComponent({
       anteprima.value = null;
     }
     const scrivi = (registro, righe) => gesto("spese", { registro, righe }, { zitto: true });
-    return { s, colSostenute, colAnteprima, colPrev, leggi, aggiungi, anteprima, scrivi, gesto, euro, numeroIt };
+    return { s, colSostenute, colAnteprima, colPrev, leggi, aggiungi, anteprima, scrivi, gesto, euro, numeroIt,
+             sopra, entra, passa, esce, lascia };
   },
   template: `
-  <div>
+  <div @dragenter="entra" @dragover="passa" @dragleave="esce" @drop="lascia">
     <p class="didascalia">Il registro delle spese reali dell'operazione, come il tuo foglio «Spese». A sinistra le
       spese già <b>sostenute</b> (le fatture); <b>accanto</b>, senza scendere in fondo alla pagina, il <b>riepilogo
       per categoria</b>, le spese ancora <b>da sostenere</b> e la torta. La quota <b>cantiere</b> (lavori, materiale,
       architetto) può sostituire la ristrutturazione stimata nello studio di fattibilità.</p>
-    <Pannello titolo="📎 Carica fatture (PDF o XML) e auto-compila">
-      <p class="didascalia">Trascina una o più fatture: leggo importo, IVA, data, numero e fornitore. Controlla i dati,
+    <label class="zona-fatture" :class="{ sopra: sopra > 0 }">
+      <span>{{ sopra > 0 ? 'Lasciale pure qui' : '📥 Trascina qui le fatture (PDF o XML), oppure' }}</span>
+      <input type="file" multiple accept=".pdf,.xml,.p7m" @change="leggi" aria-label="Fatture">
+    </label>
+    <template v-if="s.fatture_lette && s.fatture_lette.righe.length">
+      <p style="margin:12px 0 4px"><b>{{ s.fatture_lette.righe.length }} fattura/e lette.</b> Correggi se serve e
+        scegli la categoria:</p>
+      <Griglia :colonne="colAnteprima" :righe="s.fatture_lette.righe"
+               @cambia="anteprima = $event" />
+      <div class="colonne resta" style="margin-bottom:16px">
+        <button class="bottone primario" @click="aggiungi">➕ Aggiungi alle spese sostenute</button>
+        <button class="bottone" @click="gesto('scarta_fatture', {}, {zitto: true})">Scarta</button>
+      </div>
+    </template>
+    <Pannello titolo="📎 Come si caricano le fatture, e dove finiscono">
+      <p class="didascalia">Trascina una o più fatture qui sopra — o in un punto qualsiasi di questa linguetta: leggo
+        importo, IVA, data, numero e fornitore. Controlla i dati,
         scegli la <b>categoria</b> e aggiungile alle spese sostenute: il documento viene <b>messo da parte
         nell'archivio di questo cantiere</b> e resta a portata di clic sulla riga. I file non escono dal computer.
         Funziona meglio con i PDF «di cortesia» della fattura elettronica e con gli XML; su PDF con layout insoliti
         alcuni campi potrebbero restare da completare a mano.</p>
-      <input type="file" multiple accept=".pdf,.xml,.p7m" @change="leggi" aria-label="Fatture">
       <p v-if="s.fatture_archivio.quante" class="didascalia grigio">📁 In archivio per questo cantiere:
         <b>{{ s.fatture_archivio.quante }}</b> fattura/e — <code>{{ s.fatture_archivio.dove }}</code>.
         Ogni cantiere ha la sua cartella, e il fermaglio nella colonna <b>Fattura</b> apre il documento della riga.</p>
-      <template v-if="s.fatture_lette && s.fatture_lette.righe.length">
-        <p style="margin:12px 0 4px"><b>{{ s.fatture_lette.righe.length }} fattura/e lette.</b> Correggi se serve e
-          scegli la categoria:</p>
-        <Griglia :colonne="colAnteprima" :righe="s.fatture_lette.righe"
-                 @cambia="anteprima = $event" />
-        <div class="colonne resta">
-          <button class="bottone primario" @click="aggiungi">➕ Aggiungi alle spese sostenute</button>
-          <button class="bottone" @click="gesto('scarta_fatture', {}, {zitto: true})">Scarta</button>
-        </div>
-      </template>
     </Pannello>
 
     <div class="colonne" style="gap:2rem">

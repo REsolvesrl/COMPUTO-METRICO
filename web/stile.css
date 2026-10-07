@@ -253,6 +253,20 @@ input[type="checkbox"] { accent-color: var(--ottone); width: 1rem;
 .pannello.aperto > .pannello-testa .segno { transform: rotate(90deg); }
 .pannello .corpo { padding: 8px 16px 16px; }
 
+/* dove si lasciano cadere le fatture */
+.zona-fatture {
+  display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+  padding: 18px 16px; margin-bottom: 12px; cursor: pointer;
+  border: 1px dashed color-mix(in srgb, var(--ottone) 45%, transparent);
+  border-radius: var(--raggio);
+  transition: background .15s ease, border-color .15s ease;
+}
+.zona-fatture:hover, .zona-fatture.sopra {
+  border-color: var(--ottone);
+  background: color-mix(in srgb, var(--ottone) 14%, transparent);
+}
+.zona-fatture.sopra { border-style: solid; }
+
 /* st.info / warning / error / success */
 .avviso {
   border-radius: var(--raggio); padding: 16px; margin: 0 0 16px;
