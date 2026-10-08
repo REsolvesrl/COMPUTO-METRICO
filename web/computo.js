@@ -71,6 +71,12 @@ const DatiProgetto = defineComponent({
                   @cambia="imposta('committente', $event)" />
     </div>
     <div class="colonne resta" style="margin-bottom:16px">
+      <CampoTesto style="flex:1" etichetta="Indirizzo del cantiere" :valore="v.progetto.indirizzo"
+                  segnaposto="Es. Via del Canaletto 170, La Spezia"
+                  aiuto="Va in testata sul computo metrico, con e senza prezzi, e sulle tavole."
+                  @cambia="imposta('indirizzo', $event)" />
+    </div>
+    <div class="colonne resta" style="margin-bottom:16px">
       <CampoTesto style="flex:3" etichetta="Oggetto dei lavori" :valore="v.progetto.oggetto"
                   @cambia="imposta('oggetto', $event)" />
       <CampoTesto style="flex:1.2" etichetta="Luogo" :valore="v.progetto.luogo" segnaposto="Es. La Spezia"

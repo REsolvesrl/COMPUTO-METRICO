@@ -55,6 +55,10 @@ STILE_TITOLO = ParagraphStyle(
 STILE_ETICHETTA = ParagraphStyle(
     "etichetta", fontName="Helvetica-Bold", fontSize=7, leading=10,
     textColor=CEMENTO)
+# La stessa etichetta, ma appoggiata al margine destro: e' il richiamo
+# all'allegato, e sui contratti si marca nell'angolo in alto a destra.
+STILE_ETICHETTA_DESTRA = ParagraphStyle(
+    "etichetta_destra", parent=STILE_ETICHETTA, alignment=TA_RIGHT)
 # sulle tavole il testo e' servizio: piccolo, per lasciare il foglio al disegno
 STILE_TAVOLA_TESTATA = ParagraphStyle(
     "tavola_testata", fontName="Helvetica", fontSize=7, leading=8.5,
@@ -113,6 +117,13 @@ NOTA_FINALE = (
 
 COMMITTENTE_FIRMATARIO = "RESolve srl"
 
+# Il computo non e' un foglio che viaggia da solo: e' l'allegato richiamato
+# dal contratto d'appalto, e chi lo riceve deve capirlo prima di leggere i
+# numeri. Sta in alto a destra, dove sui contratti si marcano gli allegati,
+# su entrambe le versioni: quella coi prezzi (che si firma) e quella senza
+# (che l'impresa preventiva) sono lo stesso allegato dello stesso contratto.
+ALLEGATO_AL_CONTRATTO = "Allegato A al contratto di appalto"
+
 
 def _pie_di_pagina(canvas, documento):
     """Numero di pagina e nome del progetto, su ogni foglio.
@@ -166,6 +177,7 @@ def _testata_tavola(progetto, titolo, larghezza):
     for etichetta, valore in (("", progetto.get("nome")),
                               ("Committente", progetto.get("committente")),
                               ("Oggetto", progetto.get("oggetto")),
+                              ("Cantiere", progetto.get("indirizzo")),
                               ("Data", progetto.get("data"))):
         if not valore:
             continue
@@ -182,17 +194,26 @@ def _testata_tavola(progetto, titolo, larghezza):
 
 
 def _testata(progetto, titolo="Computo metrico estimativo", occhiello=None,
-             con_data=True):
+             con_data=True, allegato=None):
     """Il cartiglio: che documento è, di che lavoro, per chi, di che giorno.
 
     `occhiello` è l'etichetta piccola sopra il titolo — «ALLEGATO 1 AL
     COMPUTO METRICO». Sta lì e non dentro il titolo perché è la voce del
     sistema, quella che nomina le cose: un allegato dice prima di che cosa
     è allegato, poi come si chiama.
+
+    `allegato` è il richiamo al contratto, in alto a destra: dice di quale
+    pratica questo foglio è un pezzo. Occhiello e richiamo stanno sulla
+    stessa riga, uno per angolo, e non si rubano un millimetro a vicenda.
     """
     dati = [
         ("Committente", progetto.get("committente")),
         ("Oggetto", progetto.get("oggetto")),
+        # La via del cantiere: su un allegato contrattuale dice DOVE si
+        # lavora, e un computo senza indirizzo non si attacca a un
+        # immobile. Se non e' compilata resta il trattino, come le altre:
+        # e' una riga del cartiglio da riempire, non un dato facoltativo.
+        ("Cantiere", progetto.get("indirizzo")),
     ]
     # Sui fogli che si firmano la data scende in fondo, accanto alle firme
     # (`_riga_luogo_data`): là non è più un dato di copertina ma il giorno
@@ -211,8 +232,19 @@ def _testata(progetto, titolo="Computo metrico estimativo", occhiello=None,
         ("LEFTPADDING", (0, 0), (0, -1), 0),
     ]))
     elementi = []
-    if occhiello:
-        elementi.append(Paragraph(occhiello.upper(), STILE_ETICHETTA))
+    if occhiello or allegato:
+        riga_alta = Table(
+            [[Paragraph((occhiello or "").upper(), STILE_ETICHETTA),
+              Paragraph((allegato or "").upper(), STILE_ETICHETTA_DESTRA)]],
+            colWidths=[LARGHEZZA_UTILE / 2] * 2)
+        riga_alta.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ("LEFTPADDING", (0, 0), (0, -1), 0),
+            ("RIGHTPADDING", (-1, 0), (-1, -1), 0),
+        ]))
+        elementi.append(riga_alta)
     elementi += [
         Paragraph(titolo, STILE_TITOLO),
         Paragraph(str(progetto.get("nome") or "Progetto senza nome"),
@@ -390,7 +422,7 @@ def _gruppo_firma():
 def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
     """Il computo come PDF pronto da consegnare. Ritorna i byte del file.
 
-    progetto: {"nome", "committente", "oggetto", "data"}.
+    progetto: {"nome", "committente", "oggetto", "indirizzo", "data"}.
     voci: [{"categoria", "codice", "descrizione", "um", "quantita",
         "prezzo", "importo"}] già calcolate.
     totali: {"somma", "totale_lavori", "iva_pct", "iva", "totale"}.
@@ -417,7 +449,8 @@ def pdf_computo(progetto, voci, totali, tinte=None, con_prezzi=True):
                                     or "Progetto senza nome")
 
     tinte = tinte or {}
-    elementi = _testata(progetto, con_data=False)
+    elementi = _testata(progetto, con_data=False,
+                        allegato=ALLEGATO_AL_CONTRATTO)
     gruppi = _raggruppa(voci)
     if not gruppi:
         elementi.append(Paragraph(

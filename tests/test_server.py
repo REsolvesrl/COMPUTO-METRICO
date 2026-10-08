@@ -1,6 +1,7 @@
 """Le rotte del motore nuovo: la vista, i gesti, i file da scaricare."""
 import json
 
+import fitz
 import pytest
 from fastapi.testclient import TestClient
 
@@ -92,6 +93,29 @@ def test_i_file_si_scaricano(client, che_cosa, tipo):
     assert r.status_code == 200
     assert r.headers["content-type"].startswith(tipo)
     assert len(r.content) > 100
+
+
+def test_l_indirizzo_del_cantiere_si_scrive_e_arriva_sul_computo(client):
+    """La via del cantiere fa tutto il giro: gesto, vista, file salvato e
+    PDF. E' un dato contrattuale — se si perde per strada, il foglio dice
+    su quale immobile si lavora e sbaglia."""
+    _gesto(client, "nuovo")
+    via = "Via del Canaletto 170, La Spezia"
+    r = _gesto(client, "imposta_progetto", campo="indirizzo", valore=via)
+    assert r["vista"]["progetto"]["indirizzo"] == via
+
+    contenuto = client.get("/api/scarica/json").content
+    assert json.loads(contenuto)["progetto"]["indirizzo"] == via
+    client.post("/api/apri_file",
+                files={"file": ("p.json", contenuto, "application/json")})
+    assert principale.BANCO.dati["progetto"]["indirizzo"] == via
+
+    for rotta in ("pdf", "pdf_senza_prezzi"):
+        pdf = fitz.open(stream=client.get(f"/api/scarica/{rotta}").content,
+                        filetype="pdf")
+        testo = "".join(pagina.get_text() for pagina in pdf)
+        assert via in testo, rotta
+        assert "ALLEGATO A AL CONTRATTO DI APPALTO" in testo, rotta
 
 
 def test_il_json_scaricato_si_riapre_uguale(client):

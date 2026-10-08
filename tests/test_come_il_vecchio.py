@@ -61,6 +61,11 @@ def _il_listino_di_allora(monkeypatch):
 # nel file ci sono, nel riferimento no.
 CAMPI_NUOVI_BP = ("bp_materiali", "bp_iva_materiali")
 
+# Lo stesso per i dati del progetto: l'indirizzo del cantiere e' nato il
+# 08/10/2026, per la testata del computo. Un progetto del vecchio lo apre
+# vuoto, ed e' questo che si prova — non che il campo non esista.
+CAMPI_NUOVI_PROGETTO = ("indirizzo",)
+
 
 def _senza_immagini(dati):
     dati = json.loads(json.dumps(dati))
@@ -70,6 +75,8 @@ def _senza_immagini(dati):
     dati.pop("listino", None)       # la numerazione: il vecchio non l'aveva
     for campo in CAMPI_NUOVI_BP:
         (dati.get("business_plan") or {}).pop(campo, None)
+    for campo in CAMPI_NUOVI_PROGETTO:
+        assert (dati.get("progetto") or {}).pop(campo, "") == "",             f"«{campo}» non e' nato vuoto: il riferimento va rifatto"
     return dati
 
 

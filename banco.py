@@ -187,6 +187,10 @@ def normalizza(dati):
             "nome": progetto.get("nome", "") or "",
             "committente": progetto.get("committente", "") or "",
             "oggetto": progetto.get("oggetto", "") or "",
+            # dove si lavora: la via del cantiere, che va in testata sul
+            # computo. I file di prima non ce l'hanno e restano aperti
+            # senza una riga di codice in piu' — nasce vuota.
+            "indirizzo": progetto.get("indirizzo", "") or "",
             "luogo": progetto.get("luogo", "") or "",
             "data": data_prg,
             "aliquota_iva": float(progetto.get("aliquota_iva", 10.0)),
@@ -540,7 +544,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         return contenuto
 
     def imposta_progetto(self, campo, valore):
-        """I dati del progetto: nome, committente, oggetto, luogo, data, IVA."""
+        """I dati: nome, committente, oggetto, indirizzo, luogo, data, IVA."""
         prg = self.dati["progetto"]
         if campo == "data":
             try:
@@ -549,7 +553,8 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
                 raise ErroreBanco("Data non valida.") from errore
         elif campo == "aliquota_iva":
             prg["aliquota_iva"] = min(100.0, max(0.0, float(valore or 0.0)))
-        elif campo in ("nome", "committente", "oggetto", "luogo"):
+        elif campo in ("nome", "committente", "oggetto", "indirizzo",
+                       "luogo"):
             prg[campo] = str(valore or "")
         else:
             raise ErroreBanco(f"Campo sconosciuto: {campo}")

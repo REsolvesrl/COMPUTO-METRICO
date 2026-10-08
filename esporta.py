@@ -84,10 +84,11 @@ def excel_computo(banco):
         "Incidenza %": [100.0, None, None],
     })], ignore_index=True)
     df_progetto = pd.DataFrame({
-        "Campo": ["Nome", "Committente", "Oggetto", "Luogo", "Data",
-                  "Aliquota IVA %"],
+        "Campo": ["Nome", "Committente", "Oggetto", "Cantiere", "Luogo",
+                  "Data", "Aliquota IVA %"],
         "Valore": [prg["nome"], prg["committente"], prg["oggetto"],
-                   prg["luogo"], prg["data"], prg["aliquota_iva"]],
+                   prg.get("indirizzo", ""), prg["luogo"], prg["data"],
+                   prg["aliquota_iva"]],
     })
     righe = banco.dati["materiali"]
     df_materiali = pd.DataFrame([{

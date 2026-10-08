@@ -347,12 +347,66 @@ def test_allegato_vuoto_lo_dice():
     assert "Nessun materiale elencato" in testo
 
 
-def test_il_computo_normale_non_e_cambiato():
-    """L'occhiello e' nuovo, ma il computo non ne ha nessuno: la sua
-    testata deve restare quella di prima."""
+def test_il_computo_non_prende_l_occhiello_dei_materiali():
+    """L'occhiello dei materiali e' suo e resta suo: il computo porta in
+    alto il richiamo al contratto (sotto), non quello all'allegato 1."""
     testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
     assert "Computo metrico estimativo" in testo
-    assert "ALLEGATO" not in testo
+    assert "ALLEGATO 1" not in testo
+
+
+# ------------------------------- l'allegato al contratto e il cantiere
+#
+# Il computo non e' un foglio a se': e' il pezzo richiamato dal contratto
+# d'appalto, e dice su quale immobile si lavora. Due righe di carta che
+# valgono quanto i numeri — chi firma sta accettando QUELLE opere su QUEL
+# cantiere, e il foglio deve poterlo dimostrare da solo.
+
+PROGETTO_CANTIERE = {**PROGETTO,
+                     "indirizzo": "Via del Canaletto 170, La Spezia"}
+
+
+@pytest.mark.parametrize("con_prezzi", [True, False])
+def test_il_computo_dice_di_essere_l_allegato_al_contratto(con_prezzi):
+    """Su entrambe le versioni: quella che si firma e quella che l'impresa
+    preventiva sono lo stesso allegato dello stesso contratto."""
+    testo = _testo_del_pdf(
+        pdf_computo(PROGETTO, VOCI, TOTALI, con_prezzi=con_prezzi))
+    assert "ALLEGATO A AL CONTRATTO DI APPALTO" in testo
+
+
+def test_il_richiamo_al_contratto_sta_in_alto_a_destra():
+    """Dove sui contratti si marcano gli allegati: non in mezzo al
+    cartiglio, non in fondo. La prova sono le coordinate sul foglio."""
+    documento = fitz.open(stream=pdf_computo(PROGETTO, VOCI, TOTALI),
+                          filetype="pdf")
+    pagina = documento[0]
+    parole = [p for p in pagina.get_text("words") if p[4] == "APPALTO"]
+    assert parole, "il richiamo non c'e'"
+    x0, y0, x1, _y1 = parole[0][:4]
+    # il margine alto e' 15 mm (42,5 punti): piu' su di cosi' c'e' il
+    # bordo del foglio, e la riga del titolo comincia solo dopo
+    assert y0 < 55, f"non e' in alto (y={y0:.0f})"
+    # il margine del foglio e' 15 mm: la parola finisce addosso al bordo
+    assert x1 > pagina.rect.width - 50, f"non e' a destra (x={x1:.0f})"
+    assert x0 > pagina.rect.width / 2, "comincia nella meta' sinistra"
+
+
+@pytest.mark.parametrize("con_prezzi", [True, False])
+def test_il_computo_porta_la_via_del_cantiere(con_prezzi):
+    testo = _testo_del_pdf(pdf_computo(PROGETTO_CANTIERE, VOCI, TOTALI,
+                                       con_prezzi=con_prezzi))
+    assert "CANTIERE" in testo
+    assert "Via del Canaletto 170, La Spezia" in testo
+
+
+def test_senza_indirizzo_la_riga_del_cantiere_resta_da_riempire():
+    """I progetti di prima non hanno l'indirizzo: il cartiglio tiene la
+    riga col trattino, come fa per committente e oggetto. Una riga vuota
+    si vede e si compila; una riga che non c'e' non la cerca nessuno."""
+    testo = _testo_del_pdf(pdf_computo(PROGETTO, VOCI, TOTALI))
+    assert "CANTIERE" in testo
+    assert "—" in testo
 
 
 # ------------------------------- le planimetrie quotate
