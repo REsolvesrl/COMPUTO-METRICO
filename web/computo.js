@@ -80,9 +80,10 @@ const DatiProgetto = defineComponent({
       <CampoTesto style="flex:3" etichetta="Oggetto dei lavori" :valore="v.progetto.oggetto"
                   @cambia="imposta('oggetto', $event)" />
       <CampoTesto style="flex:1.2" etichetta="Luogo" :valore="v.progetto.luogo" segnaposto="Es. La Spezia"
-                  aiuto="Compare come «Luogo, lì data» sopra le firme dell'allegato materiali."
+                  aiuto="Compare come «Luogo, lì data» sopra le firme, sul computo e sull'allegato materiali."
                   @cambia="imposta('luogo', $event)" />
       <CampoTesto style="flex:1" etichetta="Data" tipo="date" :valore="v.progetto.data"
+                  aiuto="La data del progetto, per l'archivio e l'Excel. Sui fogli da firmare va la data del giorno in cui li stampi."
                   @cambia="imposta('data', $event)" />
     </div>
     <hr>

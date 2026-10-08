@@ -934,5 +934,7 @@ class DisegnoMixin:
         prg = self.dati["progetto"]
         return stampa.pdf_planimetrie(
             {"nome": prg["nome"], "committente": prg["committente"],
-             "oggetto": prg["oggetto"], "data": prg["data"]},
+             "oggetto": prg["oggetto"],
+             "indirizzo": prg.get("indirizzo", ""),
+             "data": stampa.data_di_oggi()},
             tavole, misure, orizzontale=orizzontale)

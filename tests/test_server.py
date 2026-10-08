@@ -1,5 +1,6 @@
 """Le rotte del motore nuovo: la vista, i gesti, i file da scaricare."""
 import json
+from datetime import date
 
 import fitz
 import pytest
@@ -116,6 +117,32 @@ def test_l_indirizzo_del_cantiere_si_scrive_e_arriva_sul_computo(client):
         testo = "".join(pagina.get_text() for pagina in pdf)
         assert via in testo, rotta
         assert "ALLEGATO A AL CONTRATTO DI APPALTO" in testo, rotta
+
+
+def test_i_documenti_portano_la_data_di_oggi(client):
+    """Computo, foglio senza prezzi, allegato materiali e tavole si firmano
+    il giorno che portano scritto: la data del progetto puo' essere di tre
+    mesi prima, e sui fogli da firmare non ci va."""
+    _gesto(client, "nuovo")
+    _gesto(client, "imposta_progetto", campo="data", valore="2026-08-09")
+    _gesto(client, "imposta_progetto", campo="luogo", valore="La Spezia")
+    oggi = date.today().strftime("%d/%m/%Y")
+    for rotta in ("pdf", "pdf_senza_prezzi", "allegato_materiali"):
+        pdf = fitz.open(stream=client.get(f"/api/scarica/{rotta}").content,
+                        filetype="pdf")
+        testo = "".join(pagina.get_text() for pagina in pdf)
+        assert f"La Spezia, lì {oggi}" in testo, rotta
+        assert "2026-08-09" not in testo and "09/08/2026" not in testo, rotta
+
+
+def test_la_data_del_progetto_resta_quella_che_hai_scritto(client):
+    """Sui fogli c'e' la data di oggi, ma il progetto tiene la sua: e'
+    quella dell'archivio e dell'Excel, e stampare non la cambia."""
+    _gesto(client, "nuovo")
+    r = _gesto(client, "imposta_progetto", campo="data", valore="2026-08-09")
+    assert r["vista"]["progetto"]["data"] == "2026-08-09"
+    client.get("/api/scarica/pdf")
+    assert principale.BANCO.dati["progetto"]["data"] == "2026-08-09"
 
 
 def test_il_json_scaricato_si_riapre_uguale(client):

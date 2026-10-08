@@ -7,7 +7,6 @@ Si costruiscono al clic, mai prima: è la lezione del vecchio, dove tre PDF
 rifatti a ogni gesto erano la parte più lenta della pagina.
 """
 import io
-from datetime import date
 
 import pandas as pd
 
@@ -30,12 +29,10 @@ def _totali_pdf(totali):
 
 def pdf_computo(banco, con_prezzi=True):
     """Il computo da consegnare; senza prezzi, quello da mandare alle
-    imprese — con la data di OGGI, perché è il giorno in cui si chiede il
-    preventivo, non quello in cui è nato il progetto."""
+    imprese. Tutti e due con la data di OGGI (`stampa.data_di_oggi`): è il giorno in cui
+    si firma, o in cui si chiede il preventivo."""
     totali = banco.totali()
-    progetto = dict(banco.dati["progetto"])
-    if not con_prezzi:
-        progetto["data"] = date.today().strftime("%d/%m/%Y")
+    progetto = dict(banco.dati["progetto"], data=stampa.data_di_oggi())
     return stampa.pdf_computo(progetto, banco.voci_da_stampare(),
                               _totali_pdf(totali),
                               tinte=_tinte(), con_prezzi=con_prezzi)
@@ -47,7 +44,7 @@ def pdf_allegato_materiali(banco):
     progetto = {
         "nome": prg["nome"], "committente": prg["committente"],
         "oggetto": prg["oggetto"], "luogo": prg["luogo"],
-        "data": date.fromisoformat(prg["data"]).strftime("%d/%m/%Y"),
+        "indirizzo": prg.get("indirizzo", ""), "data": stampa.data_di_oggi(),
     }
     return stampa.pdf_materiali(progetto, banco.dati["materiali"])
 

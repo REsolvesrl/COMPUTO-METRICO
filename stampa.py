@@ -15,6 +15,7 @@ file da scaricare, niente rete — il programma deve funzionare staccato.
 """
 
 import io
+from datetime import date
 
 from PIL import Image as PILImage
 from reportlab.lib import colors
@@ -123,6 +124,18 @@ COMMITTENTE_FIRMATARIO = "RESolve srl"
 # su entrambe le versioni: quella coi prezzi (che si firma) e quella senza
 # (che l'impresa preventiva) sono lo stesso allegato dello stesso contratto.
 ALLEGATO_AL_CONTRATTO = "Allegato A al contratto di appalto"
+
+
+def data_di_oggi():
+    """La data che va sui documenti: il giorno in cui escono, all'italiana.
+
+    Un computo, il suo allegato e le tavole si firmano, e la data stampata
+    e' quella della firma — non quella in cui il progetto e' nato, che puo'
+    essere di tre mesi prima. Si ristampa il foglio, si ridata da solo. La
+    «Data» nei dati del progetto resta la data del progetto: va nell'Excel
+    e nell'archivio, dove serve sapere di quando e' il lavoro.
+    """
+    return date.today().strftime("%d/%m/%Y")
 
 
 def _pie_di_pagina(canvas, documento):
