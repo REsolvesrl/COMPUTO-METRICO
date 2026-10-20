@@ -204,3 +204,97 @@ def test_il_fornitore_non_sta_piu_dentro_l_oggetto():
 def test_il_numero_xml_batte_ogni_regola_sul_testo():
     """Nell'XML il campo è strutturato: si legge, non si indovina."""
     assert dati_da_xml(XML_FATTURA)["nr_fattura"] == "123/2026"
+
+
+# ------------------------------------------------- la ritenuta d'acconto
+
+# La parcella di un notaio, sul modello di quella vera della Migliarina:
+# imposte anticipate fuori campo IVA (art. 15), competenze al 22% con la
+# cassa, e un «Totale documento» che e' gia' il NETTO della ritenuta.
+PDF_NOTAIO = """PARCELLA
+nr. 1407 del 15/10/2026
+FORNITORE
+Notaio Mario Rossi
+RITENUTA
+Ritenuta d'acconto (persone fisiche), Aliquota ritenuta 20%, Causale pagamento
+A
+RIEPILOGO IVA
+Totale imponibile \ Importo
+1.619,61 €
+Totale escluso IVA (N1)
+12.748,00 €
+Totale IVA
+356,31 €
+Totale documento
+14.400,00 €
+Ritenuta d'acconto (persone fisiche)
+-323,92 €
+"""
+
+
+def test_la_ritenuta_del_notaio_rientra_nel_costo():
+    d = dati_da_pdf_testo(PDF_NOTAIO)
+    # 14.400 al notaio + 323,92 all'Erario con l'F24
+    assert d["importo"] == 14723.92
+    assert "323,92" in d["note"] and "F24" in d["note"]
+
+
+def test_le_imposte_anticipate_entrano_nell_aliquota_media():
+    # prima l'imponibile «\ Importo» non si leggeva e l'IVA usciva a zero;
+    # contando solo i 1.619,61 imponibili sarebbe uscita al 22% su tutto
+    d = dati_da_pdf_testo(PDF_NOTAIO)
+    assert d["aliquota_iva"] == 2.5
+
+
+def test_un_totale_gia_lordo_non_prende_la_ritenuta_due_volte():
+    lordo = PDF_NOTAIO.replace("14.400,00", "14.723,92")
+    assert dati_da_pdf_testo(lordo)["importo"] == 14723.92
+
+
+def test_netto_a_pagare_senza_riepilogo_si_rifa_lordo():
+    testo = """FATTURA
+nr. 8/2026 del 02/03/2026
+Netto a pagare
+800,00 €
+Ritenuta d'acconto
+-200,00 €
+"""
+    assert dati_da_pdf_testo(testo)["importo"] == 1000.0
+
+
+def test_senza_ritenuta_niente_nota():
+    assert dati_da_pdf_testo(PDF_FATTURA)["note"] == ""
+
+
+def _xml_professionista(totale):
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica xmlns:p="http://x">
+  <FatturaElettronicaBody>
+    <DatiGenerali><DatiGeneraliDocumento>
+      <TipoDocumento>TD06</TipoDocumento><Data>2026-10-15</Data>
+      <Numero>1407</Numero>
+      <DatiRitenuta><TipoRitenuta>RT01</TipoRitenuta>
+        <ImportoRitenuta>323.92</ImportoRitenuta>
+        <AliquotaRitenuta>20.00</AliquotaRitenuta></DatiRitenuta>
+      <ImportoTotaleDocumento>{totale}</ImportoTotaleDocumento>
+    </DatiGeneraliDocumento></DatiGenerali>
+    <DatiBeniServizi>
+      <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA>
+        <ImponibileImporto>1619.61</ImponibileImporto>
+        <Imposta>356.31</Imposta></DatiRiepilogo>
+      <DatiRiepilogo><AliquotaIVA>0.00</AliquotaIVA><Natura>N1</Natura>
+        <ImponibileImporto>12748.00</ImponibileImporto>
+        <Imposta>0.00</Imposta></DatiRiepilogo>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>"""
+
+
+def test_xml_col_totale_netto_rimette_la_ritenuta():
+    d = dati_da_xml(_xml_professionista("14400.00"))
+    assert d["importo"] == 14723.92
+    assert "F24" in d["note"]
+
+
+def test_xml_col_totale_lordo_resta_com_e():
+    assert dati_da_xml(_xml_professionista("14723.92"))["importo"] == 14723.92

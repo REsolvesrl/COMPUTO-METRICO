@@ -88,6 +88,35 @@ def _oggetto(descrizione):
     return (descrizione or "").strip()[:120]
 
 
+def _con_ritenuta(lordo, atteso, ritenuta):
+    """L'importo della spesa con la ritenuta d'acconto dentro.
+
+    Chi paga un professionista (il notaio, l'architetto) gli versa il
+    netto, e la ritenuta la versa lui all'Erario con l'F24: il costo è
+    comunque l'intero. Il tracciato vuole il totale documento LORDO, ma più
+    d'un programma di fatturazione ci scrive il netto a pagare — la parcella
+    del notaio della Migliarina: 14.400,00 € di «Totale documento», 14.723,92
+    di imponibili, esenti e IVA, 323,92 di ritenuta.
+
+    La ritenuta si rimette solo quando i conti lo dicono: totale + ritenuta
+    deve tornare, al centesimo, imponibili + esenti + IVA (`atteso`). Un
+    totale che è già lordo resta com'è.
+    """
+    if not ritenuta or lordo is None or atteso is None:
+        return lordo
+    if abs(lordo + ritenuta - atteso) < 0.05:
+        return round(atteso, 2)
+    return lordo
+
+
+def _nota_ritenuta(ritenuta):
+    """Il promemoria che resta sulla riga: la ritenuta si paga a parte."""
+    importo = f"{ritenuta:,.2f}".replace(",", "X").replace(".", ",") \
+        .replace("X", ".")
+    return (f"Ritenuta d'acconto {importo} € compresa nell'importo: al "
+            "fornitore va il netto, la ritenuta si versa con l'F24")
+
+
 # ---------------------------------------------------------------- XML
 
 def _primo(root, nome):
@@ -139,6 +168,13 @@ def _dati_da_xml(contenuto):
     lordo = _num_it(totale.text) if totale is not None else None
     if lordo is None:
         lordo = round(imponibile_tot + imposta_tot, 2)
+    # la ritenuta d'acconto: dal 2021 i blocchi possono essere più d'uno
+    ritenuta = round(sum(abs(_num_it(e.text) or 0.0)
+                         for e in _tutti(root, "ImportoRitenuta")), 2)
+    bollo = _primo(root, "ImportoBollo")
+    bollo = (_num_it(bollo.text) or 0.0) if bollo is not None else 0.0
+    lordo = _con_ritenuta(lordo, round(imponibile_tot + imposta_tot + bollo,
+                                       2), ritenuta)
 
     # fornitore: denominazione, oppure nome + cognome
     cedente = _primo(root, "CedentePrestatore")
@@ -158,6 +194,8 @@ def _dati_da_xml(contenuto):
 
     tipo_txt = tipo.text.strip() if tipo is not None and tipo.text else ""
     note = "Nota di credito" if tipo_txt in TIPI_NOTA_CREDITO else ""
+    if ritenuta:
+        note = " · ".join(n for n in (note, _nota_ritenuta(ritenuta)) if n)
 
     return {
         "importo": lordo,
@@ -234,18 +272,38 @@ def dati_da_pdf_testo(testo):
     data = _cerca(testo, r"\bdel\s+(\d{1,2}/\d{1,2}/\d{4})")
 
     # totale documento (lordo) — vari sinonimi del foglio di stile SdI
-    lordo_txt = (_cerca(testo, r"Totale\s+documento\s*\n?\s*" + _IMPORTO)
-                 or _cerca(testo, r"Netto\s+a\s+pagare\s*\n?\s*" + _IMPORTO)
-                 or _cerca(testo, r"Importo\s+totale\s+documento\s*\n?\s*"
-                           + _IMPORTO))
-    imponibile_txt = _cerca(testo, r"Totale\s+imponibile\s*\n?\s*" + _IMPORTO)
+    totale_txt = (_cerca(testo, r"Totale\s+documento\s*\n?\s*" + _IMPORTO)
+                  or _cerca(testo, r"Importo\s+totale\s+documento\s*\n?\s*"
+                            + _IMPORTO))
+    netto_txt = _cerca(testo, r"Netto\s+a\s+pagare\s*\n?\s*" + _IMPORTO)
+    # «Totale imponibile \ Importo»: è come lo scrive il foglio di stile di
+    # più d'un intermediario, e senza la coda l'imponibile non si leggeva
+    imponibile_txt = _cerca(testo, r"Totale\s+imponibile(?:\s*\\\s*Importo)?"
+                            r"\s*\n?\s*" + _IMPORTO)
     iva_txt = _cerca(testo, r"Totale\s+IVA\s*\n?\s*" + _IMPORTO)
+    # le voci fuori campo IVA (le imposte che il notaio anticipa, art. 15)
+    # stanno nel totale ma non nell'imponibile: senza di loro l'aliquota
+    # media esce sbagliata
+    esclusi = [_num_it(x) or 0.0 for x in re.findall(
+        r"Totale\s+escluso\s+IVA[^\n]*\n?\s*" + _IMPORTO, testo,
+        re.IGNORECASE)]
+    ritenuta = abs(_num_it(_cerca(
+        testo, r"Ritenuta\s+d.acconto[^\n]*\n?\s*" + _IMPORTO)) or 0.0)
 
-    lordo = _num_it(lordo_txt)
+    lordo = _num_it(totale_txt or netto_txt)
     imponibile = _num_it(imponibile_txt)
     imposta = _num_it(iva_txt)
+    if imponibile is not None and esclusi:
+        imponibile = round(imponibile + sum(esclusi), 2)
     if lordo is None and imponibile is not None:
         lordo = round((imponibile or 0.0) + (imposta or 0.0), 2)
+    if ritenuta and lordo is not None:
+        if imponibile is not None:
+            lordo = _con_ritenuta(lordo, round(imponibile + (imposta or 0.0),
+                                               2), ritenuta)
+        elif not totale_txt:
+            # «Netto a pagare» è il netto per definizione
+            lordo = round(lordo + ritenuta, 2)
 
     # aliquota: se imponibile+IVA noti la si ricava; se compare una sola
     # percentuale nel riepilogo, si usa quella
@@ -275,5 +333,5 @@ def dati_da_pdf_testo(testo):
         "nr_fattura": numero,
         "fornitore": (fornitore or "").strip()[:120],
         "oggetto": _oggetto(descrizione),
-        "note": "",
+        "note": _nota_ritenuta(ritenuta) if ritenuta else "",
     }
