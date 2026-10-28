@@ -37,6 +37,8 @@ LIMITI_BP = {
     **{k: (0.0, 50.0) for k in IMPOSTAZIONI_BP if k.startswith("bp_iva_")},
 }
 # gli importi che non si salvano: la percentuale del loro prezzo
+# la categoria con cui nasce una fattura caricata (anche web/bp.js)
+CATEGORIA_FATTURA_NUOVA = "MATERIALE"
 DERIVATI = {"bp_imposta_eur": ("bp_imposta", "bp_acquisto"),
             "bp_ag_in_eur": ("bp_ag_in", "bp_acquisto"),
             "bp_ag_out_eur": ("bp_ag_out", "bp_vendita")}
@@ -171,7 +173,10 @@ class BusinessPlanMixin:
                     for c in COLONNE_SPESE}
             for c in ("importo", "aliquota_iva"):
                 riga[c] = None if r.get(c) is None else float(r[c])
-            riga["categoria"] = cat_pulita(riga["categoria"]) or None
+            # le fatture del cantiere sono quasi tutte di materiale: si
+            # parte da lì, e chi carica il notaio la cambia
+            riga["categoria"] = (cat_pulita(riga["categoria"])
+                                 or CATEGORIA_FATTURA_NUOVA)
             lette.append(riga)
         self.fatture_lette = {"righe": lette, "non_letti": non_letti}
         return len(lette)

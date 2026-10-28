@@ -277,7 +277,7 @@ const Spese = defineComponent({
       <div style="flex:2.2">
         <h5>🧾 Spese sostenute</h5>
         <Griglia :colonne="colSostenute" :righe="s.sostenute" dinamica obbligatoria="importo"
-                 @cambia="scrivi('spese', $event)" />
+                 :nuova="{categoria: 'MATERIALE'}" @cambia="scrivi('spese', $event)" />
         <Metrica nome="Totale spese sostenute" :valore="euro(s.totale_sostenute)" style="max-width:420px" />
       </div>
       <div style="flex:1.1">

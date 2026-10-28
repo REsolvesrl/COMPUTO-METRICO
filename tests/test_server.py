@@ -239,3 +239,11 @@ def test_le_fatture_di_un_altro_cantiere_non_si_aprono(client):
     _carica_fattura(client)
     _gesto(client, "imposta_progetto", campo="nome", valore="Migliarina")
     assert client.get("/api/fattura/fattura.xml").status_code == 404
+
+
+def test_la_fattura_caricata_nasce_materiale(client):
+    r = client.post("/api/fatture",
+                    files={"file": ("fattura.xml", FATTURA_XML,
+                                    "application/xml")})
+    riga = r.json()["vista"]["bp"]["spese"]["fatture_lette"]["righe"][0]
+    assert riga["categoria"] == "MATERIALE"
