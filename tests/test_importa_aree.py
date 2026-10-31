@@ -8,6 +8,7 @@ disegnati a scale diverse. Arrivano attaccate fra loro e si spostano tutte
 insieme finché non le si lascia lì (1/10/2026).
 """
 import io
+import itertools
 
 import pytest
 from PIL import Image
@@ -22,8 +23,14 @@ def _png(larg, alt):
     return buffer.getvalue()
 
 
+# ⚠️ Non id(ev): Python riusa l'indirizzo del dizionario appena liberato, due
+# eventi di fila potevano avere lo stesso numero e il secondo veniva scartato
+# come doppione.
+_SEQ = itertools.count(1)
+
+
 def _gesto(b, **ev):
-    ev.setdefault("seq", id(ev))
+    ev.setdefault("seq", next(_SEQ))
     b.evento_tela(ev)
     b.giro()
 

@@ -1,5 +1,6 @@
 """La scheda planimetria nel banco: piante, gesti della tela, scala, annulla."""
 import io
+import itertools
 import json
 
 import pytest
@@ -24,8 +25,14 @@ def b():
     return b
 
 
+# ⚠️ Non id(ev): Python riusa l'indirizzo del dizionario appena liberato, due
+# eventi di fila potevano avere lo stesso numero e il secondo veniva scartato
+# come doppione.
+_SEQ = itertools.count(1)
+
+
 def _gesto(b, **ev):
-    ev.setdefault("seq", id(ev))
+    ev.setdefault("seq", next(_SEQ))
     b.evento_tela(ev)
     b.giro()
 

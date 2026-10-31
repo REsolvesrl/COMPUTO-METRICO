@@ -9,6 +9,7 @@ La 3.10 è nata come voce tua su ENI, col codice 3.30: aprendo un file di
 allora che la tiene ancora fra le sue, diventa quella del listino.
 """
 import io
+import itertools
 
 import pytest
 from PIL import Image
@@ -25,8 +26,14 @@ def _png(larg=800, alt=600):
     return buffer.getvalue()
 
 
+# ⚠️ Non id(ev): Python riusa l'indirizzo del dizionario appena liberato, due
+# eventi di fila potevano avere lo stesso numero e il secondo veniva scartato
+# come doppione.
+_SEQ = itertools.count(1)
+
+
 def _gesto(b, **ev):
-    ev.setdefault("seq", id(ev))
+    ev.setdefault("seq", next(_SEQ))
     b.evento_tela(ev)
     b.giro()
 
