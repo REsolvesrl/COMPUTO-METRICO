@@ -81,3 +81,10 @@ def test_numero_da_it_e_numero_it_si_richiudono():
 
 def test_numero_da_it_rilegge_anche_gli_euro_scritti_dall_app():
     assert numero_da_it(euro(242626.0)) == pytest.approx(242626.0)
+
+
+def test_vince_il_testo_che_stacca_di_piu_dal_fondo():
+    # il viola dei Serramenti: col vecchio conteggio usciva il travertino,
+    # a 2,98:1, sulla cifra della pastiglia
+    assert colore_testo_su("#9575CD") == "#1A2744"
+    assert colore_testo_su("#1A2744") == "#ECE7DA"

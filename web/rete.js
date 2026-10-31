@@ -63,6 +63,20 @@ export async function gesto(nome, argomenti = {}, { zitto = false } = {}) {
   }
 }
 
+// Le fatture da leggere. Torna quando il motore ha finito: chi chiama ci
+// tiene sopra il suo «sto leggendo».
+export async function caricaFatture(file) {
+  const dati = new FormData();
+  file.forEach((f) => dati.append("file", f));
+  try {
+    const r = await leggi(await fetch("/api/fatture", { method: "POST", body: dati }));
+    stato.vista = r.vista;
+    if (r.esito) toast(r.esito.testo, r.esito.tipo);
+  } catch (e) {
+    toast(e.message, "errore");
+  }
+}
+
 export async function apriFile(file) {
   const dati = new FormData();
   dati.append("file", file);

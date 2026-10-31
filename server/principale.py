@@ -385,9 +385,10 @@ async def leggi_fatture(file: list[UploadFile]) -> dict:
         n = BANCO.leggi_fatture(contenuti)
         esito = None
         if BANCO.fatture_lette["non_letti"]:
-            esito = {"tipo": "errore", "testo": "Non sono riuscito a leggere: "
-                     + ", ".join(BANCO.fatture_lette["non_letti"])
-                     + ". Aggiungile a mano nella tabella sotto."}
+            # l'elenco dei file resta scritto nella pagina (web/bp.js)
+            n_scarti = len(BANCO.fatture_lette["non_letti"])
+            esito = {"tipo": "errore", "testo": (
+                f"{n_scarti} file non letti: l'elenco resta nella pagina.")}
         elif n:
             esito = {"tipo": "ok", "testo": f"{n} fattura/e lette."}
         return {"vista": _vista(), "esito": esito}

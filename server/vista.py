@@ -112,10 +112,10 @@ def computo(b: Banco):
     totali = b.totali()
     categorie = []
     for indice, cat in enumerate(b.categorie_del_computo(), start=1):
-        tinta, md = _colore(cat)
+        tinta, _ = _colore(cat)
         categorie.append({
             "indice": indice, "nome": cat, "serie": serie_della_categoria(cat),
-            "colore": tinta, "md": md, "su_tinta": colore_testo_su(tinta),
+            "colore": tinta, "su_tinta": colore_testo_su(tinta),
             "totale": b.totale_categoria(cat),
             "voci": [_riga(b, c) for c in b.scelte_della_categoria(cat)],
         })
@@ -135,9 +135,9 @@ def computo(b: Banco):
                 "prezzo": b.prezzo(c) if b.e_tua(c) else voce["prezzo"],
                 "nota": voce.get("nota") or "",
                 "tua": listino.voce_per_codice(c) is None})
-        tinta, md = _colore(cat)
+        tinta, _ = _colore(cat)
         pool.append({"indice": indice, "nome": cat, "colore": tinta,
-                     "md": md, "voci": disponibili})
+                     "voci": disponibili})
 
     per_cat = totali["per_categoria"]
     riepilogo = {

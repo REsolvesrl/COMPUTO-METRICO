@@ -9,7 +9,7 @@
 import { computed, defineComponent, nextTick, onBeforeUnmount, onMounted, ref,
          watch } from "vue";
 import { Avviso, CampioneVuoto, CampoNumero, CampoPassi, CampoTesto, Interruttore,
-         Metrica, Pannello, Tabella, Tendina } from "./componenti.js";
+         Metrica, Pannello, Tabella, Tendina, TestaCampo } from "./componenti.js";
 import { euro, numeroIt } from "./formato.js";
 import { gesto, scarica, stato, toast } from "./rete.js";
 
@@ -145,6 +145,7 @@ const Ritaglio = defineComponent({
 
 // il cursore (st.slider)
 const Cursore = defineComponent({
+  components: { TestaCampo },
   props: { valore: Number, minimo: Number, massimo: Number, passo: Number,
            etichetta: String, aiuto: String, decimali: { type: Number, default: 0 } },
   emits: ["cambia"],
@@ -155,7 +156,7 @@ const Cursore = defineComponent({
   },
   template: `
   <div class="campo">
-    <label>{{ etichetta }}<span v-if="aiuto" class="aiuto" :title="aiuto">?</span></label>
+    <TestaCampo :etichetta="etichetta" :aiuto="aiuto" />
     <div class="cursore">
       <input type="range" :min="minimo" :max="massimo" :step="passo" v-model.number="v"
              @change="$emit('cambia', v)" :aria-label="etichetta">
@@ -247,7 +248,7 @@ export const SchedaPlanimetria = defineComponent({
       <CampioneVuoto titolo="Il banco è sgombro"
         testo="Porta qui la planimetria — una foto, una scansione o il PDF del progetto — e da lì si misurano le superfici, si contano i muri e le quantità passano nel computo. Un PDF di più pagine diventa una planimetria per foglio: piano terra, piano primo, e così via." />
       <div class="campo"><label>Carica una planimetria (PNG, JPG o PDF)</label>
-        <input type="file" accept=".png,.jpg,.jpeg,.pdf" @change="carica"></div>
+        <input type="file" accept=".png,.jpg,.jpeg,.pdf" @change="carica" aria-label="Planimetria (PDF o immagine)"></div>
     </template>
     <template v-else>
     <div class="colonne" style="gap:1.1rem">
@@ -265,7 +266,7 @@ export const SchedaPlanimetria = defineComponent({
         </div>
         <hr>
         <div class="campo"><label>➕ Aggiungi planimetria</label>
-          <input type="file" accept=".png,.jpg,.jpeg,.pdf" @change="carica" style="font-size:13px;max-width:100%"></div>
+          <input type="file" accept=".png,.jpg,.jpeg,.pdf" @change="carica" aria-label="Planimetria (PDF o immagine)" style="font-size:13px;max-width:100%"></div>
       </div>
 
       <!-- il disegno e i suoi comandi -->
@@ -508,7 +509,7 @@ export const SchedaPlanimetria = defineComponent({
     <p class="legenda">
       <span v-for="c in p.categorie" :key="c.nome" style="display:inline-block;margin:2px 12px 2px 0">
         <span class="dot" :style="{background: c.colore}"></span>{{ c.nome }} · {{ numeroIt(c.percento, 0) }}%<span
-          v-if="c.soglia && c.oltre !== null" style="color:#A9B4C9"> (oltre {{ numeroIt(c.soglia, 0) }} m²:
+          v-if="c.soglia && c.oltre !== null" style="color:var(--etichette)"> (oltre {{ numeroIt(c.soglia, 0) }} m²:
           {{ numeroIt(c.oltre, 0) }}%)</span>
       </span>
     </p>
@@ -532,7 +533,7 @@ export const SchedaPlanimetria = defineComponent({
         ↩️ Riporta le etichette fuori dal disegno ({{ p.etichette_spostate }} spostate)</button>
     </Pannello>
 
-    <h3 class="sottotitolo">🧮 Superfici commerciali<template v-if="nomePiantaComputo"> — {{ nomePiantaComputo }}</template><template v-else> (tutte le planimetrie)</template></h3>
+    <h2 class="sottotitolo">🧮 Superfici commerciali<template v-if="nomePiantaComputo"> — {{ nomePiantaComputo }}</template><template v-else> (tutte le planimetrie)</template></h2>
     <!-- la stessa scelta della scheda Computo: le superfici si guardano qui,
          e qui si cambia pianta senza andarla a cercare di la' -->
     <div v-if="p.pianta_computo && p.pianta_computo.piante.length > 1"
@@ -572,7 +573,7 @@ export const SchedaPlanimetria = defineComponent({
         ➕ Riporta la superficie commerciale nel computo</button>
     </template>
 
-    <h3 class="sottotitolo">📏 Dalle superfici al computo (locale per locale)</h3>
+    <h2 class="sottotitolo">📏 Dalle superfici al computo (locale per locale)</h2>
     <CampoPassi v-if="p.mostra_altezza" etichetta="Altezza dei locali e dei muri (m)" :valore="p.altezza"
                 :passo="0.05" :minimo="1" :massimo="6" :decimali="2" style="max-width:420px;margin-bottom:16px"
                 aiuto="Usata per pareti da tinteggiare e per la superficie dei muri da demolire o costruire (lunghezza × altezza)."
@@ -686,7 +687,7 @@ export const SchedaPlanimetria = defineComponent({
       </template>
     </template>
 
-    <h3 class="sottotitolo">🧱 Dai muri al computo (demolire / costruire / cartongesso)</h3>
+    <h2 class="sottotitolo">🧱 Dai muri al computo (demolire / costruire / cartongesso)</h2>
     <Avviso v-if="p.muri_senza_scala.length" tipo="attenzione">Muri esclusi perché la planimetria è <b>senza
       scala</b>: {{ p.muri_senza_scala.join(', ') }}</Avviso>
     <Avviso v-if="!muri">Traccia i muri con lo strumento <b>PARETE</b> sul disegno (scegli sopra se sono da demolire,

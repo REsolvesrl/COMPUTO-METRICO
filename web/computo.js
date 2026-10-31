@@ -202,15 +202,13 @@ const SchedaCategoria = defineComponent({
       if (s.has(props.cat.nome)) s.delete(props.cat.nome); else s.add(props.cat.nome);
       aperte.computo = s;
     }
-    const classeNome = computed(() => ({ red: "rosso", green: "verde", blue: "azzurro",
-      orange: "arancio", violet: "viola" }[props.cat.md] || ""));
-    return { aperta, scambia, classeNome, euro };
+    return { aperta, scambia, euro };
   },
   template: `
   <section class="scheda-cat" :class="{aperta}" :style="{'--tinta': cat.colore, '--su-tinta': cat.su_tinta}">
     <button class="testa" @click="scambia" :aria-expanded="aperta">
       <span class="pastiglia">{{ String(cat.serie).padStart(2, '0') }}</span>
-      <span class="nome-cat" :class="classeNome"><span class="freccia-cat" aria-hidden="true">▸</span>{{ cat.nome }}</span>
+      <span class="nome-cat"><span class="freccia-cat" aria-hidden="true">▸</span>{{ cat.nome }}</span>
       <span class="totale-cat">{{ euro(cat.totale) }}</span>
     </button>
     <Scorre><div v-if="aperta" class="righe-voci">
@@ -299,9 +297,7 @@ const Pool = defineComponent({
       if (s.has(nome)) s.delete(nome); else s.add(nome);
       aperte.pool = s;
     }
-    const colore = (md) => ({ red: "rosso", green: "verde", blue: "azzurro", orange: "arancio",
-                              violet: "viola" }[md] || "");
-    return { c, termine, categorie, quante, aperta, scambia, colore, gesto, euro };
+    return { c, termine, categorie, quante, aperta, scambia, gesto, euro };
   },
   template: `
   <div class="scheda-pool">
@@ -313,7 +309,7 @@ const Pool = defineComponent({
            placeholder="🔎  Cerca fra le voci — codice, descrizione, unità" aria-label="Cerca una voce">
     <template v-for="cat in categorie" :key="cat.nome">
       <button class="cat-pool" @click="scambia(cat.nome)">
-        <span :class="colore(cat.md)"><span class="freccia-cat" :class="{girata: aperta(cat.nome)}" aria-hidden="true">▸</span>{{ cat.nome }}</span>
+        <span><span class="freccia-cat" :class="{girata: aperta(cat.nome)}" aria-hidden="true">▸</span>{{ cat.nome }}</span>
         <span class="grigio"> · {{ cat.disponibili.length }}</span>
       </button>
       <Scorre><div v-if="aperta(cat.nome)">
@@ -387,7 +383,7 @@ const Riepilogo = defineComponent({
   },
   template: `
   <div class="riepilogo">
-    <h4>💰 Riepilogo costi</h4>
+    <h2 class="titolo-4">💰 Riepilogo costi</h2>
     <p v-if="r.totale === 0" class="didascalia">Inserisci le quantità nelle categorie per vedere la
       distribuzione dei costi.</p>
     <div v-for="riga in r.righe" :key="riga.nome" class="riga-dot">
@@ -432,7 +428,7 @@ const SalvaEsporta = defineComponent({
     <Pannello v-if="v.computo.tabella.length" titolo="📄 Computo calcolato (tabella completa)">
       <Tabella :colonne="colonne" :righe="righe" />
     </Pannello>
-    <h3 class="sottotitolo">💾 Salva ed esporta</h3>
+    <h2 class="sottotitolo">💾 Salva ed esporta</h2>
     <p class="didascalia">Il file <b>.json</b> è il salvataggio del lavoro (comprese le planimetrie):
       conservalo e ricaricalo dal pannello <b>📋 Dati del progetto · Apri / Nuovo</b> in cima alla pagina.
       Il <b>PDF</b> è il computo completo, con i totali e le firme; il <b>PDF senza prezzi</b> è lo stesso

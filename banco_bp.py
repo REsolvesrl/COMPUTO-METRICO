@@ -206,7 +206,10 @@ class BusinessPlanMixin:
                 riga.pop("file", None)
         self.dati["spese"] = spese_da_df(df_spese_da_righe(
             list(self.dati["spese"]) + righe, COLONNE_SPESE))
-        self.fatture_lette = None
+        # i file non letti restano scritti: sono ancora da mettere a mano
+        non_letti = (self.fatture_lette or {}).get("non_letti") or []
+        self.fatture_lette = ({"righe": [], "non_letti": non_letti}
+                              if non_letti else None)
         self.fatture_in_attesa = {}
 
     def scarta_fatture(self):

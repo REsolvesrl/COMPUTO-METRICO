@@ -216,3 +216,24 @@ def test_i_materiali_non_fanno_imprevisti(b):
     b.imposta_bp("bp_materiali", 50000)
     b.giro()
     assert b.dati["business_plan"]["bp_imprevisti"] == imprevisti
+
+
+def test_i_file_non_letti_restano_scritti_dopo_l_aggiunta(b):
+    xml = ("<FatturaElettronica><FatturaElettronicaBody><Numero>1</Numero>"
+           "<ImportoTotaleDocumento>122.00</ImportoTotaleDocumento>"
+           "</FatturaElettronicaBody></FatturaElettronica>")
+    b.leggi_fatture([("buona.xml", xml.encode()), ("appunti.txt", b"niente")])
+    b.aggiungi_fatture(b.fatture_lette["righe"])
+    # la riga è entrata, ma quel file è ancora da mettere a mano
+    assert b.fatture_lette == {"righe": [], "non_letti": ["appunti.txt"]}
+    b.scarta_fatture()
+    assert b.fatture_lette is None
+
+
+def test_senza_scarti_dopo_l_aggiunta_non_resta_niente(b):
+    xml = ("<FatturaElettronica><FatturaElettronicaBody><Numero>1</Numero>"
+           "<ImportoTotaleDocumento>122.00</ImportoTotaleDocumento>"
+           "</FatturaElettronicaBody></FatturaElettronica>")
+    b.leggi_fatture([("buona.xml", xml.encode())])
+    b.aggiungi_fatture(b.fatture_lette["righe"])
+    assert b.fatture_lette is None

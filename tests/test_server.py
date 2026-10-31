@@ -247,3 +247,10 @@ def test_la_fattura_caricata_nasce_materiale(client):
                                     "application/xml")})
     riga = r.json()["vista"]["bp"]["spese"]["fatture_lette"]["righe"][0]
     assert riga["categoria"] == "MATERIALE"
+
+
+def test_plotly_non_pesa_sulla_prima_pagina(client):
+    # arriva solo quando serve un grafico (Grafico in web/componenti.js)
+    assert "plotly.min.js" not in client.get("/").text
+    assert client.get("/statico/vendor/plotly.min.js").status_code == 200
+    assert client.get("/statico/spiega.js").status_code == 200

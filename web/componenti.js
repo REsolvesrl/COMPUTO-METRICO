@@ -2,7 +2,7 @@
 // programma vecchio usava, con lo stesso aspetto (stile.css) e gli stessi
 // comportamenti che contavano — scritti una volta, usati da tutte le schede.
 import { Transition, computed, defineComponent, h, nextTick, onBeforeUnmount,
-         onMounted, ref, watch } from "vue";
+         onMounted, ref, useId, watch } from "vue";
 import { euro, numeroDaIt, numeroIt } from "./formato.js";
 
 // ---------------------------------------------------------------- metrica
@@ -19,7 +19,7 @@ export const Metrica = defineComponent({
     return { freccia };
   },
   template: `
-  <div class="metrica" :title="aiuto">
+  <div class="metrica" :title="aiuto" :tabindex="aiuto ? 0 : null">
     <div class="nome">{{ nome }}</div>
     <div class="valore">{{ valore }}</div>
     <div v-if="delta" class="delta" :class="{su: verso==='su', giu: verso==='giu'}">
@@ -33,6 +33,7 @@ export const Metrica = defineComponent({
 // ritmo sta in stile.css, .scorre-attivo). Chi ha chiesto al sistema meno
 // movimento la vede aprirsi e basta.
 function scorri(el, da, a, fatto) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { fatto(); return; }
   const apre = a !== "0px";
   const piena = apre ? el.scrollHeight : parseFloat(da);
   // Più è alta, più ci mette: una categoria da venti voci che si aprisse
@@ -90,6 +91,7 @@ export const Scelta = defineComponent({
     const elenco = ref(null);
     const attiva = ref(-1);
     const posto = ref({});
+    const ident = useId();
     const voci = computed(() => [
       ...(props.vuota ? [{ valore: "", testo: "" }] : []),
       ...(props.opzioni || []).map((o) => (typeof o === "object" && o !== null
@@ -152,20 +154,23 @@ export const Scelta = defineComponent({
       window.removeEventListener("scroll", scorre, true);
       window.removeEventListener("resize", chiudi);
     });
-    return { aperta, bottone, elenco, attiva, posto, voci, testo, apri, chiudi, scegli, tasto };
+    return { aperta, bottone, elenco, attiva, posto, ident, voci, testo, apri, chiudi, scegli, tasto };
   },
   template: `
   <div class="scelta-ancora">
   <button type="button" ref="bottone" class="scelta" :class="[classe, {aperta}]" :disabled="disabilitato"
-          :aria-label="etichetta" aria-haspopup="listbox" :aria-expanded="aperta"
+          role="combobox" :aria-label="etichetta" aria-haspopup="listbox" :aria-expanded="aperta"
+          :aria-controls="aperta ? ident : null"
+          :aria-activedescendant="aperta && attiva >= 0 ? ident + '-' + attiva : null"
           @click="aperta ? chiudi() : apri()" @keydown="tasto">
     <span class="scelta-testo">{{ testo }}</span>
     <svg class="scelta-freccia" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
   </button>
   <Teleport to="body">
     <Transition name="tendina">
-      <ul v-if="aperta" ref="elenco" class="scelta-elenco" role="listbox" :style="posto">
-        <li v-for="(o, i) in voci" :key="String(o.valore) + i" role="option"
+      <ul v-if="aperta" :id="ident" ref="elenco" class="scelta-elenco" role="listbox"
+          :aria-label="etichetta" :style="posto">
+        <li v-for="(o, i) in voci" :key="String(o.valore) + i" :id="ident + '-' + i" role="option"
             :aria-selected="String(o.valore) === String(valore ?? '')"
             :class="{attiva: i === attiva, scelta: String(o.valore) === String(valore ?? '')}"
             @mouseenter="attiva = i" @mousedown.prevent="scegli(o)">{{ o.testo || ' ' }}</li>
@@ -207,31 +212,51 @@ export const CampioneVuoto = defineComponent({
   template: `
   <div class="cme-vuoto">
     <div class="campioni"><i v-for="t in tinte" :style="{background: t}"></i></div>
-    <h3>{{ titolo }}</h3><p>{{ testo }}<slot /></p>
+    <h2>{{ titolo }}</h2><p>{{ testo }}<slot /></p>
+  </div>`,
+});
+
+// ------------------------------------------------------------------ aiuto
+// Il «?»: un bottone vero, perché ci si arrivi con Tab e col dito. Il
+// foglietto lo disegna spiega.js, leggendo il title.
+export const Aiuto = defineComponent({
+  props: { testo: String },
+  template: `<button v-if="testo" type="button" class="aiuto" :title="testo"
+                     aria-label="Spiegazione">?</button>`,
+});
+
+// L'etichetta di un campo col suo «?» accanto. ⚠️ Accanto, non dentro: un
+// bottone dentro una label fa di quella label la sua, e l'etichetta non
+// porterebbe più alla casella.
+export const TestaCampo = defineComponent({
+  components: { Aiuto },
+  props: { etichetta: String, aiuto: String, per: String },
+  template: `
+  <div v-if="etichetta" class="etichetta-campo">
+    <component :is="per ? 'label' : 'span'" :for="per">{{ etichetta }}</component><Aiuto :testo="aiuto" />
   </div>`,
 });
 
 // ------------------------------------------------------------ interruttore
 export const Interruttore = defineComponent({
+  components: { Aiuto },
   props: { acceso: Boolean, etichetta: String, aiuto: String },
   emits: ["cambia"],
   template: `
-  <label class="interruttore" :title="aiuto">
-    <input type="checkbox" :checked="acceso" @change="$emit('cambia', $event.target.checked)">
-    <span class="binario"></span><span>{{ etichetta }}</span>
-    <span v-if="aiuto" class="aiuto" :title="aiuto">?</span>
-  </label>`,
-});
-
-export const Aiuto = defineComponent({
-  props: { testo: String },
-  template: `<span v-if="testo" class="aiuto" :title="testo">?</span>`,
+  <span class="interruttore-riga">
+    <label class="interruttore">
+      <input type="checkbox" :checked="acceso" @change="$emit('cambia', $event.target.checked)">
+      <span class="binario"></span><span>{{ etichetta }}</span>
+    </label>
+    <Aiuto :testo="aiuto" />
+  </span>`,
 });
 
 // ------------------------------------------------------------ campo testo
 // Il valore parte quando si esce dalla casella o si preme Invio, non a ogni
 // tasto: è un gesto, come il campo di Streamlit.
 export const CampoTesto = defineComponent({
+  components: { TestaCampo },
   props: { valore: String, etichetta: String, segnaposto: String,
            aiuto: String, area: Boolean, tipo: { type: String, default: "text" },
            classe: String },
@@ -242,14 +267,14 @@ export const CampoTesto = defineComponent({
     function manda() {
       if ((testo.value ?? "") !== (props.valore ?? "")) emit("cambia", testo.value);
     }
-    return { testo, manda };
+    return { testo, manda, ident: useId() };
   },
   template: `
   <div class="campo">
-    <label v-if="etichetta">{{ etichetta }}<span v-if="aiuto" class="aiuto" :title="aiuto">?</span></label>
-    <textarea v-if="area" class="casella" :class="classe" v-model="testo" :placeholder="segnaposto"
+    <TestaCampo :etichetta="etichetta" :aiuto="aiuto" :per="ident" />
+    <textarea v-if="area" :id="ident" class="casella" :class="classe" v-model="testo" :placeholder="segnaposto"
               rows="1" @change="manda" :aria-label="etichetta"></textarea>
-    <input v-else class="casella" :class="classe" :type="tipo" v-model="testo" :placeholder="segnaposto"
+    <input v-else :id="ident" class="casella" :class="classe" :type="tipo" v-model="testo" :placeholder="segnaposto"
            @change="manda" @keydown.enter="$event.target.blur()" :aria-label="etichetta">
   </div>`,
 });
@@ -260,6 +285,7 @@ export const CampoTesto = defineComponent({
 // che non è un numero NON si applica e NON si cancella: resta scritto, e
 // il valore di prima continua a valere.
 export const CampoNumero = defineComponent({
+  components: { TestaCampo },
   props: { valore: Number, etichetta: String, decimali: { type: Number, default: 2 },
            aiuto: String, minimo: { type: Number, default: 0 }, massimo: Number,
            segnaposto: String, classe: String, disabilitato: Boolean },
@@ -278,20 +304,22 @@ export const CampoNumero = defineComponent({
       if (Math.abs(v - (props.valore ?? 0)) > 0.0005) emit("cambia", v);
       else testo.value = scritto(props.valore);
     }
-    return { testo, manda, sbagliato };
+    return { testo, manda, sbagliato, ident: useId() };
   },
   template: `
   <div class="campo">
-    <label v-if="etichetta">{{ etichetta }}<span v-if="aiuto" class="aiuto" :title="aiuto">?</span></label>
-    <input class="casella" :class="classe" inputmode="decimal" v-model="testo" :placeholder="segnaposto"
+    <TestaCampo :etichetta="etichetta" :aiuto="aiuto" :per="ident" />
+    <input :id="ident" class="casella" :class="classe" inputmode="decimal" v-model="testo" :placeholder="segnaposto"
            :disabled="disabilitato" @change="manda" @keydown.enter="$event.target.blur()"
-           :aria-label="etichetta" :style="sbagliato ? {borderColor: 'var(--cotto)'} : null"
+           :aria-label="etichetta" :aria-invalid="sbagliato ? 'true' : null"
+           :style="sbagliato ? {borderColor: 'var(--cotto)'} : null"
            :title="sbagliato ? 'Non è un numero: non l\\'ho applicato' : null">
   </div>`,
 });
 
 // Il campo con le frecce: dove si contano pezzi (st.number_input a passi).
 export const CampoPassi = defineComponent({
+  components: { TestaCampo },
   props: { valore: Number, etichetta: String, passo: { type: Number, default: 1 },
            minimo: { type: Number, default: 0 }, massimo: Number,
            decimali: { type: Number, default: 0 }, aiuto: String, classe: String },
@@ -306,24 +334,24 @@ export const CampoPassi = defineComponent({
       if (props.massimo !== undefined) v = Math.min(props.massimo, v);
       if (Math.abs(v - (props.valore ?? 0)) > 0.0005) emit("cambia", v);
     }
-    return { testo, manda };
+    return { testo, manda, ident: useId() };
   },
   template: `
   <div class="campo">
-    <label v-if="etichetta">{{ etichetta }}<span v-if="aiuto" class="aiuto" :title="aiuto">?</span></label>
-    <input class="casella" :class="classe" type="number" :step="passo" :min="minimo" :max="massimo"
+    <TestaCampo :etichetta="etichetta" :aiuto="aiuto" :per="ident" />
+    <input :id="ident" class="casella" :class="classe" type="number" :step="passo" :min="minimo" :max="massimo"
            v-model="testo" @change="manda" :aria-label="etichetta">
   </div>`,
 });
 
 export const Tendina = defineComponent({
-  components: { Scelta },
+  components: { Scelta, TestaCampo },
   props: { valore: [String, Number], opzioni: Array, etichetta: String, aiuto: String,
            classe: String, disabilitato: Boolean },
   emits: ["cambia"],
   template: `
   <div class="campo">
-    <label v-if="etichetta">{{ etichetta }}<span v-if="aiuto" class="aiuto" :title="aiuto">?</span></label>
+    <TestaCampo :etichetta="etichetta" :aiuto="aiuto" />
     <Scelta :classe="'casella ' + (classe || '')" :valore="valore" :opzioni="opzioni" :disabilitato="disabilitato"
             :etichetta="etichetta" @cambia="$emit('cambia', $event)" />
   </div>`,
@@ -356,21 +384,47 @@ export const Popover = defineComponent({
 // -------------------------------------------------------------- grafico
 // Le figure le costruisce il motore con le stesse funzioni del vecchio
 // (grafici.py); qui Plotly le disegna e basta.
+//
+// Plotly pesa quasi 5 MB e il computo non ha un grafico: arriva la prima
+// volta che ne serve uno, e da lì in poi resta.
+let plotly = null;
+function caricaPlotly() {
+  plotly ||= new Promise((pronto, guasto) => {
+    const s = document.createElement("script");
+    s.src = "/statico/vendor/plotly.min.js";
+    s.onload = () => pronto(window.Plotly);
+    s.onerror = () => { plotly = null; guasto(new Error("plotly")); };
+    document.head.append(s);
+  });
+  return plotly;
+}
+
 export const Grafico = defineComponent({
   props: { figura: Object },
   setup(props) {
     const el = ref(null);
-    function disegna() {
-      if (!el.value || !props.figura || !window.Plotly) return;
-      window.Plotly.react(el.value, props.figura.data, props.figura.layout,
-                          { displayModeBar: false, responsive: true });
+    const guasto = ref(false);
+    // il posto del grafico si tiene da subito: la pagina non salta quando arriva
+    const altezza = computed(() => `${props.figura?.layout?.height || 320}px`);
+    async function disegna() {
+      if (!el.value || !props.figura) return;
+      try {
+        const Plotly = await caricaPlotly();
+        if (!el.value) return;
+        guasto.value = false;
+        Plotly.react(el.value, props.figura.data, props.figura.layout,
+                     { displayModeBar: false, responsive: true });
+      } catch (e) { guasto.value = true; }
     }
     onMounted(disegna);
     watch(() => props.figura, () => nextTick(disegna));
     onBeforeUnmount(() => { if (el.value && window.Plotly) window.Plotly.purge(el.value); });
-    return { el };
+    return { el, guasto, altezza };
   },
-  template: `<div class="grafico" ref="el"></div>`,
+  template: `
+  <div class="grafico" ref="el" :style="{minHeight: altezza}">
+    <p v-if="guasto" class="didascalia grigio">Il grafico non si è caricato: ricarica la pagina.</p>
+  </div>`,
 });
 
 // ------------------------------------------------- tabella modificabile
@@ -561,8 +615,9 @@ export const Griglia = defineComponent({
       <colgroup><col style="width:32px"><col v-for="(c, j) in colonne" :key="c.chiave"
         :style="j < colonne.length - 1 ? {width: larghezze[j] + 'px'} : {minWidth: larghezze[j] + 'px'}"></colgroup>
       <thead><tr>
-        <th class="scelta-riga"></th>
-        <th v-for="c in colonne" :key="c.chiave" :class="{num: c.tipo==='numero'}" :title="c.aiuto">
+        <th class="scelta-riga" aria-label="Selezione"></th>
+        <th v-for="c in colonne" :key="c.chiave" :class="{num: c.tipo==='numero'}" :title="c.aiuto"
+            :tabindex="c.aiuto ? 0 : null">
           <span class="icona-colonna" aria-hidden="true">{{ {testo: '≡', numero: '#', scelta: '▾', spunta: '☑', link: '🔗', allegato: '📎'}[c.tipo] }}</span>{{ c.titolo }}</th>
       </tr></thead>
       <tbody>

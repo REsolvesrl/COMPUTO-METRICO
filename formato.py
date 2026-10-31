@@ -83,12 +83,23 @@ def colore_testo_su(colore_hex):
     argomento che nessuno le passava. Il nome nuovo dice la stessa cosa e
     non fa inciampare nessuno.
 
-    Ardesia scura sulle tinte chiare, travertino su quelle scure, secondo la
-    luminosità percepita (il verde pesa più del blu nell'occhio). Serve dove
-    il fondo lo sceglie l'utente — le categorie di spesa — e un testo fisso
-    finirebbe prima o poi illeggibile.
+    Fra ardesia scura e travertino vince chi stacca di più dal fondo, col
+    contrasto vero delle linee guida WCAG. Serve dove il fondo lo sceglie
+    l'utente — le categorie di spesa — e un testo fisso finirebbe prima o
+    poi illeggibile. Prima si guardava la luminosità percepita con una soglia
+    fissa, e sul viola dei Serramenti usciva il travertino a 2,98:1.
     """
-    h = colore_hex.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    luminanza = 0.299 * r + 0.587 * g + 0.114 * b
-    return "#1A2744" if luminanza > 140 else "#ECE7DA"
+    def luce(esadecimale):
+        h = esadecimale.lstrip("#")
+        canali = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        r, g, b = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+                   for c in canali]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    fondo = luce(colore_hex)
+
+    def contrasto(testo):
+        chiaro, scuro = sorted((luce(testo), fondo), reverse=True)
+        return (chiaro + 0.05) / (scuro + 0.05)
+
+    return max(("#1A2744", "#ECE7DA"), key=contrasto)

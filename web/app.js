@@ -7,13 +7,14 @@
 //   📊 Business plan         → 🏦 Studio di fattibilità · 🧾 Spese a
 //                              consuntivo · 🏗️ Cantiere — contratto e SAL ·
 //                              🏷️ MCA — prezzo di vendita
-import { computed, createApp, defineComponent, onMounted, ref, watch } from "vue";
+import { computed, createApp, defineComponent, nextTick, onMounted, ref, watch } from "vue";
 import { Avviso } from "./componenti.js";
 import { SchedaComputo } from "./computo.js";
 import { SchedaMateriali } from "./materiali.js";
 import { SchedaPlanimetria } from "./planimetria.js";
 import { SchedaBp } from "./bp.js";
 import { caricaVista, gesto, stato } from "./rete.js";
+import { installaSpiegazioni } from "./spiega.js";
 
 const SCHEDE = [
   { id: "computo", nome: "📝 Computo metrico",
@@ -59,8 +60,35 @@ const Testata = defineComponent({
   </div>`,
 });
 
+// Una fila di linguette. Tab entra sulla linguetta aperta e di lì si passa
+// alla pagina; fra una linguetta e l'altra ci si muove con le frecce.
+const Linguette = defineComponent({
+  props: { voci: Array, aperta: String, nome: String, pannello: String },
+  emits: ["scegli"],
+  setup(props, { emit }) {
+    const fila = ref(null);
+    function tasto(ev) {
+      const i = props.voci.findIndex((v) => v.id === props.aperta);
+      const dove = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: props.voci.length - 1 }[ev.key];
+      if (dove === undefined) return;
+      ev.preventDefault();
+      const n = props.voci.length;
+      const prossima = props.voci[(dove + n) % n];
+      emit("scegli", prossima.id);
+      nextTick(() => fila.value?.querySelector(".aperta")?.focus());
+    }
+    return { fila, tasto };
+  },
+  template: `
+  <div ref="fila" class="linguette" role="tablist" :aria-label="nome" @keydown="tasto">
+    <button v-for="s in voci" :key="s.id" type="button" class="linguetta" :class="{aperta: s.id === aperta}"
+            role="tab" :aria-selected="s.id === aperta" :aria-controls="pannello"
+            :tabindex="s.id === aperta ? 0 : -1" @click="$emit('scegli', s.id)">{{ s.nome }}</button>
+  </div>`,
+});
+
 const App = defineComponent({
-  components: { Testata, SchedaComputo, SchedaMateriali, SchedaPlanimetria, SchedaBp, Avviso },
+  components: { Testata, Linguette, SchedaComputo, SchedaMateriali, SchedaPlanimetria, SchedaBp, Avviso },
   setup() {
     const scheda = ricorda("cme_scheda", "computo");
     const sotto = {
@@ -68,8 +96,17 @@ const App = defineComponent({
       bp: ricorda("cme_sotto_bp", "fattibilita"),
     };
     const aperta = computed(() => SCHEDE.find((s) => s.id === scheda.value) || SCHEDE[0]);
-    onMounted(caricaVista);
-    return { stato, SCHEDE, scheda, sotto, aperta };
+    onMounted(() => { installaSpiegazioni(); caricaVista(); });
+    // Il «sto lavorando» si fa vedere solo se il lavoro dura: su un gesto
+    // che finisce subito sarebbe uno sfarfallio a ogni casella.
+    const lavora = ref(false);
+    let attesa = null;
+    watch(() => stato.occupato, (occupato) => {
+      clearTimeout(attesa);
+      if (occupato) attesa = setTimeout(() => { lavora.value = true; }, 500);
+      else lavora.value = false;
+    });
+    return { stato, SCHEDE, scheda, sotto, aperta, lavora };
   },
   template: `
   <template v-if="stato.vista">
@@ -79,24 +116,22 @@ const App = defineComponent({
       dal file del progetto: {{ stato.vista.piante_scartate.map(n => '«' + n + '»').join(', ') }}. Tutto il resto —
       computo, spese, business plan e le altre planimetrie — è stato caricato regolarmente. Ricarica il disegno
       mancante dalla scheda <b>Misura da planimetria</b>.</Avviso>
-    <nav class="linguette" role="tablist">
-      <button v-for="s in SCHEDE" :key="s.id" class="linguetta" :class="{aperta: s.id === scheda}"
-              role="tab" :aria-selected="s.id === scheda" @click="scheda = s.id">{{ s.nome }}</button>
-    </nav>
-    <nav v-if="aperta.sotto.length" class="linguette" role="tablist">
-      <button v-for="s in aperta.sotto" :key="s.id" class="linguetta"
-              :class="{aperta: s.id === sotto[aperta.id].value}" role="tab"
-              :aria-selected="s.id === sotto[aperta.id].value" @click="sotto[aperta.id].value = s.id">{{ s.nome }}</button>
-    </nav>
-    <SchedaComputo v-if="scheda === 'computo' && sotto.computo.value === 'il_computo'" />
-    <SchedaMateriali v-else-if="scheda === 'computo'" />
-    <SchedaPlanimetria v-else-if="scheda === 'planimetria'" />
-    <SchedaBp v-else :sotto="sotto.bp.value" />
+    <Linguette nome="Schede" pannello="scheda-aperta" :voci="SCHEDE" :aperta="scheda" @scegli="scheda = $event" />
+    <Linguette v-if="aperta.sotto.length" :nome="aperta.nome" pannello="scheda-aperta" :voci="aperta.sotto"
+               :aperta="sotto[aperta.id].value" @scegli="sotto[aperta.id].value = $event" />
+    <main id="scheda-aperta" role="tabpanel">
+      <SchedaComputo v-if="scheda === 'computo' && sotto.computo.value === 'il_computo'" />
+      <SchedaMateriali v-else-if="scheda === 'computo'" />
+      <SchedaPlanimetria v-else-if="scheda === 'planimetria'" />
+      <SchedaBp v-else :sotto="sotto.bp.value" />
+    </main>
   </template>
   <Avviso v-else-if="stato.errore" tipo="errore">{{ stato.errore }}</Avviso>
   <p v-else class="grigio">Apro il banco…</p>
   <div class="tostapane" aria-live="polite">
-    <div v-for="f in stato.fette" :key="f.id" class="fetta" :class="f.tipo">{{ f.testo }}</div>
+    <div v-if="lavora" class="fetta">Sto lavorando…</div>
+    <div v-for="f in stato.fette" :key="f.id" class="fetta" :class="f.tipo"
+         :role="f.tipo === 'errore' ? 'alert' : null">{{ f.testo }}</div>
   </div>`,
 });
 

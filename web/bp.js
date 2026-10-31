@@ -4,10 +4,10 @@
 // ⚠️ Le etichette inglesi dello studio (ESTIMATED, Buy cost, Net Return…)
 // sono il vocabolario del foglio Excel da cui viene: non si traducono.
 import { computed, defineComponent, ref } from "vue";
-import { Avviso, CampoNumero, CampoPassi, Grafico, Griglia, Metrica, Pannello,
+import { Aiuto, Avviso, CampoNumero, CampoPassi, Grafico, Griglia, Metrica, Pannello,
          Tabella, Tendina } from "./componenti.js";
 import { euro, numeroIt } from "./formato.js";
-import { gesto, stato, toast } from "./rete.js";
+import { caricaFatture, gesto, stato } from "./rete.js";
 
 const bpv = () => stato.vista.bp;
 const imposta = (chiave, valore) => gesto("bp", { chiave, valore }, { zitto: true });
@@ -16,14 +16,14 @@ const imposta = (chiave, valore) => gesto("bp", { chiave, valore }, { zitto: tru
 const RigheBp = defineComponent({
   props: { righe: Array },
   setup() {
-    const colore = (stile) => ({ buono: "#7DDC7D", cattivo: "#FF8A8A" }[stile] || "var(--travertino)");
+    const colore = (stile) => ({ buono: "var(--md-verde)", cattivo: "var(--md-rosso)" }[stile] || "var(--travertino)");
     return { colore };
   },
   template: `
   <div>
     <template v-for="r in righe" :key="r[0]">
       <div v-if="r[1] !== null && r[1] !== '' && r[1] !== '—'" class="riga-bp"
-           :class="{ spiegata: r[3] }" :title="r[3] || null">
+           :class="{ spiegata: r[3] }" :title="r[3] || null" :tabindex="r[3] ? 0 : null">
         <span :style="r[2] ? {fontWeight: 700, color: 'var(--travertino)'} : null">{{ r[0] }}</span>
         <span :style="{fontWeight: r[2] ? 700 : 500, color: colore(r[2])}">{{ r[1] }}</span>
       </div>
@@ -54,21 +54,27 @@ const Legenda = defineComponent({
 
 // ----------------------------------------------------- studio di fattibilità
 const RigaCosto = defineComponent({
-  components: { CampoNumero },
+  components: { Aiuto, CampoNumero },
   props: { riga: Object },
-  setup() { return { imposta, euro }; },
+  setup(props) {
+    // Un «?» per riga, accanto alla voce: dice come si è fatto il conto e a
+    // cosa stare attenti. Uno per casella raddoppierebbe i Tab da fare per
+    // compilare la tabella.
+    const spiegazione = computed(() => [props.riga.come, props.riga.centro?.aiuto, props.riga.destra?.aiuto]
+      .filter(Boolean).join("\n\n"));
+    return { imposta, euro, spiegazione };
+  },
   template: `
   <div class="riga-costo">
-    <span class="grigio" :class="{ spiegata: riga.come }" :title="riga.come || null"><b v-if="riga.arancio" class="arancio">{{ riga.etichetta }}</b>
-      <template v-else>{{ riga.etichetta }}</template></span>
-    <CampoNumero v-if="riga.centro" :valore="riga.centro.valore" :decimali="2" :aiuto="riga.centro.aiuto"
+    <span class="voce-costo"><span class="grigio" :class="{ spiegata: riga.come }" :title="riga.come || null"><b v-if="riga.arancio" class="arancio">{{ riga.etichetta }}</b>
+      <template v-else>{{ riga.etichetta }}</template></span><Aiuto :testo="spiegazione" /></span>
+    <CampoNumero v-if="riga.centro" :etichetta="riga.etichetta + ', percentuale'" :valore="riga.centro.valore" :decimali="2"
                  @cambia="imposta(riga.centro.chiave, $event)" />
     <div v-else class="barra-vuota">/</div>
-    <CampoNumero v-if="riga.destra" :valore="riga.destra.valore" :decimali="2" :aiuto="riga.destra.aiuto"
+    <CampoNumero v-if="riga.destra" :etichetta="riga.etichetta + ', importo netto'" :valore="riga.destra.valore" :decimali="2"
                  @cambia="imposta(riga.destra.chiave, $event)" />
     <div v-else class="barra-vuota">/</div>
-    <CampoNumero v-if="riga.iva" :valore="riga.iva.valore" :decimali="2" :massimo="50"
-                 aiuto="Aliquota di questa voce: 22% è l'ordinaria, 10% i lavori edili, 0% le voci che l'IVA non ce l'hanno (l'imposta di registro è già un'imposta)."
+    <CampoNumero v-if="riga.iva" :etichetta="riga.etichetta + ', aliquota IVA'" :valore="riga.iva.valore" :decimali="2" :massimo="50"
                  @cambia="imposta(riga.iva.chiave, $event)" />
     <div v-else class="barra-vuota">/</div>
     <div v-if="riga.iva" style="text-align:right;font-weight:600">{{ euro(riga.iva.euro) }}</div>
@@ -77,7 +83,7 @@ const RigaCosto = defineComponent({
 });
 
 const Fattibilita = defineComponent({
-  components: { CampoNumero, CampoPassi, Grafico, RigheBp, Intestazione, Legenda, RigaCosto, Avviso },
+  components: { Aiuto, CampoNumero, CampoPassi, Grafico, RigheBp, Intestazione, Legenda, RigaCosto, Avviso },
   setup() {
     const f = computed(() => bpv().fattibilita);
     return { f, imposta, gesto, euro, numeroIt };
@@ -140,7 +146,7 @@ const Fattibilita = defineComponent({
       <Intestazione testo="Spese acquisto — dettaglio" />
       <p v-if="f.senza_base.length" class="didascalia arancio">Le percentuali qui sotto restano a zero finché manca
         {{ f.senza_base.join(' · ') }}: non c'è ancora un importo su cui calcolarle.</p>
-      <div class="riga-costo intestazione"><span>Voce</span><span>%</span><span>Netto</span><span>IVA %</span><span>IVA €</span></div>
+      <div class="riga-costo intestazione"><span>Voce</span><span>%</span><span>Netto</span><span class="voce-costo">IVA %<Aiuto testo="Aliquota di ogni voce: 22% è l'ordinaria, 10% i lavori edili, 0% le voci che l'IVA non ce l'hanno (l'imposta di registro è già un'imposta)." /></span><span>IVA €</span></div>
       <RigaCosto v-for="r in f.costi" :key="r.etichetta" :riga="r" />
       <label v-if="f.consuntivo > 0" class="spunta" style="margin:8px 0"
              title="Lavori + materiale + architetto dalla scheda «Spese a consuntivo» (sostenute e da sostenere), al posto della stima. Ha la precedenza sulla cifra a mano qui sopra.">
@@ -196,16 +202,13 @@ const Spese = defineComponent({
       .map((c) => (c.chiave === "file"
         ? { ...c, tipo: "testo", sola_lettura: true, titolo: "File", larghezza: 170 } : c)));
     const anteprima = ref(null);
+    const leggendo = ref(0);
     async function manda(file) {
-      if (!file.length) return;
-      const dati = new FormData();
-      file.forEach((f) => dati.append("file", f));
-      try {
-        const r = await (await fetch("/api/fatture", { method: "POST", body: dati })).json();
-        stato.vista = r.vista;
-        if (r.esito) toast(r.esito.testo, r.esito.tipo);
-        anteprima.value = null;
-      } catch (e) { toast(e.message, "errore"); }
+      if (!file.length || leggendo.value) return;
+      leggendo.value = file.length;
+      await caricaFatture(file);
+      anteprima.value = null;
+      leggendo.value = 0;
     }
     async function leggi(ev) {
       await manda([...ev.target.files]);
@@ -224,13 +227,9 @@ const Spese = defineComponent({
       if (!portaFile(ev)) return;
       ev.preventDefault();
       sopra.value = 0;
-      const tutti = [...ev.dataTransfer.files];
-      const buoni = tutti.filter((f) => /\.(pdf|xml|p7m)$/i.test(f.name));
-      if (buoni.length < tutti.length) {
-        toast("Leggo solo PDF, XML e P7M: " + tutti.filter((f) => !buoni.includes(f))
-          .map((f) => f.name).join(", ") + " lasciati fuori.", "errore");
-      }
-      manda(buoni);
+      // Passano tutti: quello che non è una fattura il motore lo mette fra
+      // i non letti, e resta scritto nella pagina con gli altri.
+      manda([...ev.dataTransfer.files]);
     }
     function aggiungi() {
       const righe = anteprima.value || s.value.fatture_lette.righe;
@@ -239,7 +238,7 @@ const Spese = defineComponent({
     }
     const scrivi = (registro, righe) => gesto("spese", { registro, righe }, { zitto: true });
     return { s, colSostenute, colAnteprima, colPrev, leggi, aggiungi, anteprima, scrivi, gesto, euro, numeroIt,
-             sopra, entra, passa, esce, lascia };
+             sopra, leggendo, entra, passa, esce, lascia };
   },
   template: `
   <div @dragenter="entra" @dragover="passa" @dragleave="esce" @drop="lascia">
@@ -247,10 +246,15 @@ const Spese = defineComponent({
       spese già <b>sostenute</b> (le fatture); <b>accanto</b>, senza scendere in fondo alla pagina, il <b>riepilogo
       per categoria</b>, le spese ancora <b>da sostenere</b> e la torta. La quota <b>cantiere</b> (lavori, materiale,
       architetto) può sostituire la ristrutturazione stimata nello studio di fattibilità.</p>
-    <label class="zona-fatture" :class="{ sopra: sopra > 0 }">
-      <span>{{ sopra > 0 ? 'Lasciale pure qui' : '📥 Trascina qui le fatture (PDF o XML), oppure' }}</span>
-      <input type="file" multiple accept=".pdf,.xml,.p7m" @change="leggi" aria-label="Fatture">
+    <label class="zona-fatture" :class="{ sopra: sopra > 0, leggendo: leggendo > 0 }" :aria-busy="leggendo > 0">
+      <span role="status">{{ leggendo > 0 ? 'Sto leggendo ' + (leggendo === 1 ? 'la fattura…' : leggendo + ' fatture…')
+        : sopra > 0 ? 'Lasciale pure qui' : '📥 Trascina qui le fatture (PDF o XML), oppure' }}</span>
+      <input type="file" multiple accept=".pdf,.xml,.p7m" :disabled="leggendo > 0" @change="leggi" aria-label="Fatture">
     </label>
+    <Avviso v-if="s.fatture_lette && s.fatture_lette.non_letti.length" tipo="attenzione">⚠️ <b>Non sono riuscito a
+      leggere:</b> {{ s.fatture_lette.non_letti.join(', ') }}. Scrivile a mano nelle spese sostenute.
+      <button v-if="!s.fatture_lette.righe.length" class="bottone" style="margin-left:8px"
+              @click="gesto('scarta_fatture', {}, {zitto: true})">Ho capito</button></Avviso>
     <template v-if="s.fatture_lette && s.fatture_lette.righe.length">
       <p style="margin:12px 0 4px"><b>{{ s.fatture_lette.righe.length }} fattura/e lette.</b> Correggi se serve e
         scegli la categoria:</p>
@@ -275,13 +279,13 @@ const Spese = defineComponent({
 
     <div class="colonne" style="gap:2rem">
       <div style="flex:2.2">
-        <h5>🧾 Spese sostenute</h5>
+        <h2 class="titolo-5">🧾 Spese sostenute</h2>
         <Griglia :colonne="colSostenute" :righe="s.sostenute" dinamica obbligatoria="importo"
                  :nuova="{categoria: 'MATERIALE'}" @cambia="scrivi('spese', $event)" />
         <Metrica nome="Totale spese sostenute" :valore="euro(s.totale_sostenute)" style="max-width:420px" />
       </div>
       <div style="flex:1.1">
-        <h5>📊 Riepilogo — solo le sostenute</h5>
+        <h2 class="titolo-5">📊 Riepilogo — solo le sostenute</h2>
         <table v-if="s.riepilogo.length" class="riepilogo-spese">
           <thead><tr><th>Categoria</th><th class="num">€</th><th class="num">IVA</th></tr></thead>
           <tbody>
@@ -294,7 +298,7 @@ const Spese = defineComponent({
           </tbody>
         </table>
         <p v-else class="didascalia">Nessuna spesa sostenuta ancora.</p>
-        <h5>🔮 Spese da sostenere</h5>
+        <h2 class="titolo-5">🔮 Spese da sostenere</h2>
         <Griglia :colonne="colPrev" :righe="s.prev" dinamica obbligatoria="importo"
                  @cambia="scrivi('spese_prev', $event)" />
         <Metrica nome="Totale da sostenere" :valore="euro(s.totale_prev)" style="margin-bottom:12px" />
@@ -307,7 +311,7 @@ const Spese = defineComponent({
         <p class="didascalia grigio">Non è il costo dell'operazione: <b>ACQUISTO</b> e <b>AGENZIA</b> qui dentro, nello
           studio di fattibilità, sono già contati nel prezzo d'acquisto e nei suoi oneri. Di qua passa solo la quota
           <b>cantiere</b>.</p>
-        <h5>🥧 Sostenute per categoria</h5>
+        <h2 class="titolo-5">🥧 Sostenute per categoria</h2>
         <Grafico v-if="s.torta" :figura="s.torta" />
         <p v-else class="didascalia">La torta comparirà con le prime spese.</p>
       </div>
@@ -315,7 +319,7 @@ const Spese = defineComponent({
 
     <template v-if="s.confronto">
       <hr>
-      <h3 class="sottotitolo">⚖️ Il computo alla prova del cantiere</h3>
+      <h2 class="sottotitolo">⚖️ Il computo alla prova del cantiere</h2>
       <div class="colonne resta" style="margin-bottom:12px">
         <Metrica style="flex:1" nome="Preventivo (computo)" :valore="euro(s.confronto.preventivo)" />
         <Metrica style="flex:1" nome="Speso davvero (fatture)" :valore="euro(s.confronto.speso)" />
@@ -358,7 +362,7 @@ const Cantiere = defineComponent({
   },
   template: `
   <div>
-    <h3 class="sottotitolo" style="margin-top:0">🏗️ Contratto d'appalto e stati di avanzamento</h3>
+    <h2 class="sottotitolo" style="margin-top:0">🏗️ Contratto d'appalto e stati di avanzamento</h2>
     <p class="didascalia">Le imprese si pagano a <b>SAL</b>, concordati nel contratto prima che il cantiere apra
       (spesso 20-30-30-20, ma ogni cantiere fa storia a sé). Gli <b>extra</b> non si vedono lungo la strada: si
       calcolano a cantiere chiuso, quando ci si siede con le parti e si fa il SAL finale. Qui si tiene il conto, e
@@ -470,7 +474,7 @@ const Mca = defineComponent({
     <Griglia :colonne="colonne" :righe="m.righe" dinamica obbligatoria="nome" :nuova="{ascensore: false}"
              @cambia="gesto('comparabili', {righe: $event}, {zitto: true})" />
 
-    <h5>Il tuo immobile a lavori finiti</h5>
+    <h2 class="titolo-5">Il tuo immobile a lavori finiti</h2>
     <p class="didascalia grigio">Le stesse voci dei comparabili, ma sul tuo — <b>com'è quando lo vendi</b>, non com'è
       adesso: se lo ristrutturi integralmente, «Condizioni» è <i>Finemente ristrutturato</i>, non <i>Da ristrutturare</i>.</p>
     <div v-for="(b, i) in blocchi" :key="i" class="colonne resta" style="margin-bottom:12px">
@@ -515,7 +519,7 @@ const Mca = defineComponent({
     <p v-if="m.fonte === 'griglia' && m.mancanti.length" class="didascalia grigio">Voci non indicate, che valgono 1,00:
       <b>{{ m.mancanti.join(', ') }}</b>.</p>
 
-    <h6>Quanto vale, qui, essere già ristrutturati</h6>
+    <h3 class="titolo-6">Quanto vale, qui, essere già ristrutturati</h3>
     <div class="colonne resta" style="margin-bottom:16px">
       <CampoPassi style="flex:1" etichetta="Costo lavori (€/m² comm.)" :valore="m.bp.bp_costo_ristr_mq" :passo="50" :massimo="3000"
                   aiuto="Quanto costa ristrutturare, al metro quadro COMMERCIALE (la stessa base dei €/mq della stima, non il calpestabile). A zero la voce «Stato dell'unità» resta sulla tabella fissa."
