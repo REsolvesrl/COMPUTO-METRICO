@@ -3,7 +3,7 @@
 <!-- impeccable:design-schema 1 -->
 
 Mondo visivo di CME: **Campionario**. Le regole durature; i valori esatti
-vivono in `.streamlit/config.toml` e in `css_schede_computo()`.
+vivono in `web/stile.css` (i token stanno in `:root`) e in `costanti.py`.
 
 ## Il mondo
 
@@ -49,11 +49,11 @@ scheda del computo, cioè dentro la cornice e non sul disegno. La deroga qui
 sopra, scritta per il disegno, **non** li copriva: la si estende adesso,
 consapevolmente, perché sono i colori con cui l'utente distingue i mestieri
 a colpo d'occhio da prima dell'app. Vale una regola sola: **la tinta vive
-nella pastiglia**, non nel titolo. Il nome della categoria si legge in
-travertino, e quando Streamlit non ha un token che corrisponda alla tinta
-(le due categorie «grigie») il titolo non si colora affatto — il grigio di
-Streamlit è `rgba(250,250,250,.6)` e accanto a cinque tinte piene non legge
-«grigio», legge «disattivato».
+nella pastiglia**, non nel titolo. Il nome della categoria si legge sempre
+in travertino: colorato, sul fondo tinto della sua scheda, scendeva sotto il
+4,5:1 (azzurro 3,86, viola 4,28, rosso 4,40). La cifra sulla pastiglia la
+sceglie `colore_testo_su`, col contrasto vero, e sta a 1,17 rem in grassetto
+perché su una tinta media come il viola deve valere la soglia del testo grande.
 
 Chi un giorno volesse riportarli dentro al mondo sappia che è una decisione
 di prodotto, non un abbellimento: cotto per Demolizioni, gres per
@@ -86,15 +86,11 @@ pagina che si ridisegna sotto gli occhi.
   ⚠️ **Mai una banda sottile sul bordo sinistro**: è l'abitudine del
   gestionale travestita da campionario. Un campione vero è una tinta che si
   guarda, non una riga che decora.
-  Applicato alle categorie del computo: la pastiglia è `button::before`
-  (44 px di tinta piena), l'etichetta col codice è
-  `[data-testid="stMarkdownContainer"]::before` e il totale è
-  `button::after`. Nell'etichetta di un bottone Streamlit ci sta una sola
-  riga di testo, e dev'essere un unico nodo — la freccia va dentro la
-  marcatura di colore, altrimenti diventa un secondo elemento della griglia
-  e finisce a capo.
+  Applicato alle categorie del computo (`SchedaCategoria` in
+  `web/computo.js`): la `.pastiglia` da 44 px di tinta piena col numero, il
+  nome, il totale.
 - **La scheda dei materiali è d'ottone, non di un mestiere.** L'elenco dei
-  materiali a cura del committente (`card_materiali`, seconda linguetta
+  materiali a cura del committente (`SchedaMateriali`, seconda linguetta
   della scheda Computo) sta accanto al computo ma non ne fa parte, e il suo
   contorno lo dice: ottone al 55%, fondo al 9%, squadrato come le altre. Una
   delle sette tinte dei mestieri direbbe che è un mestiere in più; il grigio
@@ -115,10 +111,9 @@ pagina che si ridisegna sotto gli occhi.
   stanza vera, come «Pratiche e oneri» resta senza tinta piena nel computo.
   Lo **stato** dell'ordine è un semaforo a tre: rosso quello che manca,
   giallo quello mosso, verde quello arrivato. Vale la stessa regola del
-  pallino sulla categoria di spesa: il data_editor è tela grafica e ignora
-  il CSS, quindi il colore arriva incollato al testo, non nello sfondo
-  della cella.
-- **Metrica**: ogni `st.metric` è un campione — etichetta in maiuscoletto
+  pallino sulla categoria di spesa: il colore arriva incollato al testo,
+  non nello sfondo della cella.
+- **Metrica**: ogni `Metrica` è un campione — etichetta in maiuscoletto
   sopra, numero grande sotto, fondo rialzato e squadrato. Vale in tutta
   l'app: planimetria, riepilogo del computo, business plan.
 - **Il numero che comanda una scheda è ottone pieno**, tinta su tutta la
@@ -128,12 +123,20 @@ pagina che si ridisegna sotto gli occhi.
   secondarie, mai due azioni piene affiancate.
 - **Il disegno comanda**: nella scheda planimetria la tela ha la larghezza
   intera e il contrasto più alto della pagina — sta su un piano da lavoro
-  (`st.container(key="tela")`: fondo rialzato, contorno d'ottone). Pannelli
-  e comandi stanno attorno in cemento, mai in competizione: i gruppi di
-  campi vivono in contenitori `pan_*` col contorno di cemento, che
-  raggruppano invece di allineare una fila indistinta di caselle.
+  (`.tela`: fondo rialzato, contorno d'ottone). Pannelli e comandi stanno
+  attorno in cemento, mai in competizione: i gruppi di campi stanno in
+  contenitori col contorno di cemento, che raggruppano invece di allineare
+  una fila indistinta di caselle.
 - **Stati vuoti**: sono una cartella di campioni aperta, non un riquadro
   grigio con una frase. Dicono cosa succede dopo, con l'azione a portata.
+- **Spiegazioni**: una spiegazione si scrive in `title`, e la mostra un solo
+  foglietto (`web/spiega.js`) passandoci sopra, arrivandoci con Tab o
+  toccando il «?», che è un bottone vero. Esc la chiude. Mai un aiuto che si
+  legge solo col mouse, e mai dentro una `label`: il «?» sta accanto
+  all'etichetta (`TestaCampo`). Le caselle restano fuori: il loro title è il
+  testo intero della cella, e fra le celle si lavora.
+- **Titoli**: la gerarchia è H1, H2, H3, e la misura la decide la classe
+  (`sottotitolo`, `titolo-4`, `titolo-5`, `titolo-6`), non il numero del tag.
 
 ## Regole durature
 
@@ -147,8 +150,9 @@ pagina che si ridisegna sotto gli occhi.
 4. **Il numero è il protagonista.** In ogni scheda il valore è l'elemento più
    grande dopo il titolo.
 5. **Un solo ritmo di spaziatura**, con più aria sopra un titolo che sotto.
-6. **Vincolo Streamlit da conoscere:** le tabelle modificabili
-   (`st.data_editor`) sono disegnate su tela grafica e **ignorano il CSS**.
-   Non provare a vestirle: il colore arriva accanto (pallini, campioni,
-   riepiloghi in HTML). Ci abbiamo già sbattuto la testa con i colori delle
-   categorie di spesa.
+6. **Le tabelle modificabili sono HTML vero** (`Griglia` in
+   `web/componenti.js`): imitano l'aspetto del `data_editor` di Streamlit, ma
+   il CSS le raggiunge. I pallini colorati nel testo sono un'eredità di
+   quando non si poteva fare altro: restano, finché non si decide diversamente.
+7. **Niente rete**: Plotly e il carattere delle tabelle (Source Sans) stanno
+   sul computer. Plotly pesa quasi 5 MB e arriva solo quando serve un grafico.

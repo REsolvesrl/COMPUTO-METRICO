@@ -51,7 +51,6 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 ## Evidence on Hand
 
 - Modello Excel reale dell'utente replicato e verificato: i test di fattibilita.py usano i numeri esatti di "Studio fattibilità" + "MCA sell".
-- App pubblica live: <https://computometrico.streamlit.app/>.
 - Listino guida ~50 voci con prezzi indicativi (listino.py).
 - Nessuna testimonianza, caso studio o materiale marketing: non fabbricarne.
 
@@ -61,7 +60,7 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 2. **Logica pura, testata, separata dalla UI**: le funzioni di calcolo restano in moduli puri coperti da pytest.
 3. **Dal foglio di calcolo allo strumento**: ridurre attrito e passaggi manuali rispetto a Excel (estrazione fatture, quantità dalle dimensioni, superfici dalla planimetria).
 4. **Un progetto, un filo unico**: valutazione, computo, planimetrie e consuntivo vivono nello stesso progetto salvabile e riapribile.
-5. **Locale e privato**: elaborazione fatture in locale, archivio su bucket privato, credenziali mai nel codice.
+5. **Locale e privato**: fatture lette sul computer, archivio in una cartella del computer, niente che esca senza che lo si chieda.
 
 ## Accessibility & Inclusion
 
