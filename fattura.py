@@ -117,6 +117,31 @@ def _nota_ritenuta(ritenuta):
             "fornitore va il netto, la ritenuta si versa con l'F24")
 
 
+def _nota_autofattura(iva):
+    importo = f"{iva:,.2f}".replace(",", "X").replace(".", ",") \
+        .replace("X", ".")
+    return (f"Autofattura: l'IVA di {importo} € si versa e si detrae "
+            "insieme, nell'importo c'è solo l'imponibile")
+
+
+def _senza_iva(dati, iva):
+    """L'autofattura entra nelle spese per il suo imponibile, a IVA zero.
+
+    `iva` è l'imposta scritta sul documento; se non si è letta la si ricava
+    dall'aliquota, come farebbe lo scorporo.
+    """
+    lordo = dati["importo"]
+    if iva is None:
+        aliquota = float(dati.get("aliquota_iva") or 0.0)
+        iva = lordo - lordo / (1 + aliquota / 100) if aliquota else 0.0
+    iva = round(abs(iva), 2) * (-1 if lordo < 0 else 1)
+    dati["importo"] = round(lordo - iva, 2)
+    dati["aliquota_iva"] = 0.0
+    dati["note"] = " · ".join(n for n in (dati["note"], _nota_autofattura(
+        abs(iva))) if n)
+    return dati
+
+
 # ---------------------------------------------------------------- XML
 
 def _primo(root, nome):
@@ -131,6 +156,12 @@ def _tutti(root, nome):
 
 
 TIPI_NOTA_CREDITO = {"TD04", "TD08"}
+# Le autofatture d'integrazione: reverse charge interno (TD16), servizi
+# dall'estero (TD17), beni intra-UE (TD18), beni già in Italia (TD19).
+# L'IVA ci si scrive, si versa e si detrae nello stesso momento: al
+# fornitore non va, e nelle spese non è un costo. ⚠️ Non TD20 (la
+# regolarizzazione) né TD21 (lo splafonamento): lì l'IVA si versa davvero.
+TIPI_AUTOFATTURA = {"TD16", "TD17", "TD18", "TD19"}
 
 
 def dati_da_xml(contenuto):
@@ -197,7 +228,7 @@ def _dati_da_xml(contenuto):
     if ritenuta:
         note = " · ".join(n for n in (note, _nota_ritenuta(ritenuta)) if n)
 
-    return {
+    dati = {
         "importo": lordo,
         "aliquota_iva": _aliquota(imponibile_tot, imposta_tot),
         "data": _norma_data(data.text if data is not None else ""),
@@ -210,6 +241,9 @@ def _dati_da_xml(contenuto):
         "oggetto": _oggetto(descrizione),
         "note": note,
     }
+    if tipo_txt in TIPI_AUTOFATTURA:
+        return _senza_iva(dati, imposta_tot)
+    return dati
 
 
 # ---------------------------------------------------------------- PDF (testo)
@@ -237,6 +271,10 @@ _PATTERN_NUMERO = (
     r"Numero\s+fattura\s*:?\s*\n?\s*" + _NUMERO,
     r"Fattura\s+n[r°.]{0,2}\.?\s*:?\s*" + _NUMERO,
     r"\bn[r°.]{0,2}\.?\s*" + _NUMERO + r"\s+del\s",
+    # la testata del foglio SdI, «nr. AF01 66/26 del 02/11/2026»: qui il
+    # numero può cominciare con le lettere, perché la riga è quella e basta
+    r"(?m)^nr\.\s+([A-Za-z0-9][0-9A-Za-z/_.\-]*(?: [0-9A-Za-z/_.\-]+)?)"
+    r"\s+del\s+\d{1,2}/",
 )
 
 # Quello che si scrive quando il numero non c'è. Non una casella vuota: una
@@ -326,7 +364,7 @@ def dati_da_pdf_testo(testo):
     if lordo is None:
         return None
 
-    return {
+    dati = {
         "importo": lordo,
         "aliquota_iva": aliquota,
         "data": _norma_data(data or ""),
@@ -335,3 +373,10 @@ def dati_da_pdf_testo(testo):
         "oggetto": _oggetto(descrizione),
         "note": _nota_ritenuta(ritenuta) if ritenuta else "",
     }
+    # Il foglio SdI intitola «AUTOFATTURA» il documento che emette chi
+    # compra. Sul PDF il codice del tipo non c'è, quindi non si distingue
+    # un'integrazione (TD16-TD19) da una regolarizzazione (TD20, dove l'IVA
+    # si paga davvero): si legge come integrazione, che è il caso normale.
+    if re.match(r"\s*AUTOFATTURA\b", testo):
+        return _senza_iva(dati, imposta)
+    return dati

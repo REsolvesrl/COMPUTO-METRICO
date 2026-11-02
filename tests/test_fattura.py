@@ -298,3 +298,58 @@ def test_xml_col_totale_netto_rimette_la_ritenuta():
 
 def test_xml_col_totale_lordo_resta_com_e():
     assert dati_da_xml(_xml_professionista("14723.92"))["importo"] == 14723.92
+
+
+# ------------------------------------------------------- le autofatture
+
+# Sul modello dell'autofattura vera della Migliarina: dieci finestre da un
+# fornitore polacco, acquisto intra-UE. L'IVA si integra: si versa e si
+# detrae insieme, e al fornitore va solo l'imponibile.
+PDF_AUTOFATTURA = """AUTOFATTURA
+nr. AF01 66/26 del 02/11/2026
+Emessa da: Cessionario / committente
+FORNITORE
+Fornitore Estero Sp. z o.o.
+RIEPILOGO IVA
+Totale imponibile
+1.626,22 €
+Totale IVA
+357,77 €
+Totale documento
+1.983,99 €
+Netto a pagare
+1.983,99 €
+"""
+
+
+def test_l_autofattura_entra_per_il_solo_imponibile():
+    d = dati_da_pdf_testo(PDF_AUTOFATTURA)
+    assert d["importo"] == 1626.22
+    assert d["aliquota_iva"] == 0.0
+    assert "357,77" in d["note"]
+
+
+def test_il_numero_dell_autofattura_comincia_con_le_lettere():
+    assert dati_da_pdf_testo(PDF_AUTOFATTURA)["nr_fattura"] == "AF01 66/26"
+
+
+def test_una_fattura_normale_tiene_la_sua_iva():
+    d = dati_da_pdf_testo(PDF_FATTURA)
+    assert d["importo"] == 122.0 and d["aliquota_iva"] == 22.0
+
+
+def _xml_tipo(tipo):
+    return XML_FATTURA.replace("<TipoDocumento>TD01</TipoDocumento>",
+                               f"<TipoDocumento>{tipo}</TipoDocumento>")
+
+
+def test_xml_delle_integrazioni_a_iva_zero():
+    for tipo in ("TD16", "TD17", "TD18", "TD19"):
+        d = dati_da_xml(_xml_tipo(tipo))
+        assert (d["importo"], d["aliquota_iva"]) == (100.0, 0.0), tipo
+
+
+def test_xml_della_regolarizzazione_tiene_l_iva():
+    # TD20: l'IVA chi compra la versa davvero all'Erario
+    d = dati_da_xml(_xml_tipo("TD20"))
+    assert (d["importo"], d["aliquota_iva"]) == (122.0, 22.0)
