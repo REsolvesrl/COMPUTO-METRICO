@@ -589,7 +589,7 @@ input[type="checkbox"] { accent-color: var(--ottone); width: 1rem;
 .griglia-barra button:disabled { opacity: .35; cursor: not-allowed; }
 .griglia-scorre { overflow-x: auto; border: 1px solid rgba(236, 231, 218, .1); }
 table.griglia {
-  border-collapse: collapse; width: 100%; table-layout: fixed;
+  border-collapse: collapse; table-layout: fixed;
   font-family: "Source Sans", "Segoe UI", sans-serif; font-size: 14px;
   background: var(--ardesia-chiara);
 }
@@ -600,6 +600,20 @@ table.griglia th {
   border-right: 1px solid rgba(236, 231, 218, .1);
   border-bottom: 1px solid rgba(236, 231, 218, .1);
 }
+table.griglia th { position: relative; }
+/* il bordo che si trascina: si vede passandoci sopra */
+table.griglia th .maniglia {
+  position: absolute; top: 0; right: 0; width: 8px; height: 100%;
+  cursor: col-resize; touch-action: none;
+}
+table.griglia th .maniglia::after {
+  content: ""; position: absolute; top: 6px; bottom: 6px; right: 0; width: 2px;
+  background: var(--ottone); opacity: 0; transition: opacity .12s ease;
+}
+table.griglia th .maniglia:hover::after, table.griglia th .maniglia:active::after,
+table.griglia th .maniglia:focus-visible::after { opacity: 1; }
+table.griglia th .maniglia:focus-visible { outline: none; }
+@media (pointer: coarse) { table.griglia th .maniglia { width: 20px; } }
 table.griglia th .icona-colonna {
   display: inline-block; width: 14px; margin-right: 6px; font-size: 11px;
   color: rgba(236, 231, 218, .45); text-align: center;

@@ -553,8 +553,9 @@ export const Griglia = defineComponent({
       manda();
     }
     // Le colonne larghe quanto il loro contenuto, come l'«autosize» della
-    // tabella di Streamlit: si misura il testo più lungo (intestazione
-    // compresa) e l'ultima colonna si prende quello che resta.
+    // tabella di Streamlit: si misura il testo più lungo, intestazione
+    // compresa. L'ultima non si prende più tutto il resto della riga: le
+    // Note arrivavano a mezzo schermo con dentro una parola.
     const misuratore = document.createElement("canvas").getContext("2d");
     const larghezze = computed(() => {
       misuratore.font = '14px "Source Sans", "Segoe UI", sans-serif';
@@ -572,6 +573,53 @@ export const Griglia = defineComponent({
         return Math.round(Math.min(c.tipo === "link" ? 180 : 420, Math.max(c.minimo_px || 56, massimo)));
       });
     });
+    // Le colonne si allargano trascinando il bordo dell'intestazione, e la
+    // misura si ricorda nel browser, tabella per tabella: è una comodità di
+    // chi guarda, non un dato del progetto. Doppio clic: torna su misura.
+    const memoria = computed(() => "cme_colonne:" + props.colonne.map((c) => c.chiave).join(","));
+    function rileggi() {
+      try { return JSON.parse(localStorage.getItem(memoria.value)) || {}; } catch (e) { return {}; }
+    }
+    const allargate = ref(rileggi());
+    watch(memoria, () => { allargate.value = rileggi(); });
+    function ricorda() {
+      try { localStorage.setItem(memoria.value, JSON.stringify(allargate.value)); } catch (e) { /* niente */ }
+    }
+    const misure = computed(() => props.colonne.map((c, j) => allargate.value[c.chiave] ?? larghezze.value[j]));
+    const totale = computed(() => 32 + misure.value.reduce((a, b) => a + b, 0));
+    function fissa(j, px) {
+      allargate.value = { ...allargate.value, [props.colonne[j].chiave]: Math.max(40, Math.round(px)) };
+    }
+    function trascina(ev, j) {
+      ev.preventDefault();
+      const maniglia = ev.currentTarget;
+      const da = ev.clientX;
+      const prima = misure.value[j];
+      try { maniglia.setPointerCapture(ev.pointerId); } catch (e) { /* un puntatore già andato */ }
+      const muovi = (e) => fissa(j, prima + e.clientX - da);
+      const fine = () => {
+        maniglia.removeEventListener("pointermove", muovi);
+        maniglia.removeEventListener("pointerup", fine);
+        maniglia.removeEventListener("pointercancel", fine);
+        ricorda();
+      };
+      maniglia.addEventListener("pointermove", muovi);
+      maniglia.addEventListener("pointerup", fine);
+      maniglia.addEventListener("pointercancel", fine);
+    }
+    function suMisura(j) {
+      const resto = { ...allargate.value };
+      delete resto[props.colonne[j].chiave];
+      allargate.value = resto;
+      ricorda();
+    }
+    function tastoManiglia(ev, j) {
+      const passo = { ArrowLeft: -10, ArrowRight: 10 }[ev.key];
+      if (!passo) return;
+      ev.preventDefault();
+      fissa(j, misure.value[j] + passo);
+      ricorda();
+    }
     const schermoIntero = ref(false);
     function scaricaCsv() {
       const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -589,7 +637,8 @@ export const Griglia = defineComponent({
     }
     const ancheBozze = computed(() => locali.value);
     return { locali: ancheBozze, scelte, testoCella, scrivi, aggiungi, togliScelte,
-             scegli, copia, incolla, larghezze, schermoIntero, scaricaCsv };
+             scegli, copia, incolla, misure, totale, trascina, suMisura, tastoManiglia,
+             schermoIntero, scaricaCsv };
   },
   template: `
   <div class="griglia-scatola" :class="{'a-tutto-schermo': schermoIntero}">
@@ -611,14 +660,18 @@ export const Griglia = defineComponent({
       </div>
     </div>
     <div class="griglia-scorre" :style="altezzaMax ? {maxHeight: altezzaMax, overflowY: 'auto'} : null">
-    <table class="griglia">
+    <table class="griglia" :style="{width: totale + 'px'}">
       <colgroup><col style="width:32px"><col v-for="(c, j) in colonne" :key="c.chiave"
-        :style="j < colonne.length - 1 ? {width: larghezze[j] + 'px'} : {minWidth: larghezze[j] + 'px'}"></colgroup>
+        :style="{width: misure[j] + 'px'}"></colgroup>
       <thead><tr>
         <th class="scelta-riga" aria-label="Selezione"></th>
-        <th v-for="c in colonne" :key="c.chiave" :class="{num: c.tipo==='numero'}" :title="c.aiuto"
+        <th v-for="(c, j) in colonne" :key="c.chiave" :class="{num: c.tipo==='numero'}" :title="c.aiuto"
             :tabindex="c.aiuto ? 0 : null">
-          <span class="icona-colonna" aria-hidden="true">{{ {testo: '≡', numero: '#', scelta: '▾', spunta: '☑', link: '🔗', allegato: '📎'}[c.tipo] }}</span>{{ c.titolo }}</th>
+          <span class="icona-colonna" aria-hidden="true">{{ {testo: '≡', numero: '#', scelta: '▾', spunta: '☑', link: '🔗', allegato: '📎'}[c.tipo] }}</span>{{ c.titolo }}<span
+            class="maniglia" role="separator" aria-orientation="vertical" tabindex="0"
+            :aria-label="'Larghezza della colonna ' + c.titolo" :aria-valuenow="misure[j]"
+            title="Trascina per allargare o stringere la colonna. Doppio clic: torna su misura."
+            @pointerdown="trascina($event, j)" @dblclick="suMisura(j)" @keydown="tastoManiglia($event, j)"></span></th>
       </tr></thead>
       <tbody>
         <tr v-for="(r, i) in locali" :key="i" :class="{selezionata: scelte.has(i), nuova: r.__bozza}">
