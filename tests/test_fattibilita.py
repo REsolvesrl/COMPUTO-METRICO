@@ -279,8 +279,8 @@ def test_riepilogo_per_categoria_aggrega_e_scorpora():
         {"categoria": "LAVORI", "importo": 1000.0, "aliquota_iva": 0.0},
     ]
     riep = riepilogo_per_categoria(righe)
-    assert riep["MATERIALE"] == {"importo": 232.0, "iva": 32.0}
-    assert riep["LAVORI"] == {"importo": 1000.0, "iva": 0.0}
+    assert riep["MATERIALE"] == {"importo": 232.0, "iva": 32.0, "netto": 200.0}
+    assert riep["LAVORI"] == {"importo": 1000.0, "iva": 0.0, "netto": 1000.0}
 
 
 def test_riepilogo_per_categoria_ordine_e_default():

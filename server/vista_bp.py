@@ -28,17 +28,28 @@ def _figura(fig):
 
 
 def _quota_cantiere(righe):
-    return round(sum(r["importo"] for r in righe
-                     if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
+    """Lavori, materiale e architetto, al netto dell'IVA."""
+    return fattibilita.netto_spese(
+        [r for r in righe if r["categoria"] in fattibilita.CATEGORIE_CANTIERE])
+
+
+def _con_iva(righe):
+    return [dict(r, iva_eur=fattibilita.iva_scorporata(
+        r["importo"], r["aliquota_iva"])) for r in righe]
 
 
 def _spese(b):
     d = b.dati
     sostenute, prev = d["spese"], d["spese_prev"]
-    tot_sost = fattibilita.totale_spese(sostenute)
-    tot_prev = fattibilita.totale_spese(prev)
+    # Tutto al netto dell'IVA, scorporata riga per riga: il registro si
+    # scrive coi lordi delle fatture, ma i conti si fanno sui netti, come il
+    # computo e come lo studio di fattibilità.
+    tot_sost = fattibilita.netto_spese(sostenute)
+    tot_prev = fattibilita.netto_spese(prev)
+    iva_sost = fattibilita.iva_spese(sostenute)
+    iva_prev = fattibilita.iva_spese(prev)
     riepilogo = fattibilita.riepilogo_per_categoria(sostenute)
-    iva_totale = round(sum(v["iva"] for v in riepilogo.values()), 2)
+    iva_totale = iva_sost
     ristr_computo = b.totali()["totale"]
     sost_c, prev_c = _quota_cantiere(sostenute), _quota_cantiere(prev)
     consuntivo = round(sost_c + prev_c, 2)
@@ -52,13 +63,14 @@ def _spese(b):
             "scostamento_pct": (round(scost / ristr_computo * 100, 2)
                                 if ristr_computo else None)}
     return {
-        "sostenute": [dict(r, iva_eur=fattibilita.iva_scorporata(
-            r["importo"], r["aliquota_iva"])) for r in sostenute],
-        "prev": prev,
+        "sostenute": _con_iva(sostenute),
+        "prev": _con_iva(prev),
         "totale_sostenute": tot_sost, "totale_prev": tot_prev,
+        "iva_sostenute": iva_sost, "iva_prev": iva_prev,
         "totale": round(tot_sost + tot_prev, 2),
+        "iva_registro": round(iva_sost + iva_prev, 2),
         "quota_cantiere": _quota_cantiere(sostenute + prev),
-        "riepilogo": [{"categoria": c, "importo": v["importo"],
+        "riepilogo": [{"categoria": c, "importo": v["netto"],
                        "iva": v["iva"],
                        "colore": COLORE_CATEGORIA_SPESA.get(c, OTTONE),
                        "su_colore": colore_testo_su(
@@ -83,11 +95,13 @@ def _spese(b):
 
 def _riga_costo(etichetta, bp, derivati, centro=None, destra=None, iva=None,
                 imponibile=None, aiuto_centro=None, aiuto_destra=None,
-                arancio=False, come=None):
+                arancio=False, come=None, iva_vera=None):
     """Una riga del dettaglio costi: etichetta | % | netto | IVA % | IVA €.
 
     `come`: da dove viene il netto, detto coi numeri del progetto; la riga
     ci aggiunge il conto dell'IVA. Si legge passando col cursore.
+    `iva_vera`: l'IVA già scritta sulle fatture, al posto di quella che
+    l'aliquota della riga darebbe sull'imponibile.
     """
     def valore(chiave):
         return derivati[chiave] if chiave in derivati else bp.get(chiave)
@@ -101,11 +115,17 @@ def _riga_costo(etichetta, bp, derivati, centro=None, destra=None, iva=None,
         base = imponibile if imponibile is not None else (valore(destra)
                                                           or 0.0)
         riga["iva"] = {"chiave": iva, "valore": bp[iva],
-                       "euro": fattibilita.iva_su(base, bp[iva])}
-        righe_come.append(
-            f"IVA: {euro(base)} × {numero_it(bp[iva], 2)}% = "
-            f"{euro(riga['iva']['euro'])}" if bp[iva] else
-            "IVA: aliquota 0%, niente da aggiungere")
+                       "euro": (iva_vera if iva_vera is not None
+                                else fattibilita.iva_su(base, bp[iva]))}
+        if iva_vera is not None:
+            righe_come.append(
+                f"IVA: {euro(iva_vera)}, quella vera delle fatture, scorporata "
+                "riga per riga: l'aliquota qui accanto non conta")
+        else:
+            righe_come.append(
+                f"IVA: {euro(base)} × {numero_it(bp[iva], 2)}% = "
+                f"{euro(riga['iva']['euro'])}" if bp[iva] else
+                "IVA: aliquota 0%, niente da aggiungere")
     riga["come"] = "\n".join(righe_come)
     return riga
 
@@ -128,6 +148,9 @@ def _fattibilita(b, spese):
     mq_eff = bp["bp_mq"] or mq_plan
     ristr_eff, usa = b.ristrutturazione()
     consuntivo = b.cantiere_consuntivo()
+    # coi costi reali l'IVA dei lavori è quella delle fatture, non il 10%
+    iva_ristr = (b.cantiere_consuntivo_iva() if usa
+                 else fattibilita.iva_su(ristr_eff, bp.get("bp_iva_ristr", 0.0)))
     parametri = {
         "prezzo_acquisto": bp["bp_acquisto"],
         "prezzo_vendita": bp["bp_vendita"],
@@ -149,7 +172,7 @@ def _fattibilita(b, spese):
     iva_voci = [fattibilita.iva_su(valori.get(campo, 0.0),
                                    bp.get(aliquota, 0.0))
                 for campo, aliquota in VOCI_CON_IVA]
-    iva_voci.append(fattibilita.iva_su(ristr_eff, bp.get("bp_iva_ristr", 0.0)))
+    iva_voci.append(iva_ristr)
     parametri["iva_costi"] = round(sum(iva_voci), 2)
     parametri["iva_costi_vendita"] = fattibilita.iva_su(
         derivati["bp_ag_out_eur"], bp.get("bp_iva_ag_out", 0.0))
@@ -182,8 +205,8 @@ def _fattibilita(b, spese):
     acquisto_txt = f"prezzo di acquisto {euro(bp['bp_acquisto'])}"
     if usa:
         origine_ristr = ("I costi reali del cantiere (lavori, materiale, "
-                         "architetto dalle Spese a consuntivo): "
-                         f"{euro(ristr_eff)}")
+                         "architetto dalle Spese a consuntivo), al netto "
+                         f"dell'IVA: {euro(ristr_eff)}")
     elif bp["bp_ristr"]:
         origine_ristr = f"{a_mano}: {euro(ristr_eff)}"
     else:
@@ -227,6 +250,7 @@ def _fattibilita(b, spese):
         _riga_costo("Ristrutturazione stimata", bp, derivati,
                     destra="bp_ristr", iva="bp_iva_ristr",
                     imponibile=ristr_eff, arancio=True,
+                    iva_vera=iva_ristr if usa else None,
                     aiuto_destra="I lavori NUDI, senza riserva: gli "
                     "imprevisti sono la riga qui sopra e si contano una "
                     "volta sola. Lasciando 0 arriva il totale del computo — "
@@ -268,8 +292,7 @@ def _fattibilita(b, spese):
     iva_parti = [(nomi_iva.get(campo, campo), fattibilita.iva_su(
         valori.get(campo, 0.0), bp.get(aliquota, 0.0)))
         for campo, aliquota in VOCI_CON_IVA]
-    iva_parti.append(("ristrutturazione", fattibilita.iva_su(
-        ristr_eff, bp.get("bp_iva_ristr", 0.0))))
+    iva_parti.append(("ristrutturazione", iva_ristr))
     entry, uscita = esito["entry"], esito["exit"]
     if durata == 12:
         come_annuo = "Su 12 mesi coincide col ROE"

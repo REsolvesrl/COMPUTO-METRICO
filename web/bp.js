@@ -149,9 +149,9 @@ const Fattibilita = defineComponent({
       <div class="riga-costo intestazione"><span>Voce</span><span>%</span><span>Netto</span><span class="voce-costo">IVA %<Aiuto testo="Aliquota di ogni voce: 22% è l'ordinaria, 10% i lavori edili, 0% le voci che l'IVA non ce l'hanno (l'imposta di registro è già un'imposta)." /></span><span>IVA €</span></div>
       <RigaCosto v-for="r in f.costi" :key="r.etichetta" :riga="r" />
       <label v-if="f.consuntivo > 0" class="spunta" style="margin:8px 0"
-             title="Lavori + materiale + architetto dalla scheda «Spese a consuntivo» (sostenute e da sostenere), al posto della stima. Ha la precedenza sulla cifra a mano qui sopra.">
+             title="Lavori + materiale + architetto dalla scheda «Spese a consuntivo» (sostenute e da sostenere), al netto dell'IVA, al posto della stima. L'IVA entra a parte, quella vera delle fatture. Ha la precedenza sulla cifra a mano qui sopra.">
         <input type="checkbox" :checked="f.bp.bp_usa_consuntivo" @change="imposta('bp_usa_consuntivo', $event.target.checked)">
-        Usa i costi reali del cantiere ({{ euro(f.consuntivo) }})</label>
+        Usa i costi reali del cantiere ({{ euro(f.consuntivo) }} netti)</label>
       <RigheBp :righe="f.esito.acquisto_totali" />
       <div style="height:10px"></div>
       <RigaCosto :riga="f.agenzia_out" />
@@ -189,8 +189,11 @@ const Spese = defineComponent({
     const colPrev = computed(() => [
       { chiave: "oggetto", titolo: "Oggetto", tipo: "testo", larghezza: 190 },
       { chiave: "importo", titolo: "Importo previsto", tipo: "numero", formato: "euro", larghezza: 125, minimo: 0,
-        aiuto: "IVA compresa, come le spese sostenute: i due registri si sommano." },
-      { chiave: "aliquota_iva", titolo: "IVA %", tipo: "numero", decimali: 0, larghezza: 70, minimo: 0, massimo: 22 },
+        aiuto: "IVA compresa, come il totale di una fattura: l'IVA si scorpora con l'aliquota accanto, e i totali qui sotto sono al netto." },
+      { chiave: "aliquota_iva", titolo: "IVA %", tipo: "numero", decimali: 0, larghezza: 70, minimo: 0, massimo: 22,
+        aiuto: "Aliquota prevista, per lo scorporo (22, 10 o 0)" },
+      { chiave: "iva_eur", titolo: "di cui IVA", tipo: "numero", formato: "euro", larghezza: 105, sola_lettura: true,
+        aiuto: "Calcolata: l'IVA contenuta nell'importo previsto, con l'aliquota della colonna accanto." },
       { chiave: "categoria", titolo: "Categoria", tipo: "scelta", larghezza: 150, opzioni: s.value.categorie },
       { chiave: "note", titolo: "Note", tipo: "testo", larghezza: 110 },
     ]);
@@ -282,12 +285,13 @@ const Spese = defineComponent({
         <h2 class="titolo-5">🧾 Spese sostenute</h2>
         <Griglia :colonne="colSostenute" :righe="s.sostenute" dinamica obbligatoria="importo"
                  :nuova="{categoria: 'MATERIALE'}" @cambia="scrivi('spese', $event)" />
-        <Metrica nome="Totale spese sostenute" :valore="euro(s.totale_sostenute)" style="max-width:420px" />
+        <Metrica nome="Totale spese sostenute, netto IVA" :valore="euro(s.totale_sostenute)" style="max-width:420px"
+                 :aiuto="'Le fatture senza IVA, scorporata riga per riga. IVA: ' + euro(s.iva_sostenute)" />
       </div>
       <div style="flex:1.1">
         <h2 class="titolo-5">📊 Riepilogo — solo le sostenute</h2>
         <table v-if="s.riepilogo.length" class="riepilogo-spese">
-          <thead><tr><th>Categoria</th><th class="num">€</th><th class="num">IVA</th></tr></thead>
+          <thead><tr><th>Categoria</th><th class="num">Netto</th><th class="num">IVA</th></tr></thead>
           <tbody>
             <tr v-for="r in s.riepilogo" :key="r.categoria">
               <td :style="{background: r.colore, color: r.su_colore, fontWeight: 700}">{{ r.categoria }}</td>
@@ -301,16 +305,19 @@ const Spese = defineComponent({
         <h2 class="titolo-5">🔮 Spese da sostenere</h2>
         <Griglia :colonne="colPrev" :righe="s.prev" dinamica obbligatoria="importo"
                  @cambia="scrivi('spese_prev', $event)" />
-        <Metrica nome="Totale da sostenere" :valore="euro(s.totale_prev)" style="margin-bottom:12px" />
+        <Metrica nome="Totale da sostenere, netto IVA" :valore="euro(s.totale_prev)" style="margin-bottom:12px"
+                 :aiuto="'Gli importi previsti senza IVA, scorporata riga per riga. IVA: ' + euro(s.iva_prev)" />
         <div class="totale-oro">
-          <div class="nome">Totale del registro spese</div>
+          <div class="nome">Totale del registro spese, netto IVA</div>
           <div class="valore">{{ euro(s.totale) }}</div>
           <div class="sotto">sostenute {{ euro(s.totale_sostenute) }} + da sostenere {{ euro(s.totale_prev) }}</div>
-          <div class="separato">di cui cantiere <b>{{ euro(s.quota_cantiere) }}</b> — riportabile nello studio di fattibilità</div>
+          <dl class="iva-registro">
+            <dt>IVA già accumulata <span>— dalle fatture</span></dt><dd>{{ euro(s.iva_sostenute) }}</dd>
+            <dt>IVA che si stima di accumulare <span>— dalle spese da sostenere</span></dt><dd>{{ euro(s.iva_prev) }}</dd>
+            <dt class="tutta">IVA in tutto</dt><dd class="tutta">{{ euro(s.iva_registro) }}</dd>
+          </dl>
+          <div class="separato">di cui cantiere <b>{{ euro(s.quota_cantiere) }}</b> netti — riportabile nello studio di fattibilità</div>
         </div>
-        <p class="didascalia grigio">Non è il costo dell'operazione: <b>ACQUISTO</b> e <b>AGENZIA</b> qui dentro, nello
-          studio di fattibilità, sono già contati nel prezzo d'acquisto e nei suoi oneri. Di qua passa solo la quota
-          <b>cantiere</b>.</p>
         <h2 class="titolo-5">🥧 Sostenute per categoria</h2>
         <Grafico v-if="s.torta" :figura="s.torta" />
         <p v-else class="didascalia">La torta comparirà con le prime spese.</p>
@@ -328,7 +335,7 @@ const Spese = defineComponent({
                  :valore="s.confronto.scostamento_pct !== null ? numeroIt(s.confronto.scostamento_pct, 1) + ' %' : '—'"
                  :delta="euro(s.confronto.scostamento)" :verso="s.confronto.scostamento > 0 ? 'giu' : 'su'" />
       </div>
-      <p class="didascalia grigio">Lavori, materiale e architetto. Il confronto usa <b>entrambe</b> le colonne — speso
+      <p class="didascalia grigio">Lavori, materiale e architetto, al netto dell'IVA come il computo. Il confronto usa <b>entrambe</b> le colonne — speso
         più da sostenere — perché è il costo atteso del cantiere; finché la seconda non è vuota, lo scostamento è in
         parte una previsione. ⚠️ I materiali che compri tu il computo non li conosce: se sono una fetta grossa,
         mettine il budget fra le <b>spese da sostenere</b>, o questo confronto ti dirà che stai sforando quando non

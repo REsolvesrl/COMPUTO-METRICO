@@ -53,9 +53,10 @@ def grafico_totali(totali):
 
 
 def grafico_torta_spese(riepilogo):
-    """Torta delle spese sostenute per categoria (importi lordi)."""
+    """Torta delle spese sostenute per categoria, al netto dell'IVA."""
     categorie = list(riepilogo)
-    valori = [riepilogo[c]["importo"] for c in categorie]
+    valori = [riepilogo[c].get("netto", riepilogo[c]["importo"])
+              for c in categorie]
     colori = [COLORE_CATEGORIA_SPESA.get(c, ORO) for c in categorie]
     fig = go.Figure(go.Pie(
         labels=categorie,

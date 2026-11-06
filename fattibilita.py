@@ -47,11 +47,26 @@ def totale_spese(righe):
     return round(sum(float(r.get("importo") or 0.0) for r in righe), 2)
 
 
+def iva_spese(righe):
+    """L'IVA contenuta in un elenco di spese, scorporata riga per riga."""
+    return round(sum(iva_scorporata(r.get("importo"), r.get("aliquota_iva"))
+                     for r in righe), 2)
+
+
+def netto_spese(righe):
+    """Le spese al netto dell'IVA: il lordo meno l'IVA di ogni riga.
+
+    Ogni riga con la sua aliquota, non una sola per tutti: nello stesso
+    cantiere i lavori stanno al 10% e il materiale al 22%.
+    """
+    return round(totale_spese(righe) - iva_spese(righe), 2)
+
+
 def riepilogo_per_categoria(righe):
-    """Aggrega le spese per categoria: {categoria: {'importo', 'iva'}}.
+    """Aggrega le spese per categoria: {categoria: {'importo', 'iva', 'netto'}}.
 
     L'importo è il totale lordo della categoria, l'IVA è la somma scorporata
-    riga per riga. L'ordine segue CATEGORIE_SPESE (le categorie fuori elenco
+    riga per riga, il netto la differenza. L'ordine segue CATEGORIE_SPESE (le categorie fuori elenco
     vengono in coda, in ordine di comparsa).
     """
     agg = {}
@@ -63,7 +78,9 @@ def riepilogo_per_categoria(righe):
     ordine = {c: i for i, c in enumerate(CATEGORIE_SPESE)}
     chiavi = sorted(agg, key=lambda c: ordine.get(c, len(ordine)))
     return {c: {"importo": round(agg[c]["importo"], 2),
-                "iva": round(agg[c]["iva"], 2)} for c in chiavi}
+                "iva": round(agg[c]["iva"], 2),
+                "netto": round(agg[c]["importo"] - agg[c]["iva"], 2)}
+            for c in chiavi}
 
 
 def iva_su(imponibile, aliquota):

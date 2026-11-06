@@ -68,7 +68,8 @@ def test_le_spese_si_normalizzano_come_nel_vecchio(b):
         "fornitore": "", "oggetto": "", "categoria": "LAVORI", "note": ""}]
     v = vista_bp(b)["spese"]
     assert v["sostenute"][0]["iva_eur"] == pytest.approx(220.0)
-    assert v["quota_cantiere"] == 1220.0
+    # la quota cantiere è al netto: 1.220 € al 22% sono 1.000 di lavori
+    assert v["quota_cantiere"] == 1000.0
 
 
 def test_i_costi_reali_del_cantiere_sostituiscono_la_stima(b):
@@ -237,3 +238,43 @@ def test_senza_scarti_dopo_l_aggiunta_non_resta_niente(b):
     b.leggi_fatture([("buona.xml", xml.encode())])
     b.aggiungi_fatture(b.fatture_lette["righe"])
     assert b.fatture_lette is None
+
+
+# --------------------------------------------- il registro spese al netto
+
+def test_il_registro_spese_conta_al_netto(b):
+    b.scrivi_spese("spese", [
+        {"importo": 1100, "aliquota_iva": 10, "categoria": "LAVORI"},
+        {"importo": 122, "aliquota_iva": 22, "categoria": "MATERIALE"}])
+    b.scrivi_spese("spese_prev", [
+        {"importo": 12200, "aliquota_iva": 22, "categoria": "MATERIALE"}])
+    v = vista_bp(b)["spese"]
+    assert v["totale_sostenute"] == 1100.0          # 1.000 + 100
+    assert v["iva_sostenute"] == 122.0              # 100 + 22
+    assert v["totale_prev"] == 10000.0
+    assert v["prev"][0]["iva_eur"] == pytest.approx(2200.0)
+    assert v["totale"] == 11100.0
+    assert v["quota_cantiere"] == 11100.0
+    assert {r["categoria"]: r["importo"] for r in v["riepilogo"]} == {
+        "LAVORI": 1000.0, "MATERIALE": 100.0}
+
+
+def test_coi_costi_reali_l_iva_non_si_conta_due_volte(b):
+    # 110.000 € di lavori al 10%: 100.000 netti e 10.000 di IVA
+    b.scrivi_spese("spese", [
+        {"importo": 110000, "aliquota_iva": 10, "categoria": "LAVORI"}])
+    b.imposta_bp("bp_usa_consuntivo", True)
+    assert b.ristrutturazione() == (100000.0, True)
+    f = vista_bp(b)["fattibilita"]
+    riga = next(r for r in f["costi"] if r["etichetta"] == "Ristrutturazione stimata")
+    # l'IVA è quella delle fatture, non l'aliquota della riga sopra il lordo
+    assert riga["iva"]["euro"] == 10000.0
+    assert "fatture" in riga["come"]
+
+
+def test_il_confronto_col_computo_e_fra_netti(b):
+    b.scrivi_spese("spese", [
+        {"importo": 11000, "aliquota_iva": 10, "categoria": "LAVORI"}])
+    c = vista_bp(b)["spese"]["confronto"]
+    assert c["speso"] == 10000.0
+    assert c["scostamento"] == round(10000.0 - c["preventivo"], 2)

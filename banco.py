@@ -1182,11 +1182,24 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
             escludi=CATEGORIE_INVOLUCRO)
         return mq
 
+    def _spese_cantiere(self):
+        return [r for r in self.dati["spese"] + self.dati["spese_prev"]
+                if r["categoria"] in fattibilita.CATEGORIE_CANTIERE]
+
     def cantiere_consuntivo(self):
-        """Lavori, materiale e architetto: sostenute più da sostenere."""
-        return round(sum(
-            r["importo"] for r in self.dati["spese"] + self.dati["spese_prev"]
-            if r["categoria"] in fattibilita.CATEGORIE_CANTIERE), 2)
+        """Lavori, materiale e architetto: sostenute più da sostenere, AL
+        NETTO dell'IVA.
+
+        ⚠️ Netto, perché prende il posto della ristrutturazione nello studio
+        di fattibilità, che è un imponibile: l'IVA ci si aggiunge a parte, e
+        con il lordo si contava due volte. E il computo con cui si confronta
+        è anche lui senza IVA.
+        """
+        return fattibilita.netto_spese(self._spese_cantiere())
+
+    def cantiere_consuntivo_iva(self):
+        """L'IVA vera delle stesse spese, quella scritta sulle fatture."""
+        return fattibilita.iva_spese(self._spese_cantiere())
 
     def ristrutturazione(self):
         """(importo dei lavori usato dal business plan, usa_consuntivo)."""

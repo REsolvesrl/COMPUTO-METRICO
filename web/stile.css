@@ -356,6 +356,16 @@ input[type="checkbox"] { accent-color: var(--ottone); width: 1rem;
 }
 .totale-oro .valore { font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
 .totale-oro .sotto { font-size: .74rem; opacity: .8; }
+/* l'IVA del registro: quella già pagata e quella che arriverà */
+.totale-oro .iva-registro {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px;
+  margin: 8px 0 0; padding-top: 6px; font-size: .8rem;
+  border-top: 1px solid rgba(26, 39, 68, .25);
+}
+.totale-oro .iva-registro dt, .totale-oro .iva-registro dd { margin: 0; }
+.totale-oro .iva-registro dt span { opacity: .75; }
+.totale-oro .iva-registro dd { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.totale-oro .iva-registro .tutta { padding-top: 3px; border-top: 1px solid rgba(26, 39, 68, .2); }
 .totale-oro .separato {
   font-size: .74rem; margin-top: 6px; padding-top: 6px;
   border-top: 1px solid rgba(26, 39, 68, .25);
