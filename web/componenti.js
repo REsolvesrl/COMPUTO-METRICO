@@ -117,17 +117,51 @@ export const Scelta = defineComponent({
       aperta.value = true;
       nextTick(() => elenco.value?.querySelector(".attiva")?.scrollIntoView({ block: "nearest" }));
     }
-    function chiudi() { aperta.value = false; }
+    function chiudi() { aperta.value = false; cercato = ""; }
     function scegli(o) {
       chiudi();
       bottone.value?.focus();
       if (String(o.valore) !== String(props.valore ?? "")) emit("cambia", o.valore);
     }
+    // Scrivendo si va alla voce: «M» porta a MATERIALE, «ma» anche, e una
+    // seconda «M» passa alla voce dopo che comincia per M. Il pallino e le
+    // emoji davanti non contano, gli accenti nemmeno. Le lettere scritte di
+    // fila si sommano per un secondo, come nelle tendine del sistema.
+    let cercato = "";
+    let quando = 0;
+    const piano = (t) => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/^[^\p{L}\p{N}]+/u, "").toLowerCase();
+    function cerca(lettera) {
+      const ora = Date.now();
+      cercato = ora - quando < 1000 ? cercato + lettera : lettera;
+      quando = ora;
+      const n = voci.value.length;
+      // la stessa lettera ripetuta scorre fra le voci che cominciano così
+      const ripetuta = cercato.length > 1 && [...cercato].every((c) => c === cercato[0]);
+      const cosa = ripetuta ? cercato[0] : cercato;
+      const da = ripetuta || cercato.length === 1 ? attiva.value + 1 : attiva.value;
+      for (let k = 0; k < n; k++) {
+        const i = (Math.max(0, da) + k) % n;
+        if (piano(voci.value[i].testo).startsWith(cosa)) { attiva.value = i; return true; }
+      }
+      return false;
+    }
     function tasto(ev) {
+      const lettera = ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey
+        && (ev.key !== " " || (cercato && Date.now() - quando < 1000)) ? ev.key.toLowerCase() : null;
+      if (lettera) {
+        ev.preventDefault();
+        if (!aperta.value) apri();
+        cerca(piano(lettera) || lettera);
+        nextTick(() => elenco.value?.querySelector(".attiva")?.scrollIntoView({ block: "nearest" }));
+        return;
+      }
       if (!aperta.value) {
         if (["ArrowDown", "ArrowUp", "Enter", " "].includes(ev.key)) { ev.preventDefault(); apri(); }
         return;
       }
+      // chi ha cercato scrivendo e poi va avanti con Tab vuole quella voce
+      if (ev.key === "Tab" && cercato && voci.value[attiva.value]) { scegli(voci.value[attiva.value]); return; }
       if (ev.key === "Escape" || ev.key === "Tab") { chiudi(); return; }
       if (ev.key === "ArrowDown") attiva.value = Math.min(voci.value.length - 1, attiva.value + 1);
       else if (ev.key === "ArrowUp") attiva.value = Math.max(0, attiva.value - 1);
