@@ -292,6 +292,61 @@ def _numero_fattura(testo):
     return NUMERO_MANCANTE
 
 
+_CIFRA = re.compile(r"-?\s?[\d.]+,\d{2}\s*€?")
+_FINE_TABELLA = re.compile(r"METODO DI PAGAMENTO|REGIME FISCALE|RIEPILOGO IVA|"
+                           r"DATI AGGIUNTIVI")
+
+
+def _voci(testo):
+    """Le righe di «Prodotti e servizi» del foglio SdI: [(descrizione, importo)].
+
+    Il testo arriva una cella per riga: il numero della voce da solo, la
+    descrizione (anche su più righe), poi quantità e unità, prezzo, sconto,
+    importo e l'aliquota col «%». L'importo è l'ultima cifra in euro prima
+    dell'aliquota. Dopo vengono righe di dettaglio («Data inizio…», «Tipo
+    dato…») fino al numero della voce dopo.
+    """
+    m = re.search(r"IVA\s+NATURA\s+IVA\s*\n", testo)
+    if not m:
+        return []
+    righe = [r.strip() for r in testo[m.end():].splitlines()]
+    voci, i, numero = [], 0, 1
+    while i < len(righe):
+        while i < len(righe) and righe[i] != str(numero):
+            if _FINE_TABELLA.search(righe[i]):
+                return voci
+            i += 1
+        i += 1
+        pezzi = []
+        while i < len(righe) and righe[i] and not (
+                re.fullmatch(r"\d+(?:[.,]\d+)?", righe[i])
+                or _CIFRA.fullmatch(righe[i])):
+            pezzi.append(righe[i])
+            i += 1
+        importo = None
+        while i < len(righe) and not righe[i].endswith("%"):
+            if _CIFRA.fullmatch(righe[i]):
+                importo = _num_it(righe[i])
+            i += 1
+        if pezzi:
+            voci.append((" ".join(pezzi).lstrip("/ ").strip(), importo or 0.0))
+        numero += 1
+    return voci
+
+
+def _prima_voce(testo):
+    """La voce che dice cosa si è comprato: quella che costa di più.
+
+    Non la prima: nelle fatture di Amazon la prima è spesso la spedizione,
+    e in altre una riga a zero con un codice d'ordine. Fra due importi
+    uguali vince quella che viene prima.
+    """
+    voci = [v for v in _voci(testo) if v[0]]
+    if not voci:
+        return ""
+    return max(voci, key=lambda v: abs(v[1]))[0]
+
+
 def dati_da_pdf_testo(testo):
     """Estrae i dati dal testo di un PDF di cortesia (best-effort).
 
@@ -355,9 +410,12 @@ def dati_da_pdf_testo(testo):
 
     # fornitore: la riga subito dopo "FORNITORE"
     fornitore = _cerca(testo, r"FORNITORE\s*\n\s*(.+)")
-    # descrizione: prima riga significativa dopo l'intestazione tabella o la
-    # "Descrizione causale"
-    descrizione = (_cerca(testo, r"Descrizione\s+causale\s+(.+)")
+    # descrizione: quello che si è comprato, cioè la prima voce di «Prodotti
+    # e servizi». La «Descrizione causale» dei dati aggiuntivi viene dopo,
+    # solo se la tabella non si legge: è un campo libero, e chi vende ci
+    # scrive di tutto — «Vendita», «Pagamento alla ricezione».
+    descrizione = (_prima_voce(testo)
+                   or _cerca(testo, r"Descrizione\s+causale\s+(.+)")
                    or "")
 
     # serve un importo totale riconoscibile: senza, non è una fattura leggibile

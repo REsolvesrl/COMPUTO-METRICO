@@ -353,3 +353,82 @@ def test_xml_della_regolarizzazione_tiene_l_iva():
     # TD20: l'IVA chi compra la versa davvero all'Erario
     d = dati_da_xml(_xml_tipo("TD20"))
     assert (d["importo"], d["aliquota_iva"]) == (122.0, 22.0)
+
+
+# ------------------------------------- l'oggetto: cosa si è comprato davvero
+
+# La tabella «Prodotti e servizi» del foglio SdI, come la estrae PyMuPDF:
+# una cella per riga. Sul modello delle fatture Amazon del cantiere, con la
+# spedizione come prima voce e una causale che non dice niente.
+PDF_PRODOTTI = """FATTURA
+nr. IT26-AEUI-18514314 del 13/11/2026
+FORNITORE
+Amazon EU S.a r.l., Succursale
+PRODOTTI E SERVIZI
+NR
+DESCRIZIONE
+QUANTITA'
+PREZZO
+IMPORTO
+IVA NATURA IVA
+1
+Costi di spedizione
+1
+EA
+9,43 €
+9,43 €
+22 %
+-
+Data inizio: 13/11/2026, Data fine: 13/11/2026
+2
+Scaldabagno Elettrico 74L Sotto Lavello
+Doppia Tanica WiFi Bianco
+1
+EA
+113,98 €
+113,98 €
+22 %
+-
+METODO DI PAGAMENTO
+1
+Carta di
+pagamento
+Pagamento in
+unica soluzione
+REGIME FISCALE
+DATI AGGIUNTIVI
+Descrizione causale Pagamento alla ricezione
+Totale imponibile
+123,41 €
+Totale IVA
+27,15 €
+Totale documento
+150,56 €
+"""
+
+
+def test_l_oggetto_viene_dai_prodotti_non_dalla_causale():
+    d = dati_da_pdf_testo(PDF_PRODOTTI)
+    assert d["oggetto"] == ("Scaldabagno Elettrico 74L Sotto Lavello "
+                            "Doppia Tanica WiFi Bianco")
+
+
+def test_vince_la_voce_che_costa_di_piu_non_la_spedizione():
+    # la spedizione è la prima voce, ma non è quello che si è comprato
+    assert "Spedizione" not in dati_da_pdf_testo(PDF_PRODOTTI)["oggetto"]
+
+
+def test_una_riga_a_zero_in_testa_non_diventa_l_oggetto():
+    testo = PDF_PRODOTTI.replace("Costi di spedizione\n1\nEA\n9,43 €\n9,43 €",
+                                 "/D OR: TESOABJHF\n0,00 €\n0,00 €")
+    assert dati_da_pdf_testo(testo)["oggetto"].startswith("Scaldabagno")
+
+
+def test_senza_tabella_resta_la_causale():
+    testo = """FATTURA
+nr. 12 del 01/10/2026
+Descrizione causale Lavori di tinteggiatura
+Totale documento
+1.220,00 €
+"""
+    assert dati_da_pdf_testo(testo)["oggetto"] == "Lavori di tinteggiatura"
