@@ -50,8 +50,17 @@ const Testata = defineComponent({
       <template v-else-if="!t.vuoto"><span class="cme-etichetta">progetto</span><span class="progetto">senza nome</span></template>
       <span v-else class="cme-etichetta">nessun progetto aperto</span>
       <span class="versione">{{ t.versione }}</span>
-      <span v-if="t.stato === 'mai'" class="salvataggio sospeso">mai salvato in questa sessione</span>
+      <span v-if="t.automatico && t.automatico.motivo === 'senza_nome'" class="salvataggio sospeso"
+            title="Il salvataggio automatico ha bisogno di un nome: lo scrivi in «Dati del progetto», nella scheda del computo.">
+        dai un nome al progetto e si salverà da solo</span>
+      <span v-else-if="t.automatico && t.automatico.motivo === 'nome_preso'" class="salvataggio sospeso"
+            :title="'In archivio esiste già un altro progetto «' + t.automatico.nome + '»: non lo sovrascrivo da solo. Salva lo sostituisce con questo; altrimenti cambia nome.'">
+        non salvato: «{{ t.automatico.nome }}» in archivio è un altro progetto</span>
+      <span v-else-if="t.automatico && t.automatico.motivo === 'errore'" class="salvataggio sospeso"
+            :title="t.automatico.testo">salvataggio non riuscito</span>
+      <span v-else-if="t.stato === 'mai'" class="salvataggio sospeso">mai salvato in questa sessione</span>
       <span v-else-if="t.stato === 'modificato'" class="salvataggio sospeso">modifiche non salvate</span>
+      <span v-else-if="t.stato === 'archivio'" class="salvataggio pari">in archivio, si salva da solo</span>
       <span v-else-if="t.stato === 'pari'" class="salvataggio pari">salvato alle {{ t.salvato_alle }}</span>
     </div>
     <button class="bottone primario salva-testata" @click="gesto('salva')"

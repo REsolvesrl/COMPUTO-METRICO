@@ -22,7 +22,7 @@ import copy
 import hashlib
 import io
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
@@ -85,6 +85,11 @@ FINITURE_PREDEFINITE = {
 }
 ETICHETTE_PREDEFINITE = {"font": 14, "nome": True, "m2": True,
                          "percento": True, "perimetro": True}
+
+
+# Il salvataggio automatico mette da parte al massimo una versione ogni
+# tanto: le versioni servono a tornare a com'era «prima», non un minuto fa.
+VERSIONE_AUTOMATICA = timedelta(minutes=10)
 
 
 class ErroreBanco(ErroreDisegno):
@@ -397,9 +402,34 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         self.ripreso = None
         self.piante_scartate = []
         self._uso_contati = set()
+        self._versionati = set()
         self.carica_disegno()
         self.carica_bp()
         self.carica_giro()
+        self._da_caricato()
+
+    # --------------------------------------------- salvataggio automatico
+    # Il progetto si salva da solo a ogni modifica (Banco.salva_da_solo, che
+    # il motore chiama prima di rispondere a ogni gesto). Due cautele:
+    #
+    # - non scrive sopra un progetto che non è il suo. Il file in archivio
+    #   col nome del progetto è «suo» se l'ha aperto da lì o l'ha già
+    #   salvato in questa sessione; un nome scritto a mano che coincide con
+    #   un altro progetto si ferma e lo dice, e lì decide il tasto Salva;
+    # - le tre versioni di riserva restano utili: la prima volta che si
+    #   salva un progetto in una sessione la versione si mette sempre da
+    #   parte, dopo al massimo una ogni VERSIONE_AUTOMATICA.
+
+    def _da_caricato(self, nome_proprio=None):
+        """Quello che c'è adesso sul banco è il punto di partenza: finché
+        non lo si cambia, non c'è niente da salvare."""
+        # ⚠️ Non firma_salvata: anche scaricare il .json «mette al sicuro»
+        # e la testata lo dice, ma in archivio non scrive niente. Qui si
+        # ricorda cosa c'è davvero nel file dell'archivio (o sul banco
+        # appena aperto).
+        self.firma_archiviata = self.firma()
+        self._nome_proprio = nome_proprio
+        self.autosalvataggio = None
 
     # ------------------------------------------------------ progetto intero
 
@@ -413,6 +443,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         self.carica_bp()
         self.carica_giro()
         self.giro()
+        self._da_caricato()
 
     def nuovo(self):
         """«Svuota tutto»: il computo riparte dalle voci di Migliarina."""
@@ -426,12 +457,16 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         except (OSError, json.JSONDecodeError, UnicodeDecodeError) as errore:
             raise ErroreBanco(f"Non riesco ad aprire «{nome}»: {errore}") \
                 from errore
+        self._nome_proprio = nome
 
     def apri_versione(self, file):
         try:
             self.carica(archivio_locale.carica_versione(file))
         except (OSError, json.JSONDecodeError, UnicodeDecodeError) as errore:
             raise ErroreBanco("Questa versione non è leggibile.") from errore
+        # una versione è il passato di questo progetto: tornarci e cambiare
+        # qualcosa vuol dire rimetterla al suo posto
+        self._nome_proprio = self.nome_archivio()
 
     def vuoto(self):
         """True se non c'è ancora niente da perdere (`progetto_e_vuoto`)."""
@@ -461,6 +496,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
             self.carica(archivio_locale.carica_progetto(nome))
         except Exception:                                    # noqa: BLE001
             return            # file illeggibile: si parte puliti
+        self._nome_proprio = nome
         self.ripreso = {"nome": nome, "quando": quando.isoformat()}
 
     def nome_archivio(self):
@@ -479,18 +515,57 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         return firma(self.dati)
 
     def stato_salvataggio(self):
-        """'vuoto' · 'mai' · 'modificato' · 'pari' (la testata lo dice)."""
+        """'vuoto' · 'mai' · 'archivio' · 'modificato' · 'pari' (la testata
+        lo dice). 'archivio': aperto dall'archivio e non ancora toccato."""
         if self.vuoto():
             return "vuoto"
         if self.ultimo_salvataggio is None:
+            if self._nome_proprio and self.firma() == self.firma_archiviata:
+                return "archivio"
             return "mai"
         if self.firma() != self.firma_salvata:
             return "modificato"
         return "pari"
 
-    def _segna_salvato(self):
+    def _segna_salvato(self, nome=None):
         self.ultimo_salvataggio = datetime.now()
         self.firma_salvata = self.firma()
+        if nome:
+            self.firma_archiviata = self.firma_salvata
+            self._nome_proprio = nome
+            self._versionati.add(nome)
+        self.autosalvataggio = None
+
+    def salva_da_solo(self):
+        """Il salvataggio automatico: in archivio, se c'è qualcosa di nuovo.
+
+        Non solleva mai: un salvataggio che non riesce resta scritto in
+        `autosalvataggio`, e la testata lo dice.
+        """
+        firma = self.firma()
+        if self.vuoto() or firma == self.firma_archiviata:
+            return None
+        if not (self.dati["progetto"]["nome"] or "").strip():
+            self.autosalvataggio = {"motivo": "senza_nome"}
+            return None
+        nome = self.nome_archivio()
+        try:
+            gia_li = nome in archivio_locale.elenco_progetti()
+        except OSError:
+            gia_li = False
+        if gia_li and nome != self._nome_proprio:
+            self.autosalvataggio = {"motivo": "nome_preso", "nome": nome}
+            return None
+        ogni = (VERSIONE_AUTOMATICA if nome in self._versionati else None)
+        try:
+            archivio_locale.salva_progetto(nome, json_bytes(self.dati),
+                                           versione_ogni=ogni)
+        except OSError as errore:
+            self.autosalvataggio = {"motivo": "errore", "testo": str(errore)}
+            return None
+        self._segna_salvato(nome)
+        self._conta_uso(nome)
+        return nome
 
     def _conta_uso(self, nome):
         """Una lavorazione per progetto e per sessione, non per salvataggio."""
@@ -510,7 +585,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
         except OSError as errore:
             raise ErroreBanco(f"Non sono riuscito a salvare: {errore}") \
                 from errore
-        self._segna_salvato()
+        self._segna_salvato(nome)
         self._conta_uso(nome)
         return nome
 
@@ -526,7 +601,7 @@ class Banco(DisegnoMixin, BusinessPlanMixin):
             archivio_locale.salva_progetto(nome, json_bytes(self.dati))
         except OSError as errore:
             raise ErroreBanco(f"Errore nel salvataggio: {errore}") from errore
-        self._segna_salvato()
+        self._segna_salvato(nome)
         self._conta_uso(nome)
         return nome
 

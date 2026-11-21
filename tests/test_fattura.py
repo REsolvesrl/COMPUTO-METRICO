@@ -219,7 +219,7 @@ RITENUTA
 Ritenuta d'acconto (persone fisiche), Aliquota ritenuta 20%, Causale pagamento
 A
 RIEPILOGO IVA
-Totale imponibile \ Importo
+Totale imponibile \\ Importo
 1.619,61 €
 Totale escluso IVA (N1)
 12.748,00 €

@@ -27,7 +27,7 @@ Sostituisce i fogli Excel personali dell'utente ("Studio fattibilità" + "MCA se
 
 - Flusso tipico: valutazione dell'affare (business plan / MCA) → computo metrico della ristrutturazione → misura delle superfici da planimetria (PDF o immagine) → durante il cantiere, registrazione delle spese a consuntivo caricando le fatture (XML FatturaPA o PDF di cortesia SdI, estrazione automatica dei campi, tutto in locale).
 - Misura da planimetria in stile AreaPlan: più planimetrie per progetto, zone colorate per categoria di superficie con percentuale commerciale, scala su misura nota, misura pareti, riepilogo della superficie commerciale riportabile nel computo; rilevamento automatico stanze (beta, OpenCV).
-- Salvataggio: archivio in una cartella del computer (`~/CME/progetti`, con le ultime tre versioni di ogni progetto) e file .json scaricabile (planimetrie incluse). Il programma online (Streamlit Cloud, poi Render, archivio Supabase, password) non serve più dal 24/09/2026.
+- Salvataggio: automatico a ogni modifica (dal 21/11/2026), in una cartella del computer (`~/CME/progetti`, con le ultime tre versioni di ogni progetto, al massimo una ogni dieci minuti) e file .json scaricabile (planimetrie incluse). Il programma online (Streamlit Cloud, poi Render, archivio Supabase, password) non serve più dal 24/09/2026.
 - Avvio con `Avvia CME.bat`, che si aggiorna da sé; test con pytest.
 
 ## Capabilities and Constraints

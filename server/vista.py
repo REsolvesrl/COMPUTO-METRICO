@@ -66,6 +66,8 @@ def testata(b: Banco):
         "versione": versione_codice(),
         "nome_archivio": b.nome_archivio(),
         "cartella": str(archivio_locale.cartella()),
+        # perché il salvataggio automatico si è fermato, se si è fermato
+        "automatico": b.autosalvataggio,
     }
 
 

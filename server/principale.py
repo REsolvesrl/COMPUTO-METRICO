@@ -282,6 +282,10 @@ class Gesto(BaseModel):
 
 def _vista():
     BANCO.riapri_ultimo()
+    # Ogni risposta del motore passa di qui dopo un gesto, una fattura, una
+    # planimetria: è il punto giusto per salvare, prima di dire alla pagina
+    # com'è il progetto. Se non è cambiato niente, non scrive niente.
+    BANCO.salva_da_solo()
     return viste.vista(BANCO)
 
 

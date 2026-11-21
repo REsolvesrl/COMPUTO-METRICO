@@ -78,8 +78,12 @@ def test_salva_scrive_nell_archivio_e_la_testata_lo_dice(client, tmp_path):
     assert r["esito"]["tipo"] == "ok"
     assert r["vista"]["testata"]["stato"] == "pari"
     assert (tmp_path / "progetti" / "Via Roma.json").is_file()
+    # e da lì in poi si salva da solo, a ogni modifica
+    file = tmp_path / "progetti" / "Via Roma.json"
+    prima = file.read_bytes()
     r = _gesto(client, "prezzo", codice="2.1", valore=99)
-    assert r["vista"]["testata"]["stato"] == "modificato"
+    assert r["vista"]["testata"]["stato"] == "pari"
+    assert file.read_bytes() != prima
 
 
 @pytest.mark.parametrize("che_cosa,tipo", [
@@ -254,3 +258,71 @@ def test_plotly_non_pesa_sulla_prima_pagina(client):
     assert "plotly.min.js" not in client.get("/").text
     assert client.get("/statico/vendor/plotly.min.js").status_code == 200
     assert client.get("/statico/spiega.js").status_code == 200
+
+
+# ------------------------------------------------ il salvataggio automatico
+# Ogni modifica finisce in archivio da sola (21/11/2026), ma senza scrivere
+# sopra un progetto che non è quello aperto, e senza bruciare le versioni.
+
+def test_un_progetto_con_nome_si_salva_da_solo(client, tmp_path):
+    _gesto(client, "nuovo")
+    _gesto(client, "imposta_progetto", campo="nome", valore="Via Milano")
+    r = _gesto(client, "quantita", codice="2.1", valore=10)
+    assert r["vista"]["testata"]["stato"] == "pari"
+    assert (tmp_path / "progetti" / "Via Milano.json").is_file()
+
+
+def test_senza_nome_non_si_salva_e_lo_dice(client, tmp_path):
+    _gesto(client, "nuovo")
+    r = _gesto(client, "quantita", codice="2.1", valore=10)
+    assert r["vista"]["testata"]["automatico"] == {"motivo": "senza_nome"}
+    assert not (tmp_path / "progetti" / "Progetto senza nome.json").exists()
+
+
+def test_non_scrive_sopra_un_altro_progetto_con_lo_stesso_nome(client, tmp_path):
+    _gesto(client, "nuovo")
+    _gesto(client, "imposta_progetto", campo="nome", valore="Via Roma")
+    _gesto(client, "quantita", codice="2.1", valore=10)
+    file = tmp_path / "progetti" / "Via Roma.json"
+    buono = file.read_bytes()
+    # un progetto nuovo a cui si dà lo stesso nome non è «Via Roma»
+    _gesto(client, "nuovo")
+    _gesto(client, "imposta_progetto", campo="nome", valore="Via Roma")
+    r = _gesto(client, "quantita", codice="2.1", valore=77)
+    assert r["vista"]["testata"]["automatico"]["motivo"] == "nome_preso"
+    assert file.read_bytes() == buono
+    # il tasto Salva resta la decisione di chi lavora
+    _gesto(client, "salva")
+    assert file.read_bytes() != buono
+
+
+def _apri(client, nome):
+    r = client.post("/api/gesto", json={"nome": "apri", "argomenti": {"nome": nome}})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_un_progetto_riaperto_dall_archivio_si_salva_al_suo_posto(client, tmp_path):
+    _gesto(client, "nuovo")
+    _gesto(client, "imposta_progetto", campo="nome", valore="Via Roma")
+    _gesto(client, "quantita", codice="2.1", valore=10)
+    _gesto(client, "nuovo")
+    _apri(client, "Via Roma")
+    file = tmp_path / "progetti" / "Via Roma.json"
+    prima = file.read_bytes()
+    # aperto e basta non si riscrive
+    assert _gesto(client, "nuovo") and file.read_bytes() == prima
+    _apri(client, "Via Roma")
+    r = _gesto(client, "quantita", codice="2.1", valore=20)
+    assert r["vista"]["testata"]["stato"] == "pari"
+    assert file.read_bytes() != prima
+
+
+def test_le_versioni_non_si_bruciano_a_ogni_modifica(client, tmp_path):
+    import archivio_locale
+    _gesto(client, "nuovo")
+    _gesto(client, "imposta_progetto", campo="nome", valore="Via Roma")
+    for valore in range(1, 8):
+        _gesto(client, "quantita", codice="2.1", valore=valore)
+    # sette salvataggi in pochi secondi: una versione sola messa da parte
+    assert len(archivio_locale.versioni("Via Roma")) == 1

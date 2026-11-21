@@ -134,18 +134,30 @@ def carica_versione(file):
         return json.load(fh)
 
 
-def _metti_da_parte(finale, quando=None):
+def _metti_da_parte(finale, quando=None, ogni=None):
     """Archivia il progetto attuale prima che venga sovrascritto.
 
     Poi pota: restano le VERSIONI_TENUTE − 1 più recenti, perché la terza
     è il file del progetto che sta per essere riscritto.
+
+    `ogni` (un timedelta): se l'ultima versione messa da parte è più
+    giovane di così, non se ne fa un'altra. Serve al salvataggio
+    automatico, che scrive a ogni modifica: senza, in tre caselle cambiate
+    le versioni di riserva sarebbero tutte di un minuto fa.
     """
     if not finale.is_file():
         return                      # primo salvataggio: non c'è un prima
     cart = cartella_versioni()
-    cart.mkdir(parents=True, exist_ok=True)
     radice = finale.name[:-len(ESTENSIONE)]
-    marca = (quando or datetime.now()).strftime("%Y%m%d-%H%M%S")
+    adesso = quando or datetime.now()
+    if ogni is not None:
+        precedenti = sorted(cart.glob(radice + "__*" + ESTENSIONE),
+                            key=lambda f: f.name, reverse=True) \
+            if cart.is_dir() else []
+        if precedenti and adesso - quando_versione(precedenti[0]) < ogni:
+            return
+    cart.mkdir(parents=True, exist_ok=True)
+    marca = adesso.strftime("%Y%m%d-%H%M%S")
     # due salvataggi nello stesso secondo finiscono sullo stesso nome: il
     # secondo sovrascrive il primo, che è la cosa giusta (sono lo stesso
     # istante di lavoro) e soprattutto non fa fallire il salvataggio
@@ -156,7 +168,7 @@ def _metti_da_parte(finale, quando=None):
         vecchia.unlink(missing_ok=True)
 
 
-def salva_progetto(nome, contenuto):
+def salva_progetto(nome, contenuto, versione_ogni=None):
     """Scrive (o sovrascrive) il progetto `nome` con i byte JSON `contenuto`.
 
     Scrive prima un file temporaneo e poi lo rinomina: se manca la corrente a
@@ -170,6 +182,9 @@ def salva_progetto(nome, contenuto):
     salvataggio automatico ogni versione è uno stato che una persona ha
     deciso di salvare, non un'istantanea presa da un timer.
 
+    `versione_ogni`: per il salvataggio automatico, la versione si mette da
+    parte solo se l'ultima ha almeno quell'età (vedi _metti_da_parte).
+
     ⚠️ La messa da parte non deve MAI impedire il salvataggio: se la copia
     non riesce (disco pieno, cartella in sola lettura) si salva lo stesso.
     Perdere la cronologia è un dispiacere, perdere il lavoro no.
@@ -178,7 +193,7 @@ def salva_progetto(nome, contenuto):
     cart.mkdir(parents=True, exist_ok=True)
     finale = cart / _chiave(nome)
     try:
-        _metti_da_parte(finale)
+        _metti_da_parte(finale, ogni=versione_ogni)
     except OSError:
         pass
     temporaneo = finale.with_suffix(".json.parziale")
