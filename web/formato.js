@@ -22,6 +22,8 @@ export function numeroDaIt(testo) {
   if (testo === null || testo === undefined) return null;
   let t = String(testo).replace(/[€%]/g, "").replace(/[\s ]/g, "");
   if (!t) return null;
+  // il meno tipografico (−) e il trattino lungo arrivano copiando da un PDF
+  t = t.replace(/[−–]/g, "-");
   if (t.includes(",")) {
     t = t.replace(/\./g, "").replace(",", ".");
   } else if (t.includes(".")) {
