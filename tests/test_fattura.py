@@ -243,7 +243,7 @@ def test_le_imposte_anticipate_entrano_nell_aliquota_media():
     # prima l'imponibile «\ Importo» non si leggeva e l'IVA usciva a zero;
     # contando solo i 1.619,61 imponibili sarebbe uscita al 22% su tutto
     d = dati_da_pdf_testo(PDF_NOTAIO)
-    assert d["aliquota_iva"] == 2.5
+    assert round(d["aliquota_iva"], 2) == 2.48
 
 
 def test_un_totale_gia_lordo_non_prende_la_ritenuta_due_volte():
@@ -451,3 +451,33 @@ def test_la_nota_di_credito_xml_toglie_anche_se_scritta_positiva():
 
 def test_una_nota_gia_negativa_non_cambia_segno_due_volte():
     assert dati_da_pdf_testo(PDF_NOTA)["importo"] == -23.72
+
+
+# ------------------------------------- l'IVA esatta, quella del documento
+
+def test_lo_scorporo_ridà_l_iva_del_notaio_al_centesimo():
+    from fattibilita import iva_scorporata
+    d = dati_da_pdf_testo(PDF_NOTAIO)
+    # col 2,5% tondo uscivano 359,12 €
+    assert iva_scorporata(d["importo"], d["aliquota_iva"]) == 356.31
+
+
+def test_l_aliquota_tonda_resta_tonda_quando_basta():
+    assert dati_da_pdf_testo(PDF_FATTURA)["aliquota_iva"] == 22.0
+
+
+def test_il_centesimo_di_amazon_torna():
+    from fattibilita import iva_scorporata
+    # 34,20 € con 6,16 € di IVA: il 22% tondo ne scorpora 6,17
+    testo = PDF_FATTURA.replace("100,00 €", "28,04 €").replace(
+        "22,00 €", "6,16 €").replace("122,00 €", "34,20 €")
+    d = dati_da_pdf_testo(testo)
+    assert iva_scorporata(d["importo"], d["aliquota_iva"]) == 6.16
+
+
+def test_la_nota_di_credito_scorpora_iva_negativa():
+    from fattibilita import iva_scorporata
+    testo = PDF_FATTURA.replace("FATTURA", "NOTA DI CREDITO", 1)
+    d = dati_da_pdf_testo(testo)
+    iva = iva_scorporata(d["importo"], d["aliquota_iva"])
+    assert (d["importo"], iva) == (-122.0, -22.0)

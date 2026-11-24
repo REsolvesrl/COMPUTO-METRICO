@@ -172,7 +172,7 @@ const Spese = defineComponent({
     const colSostenute = computed(() => [
       { chiave: "importo", titolo: "Totale fattura", tipo: "numero", formato: "euro", larghezza: 120,
         aiuto: "Il LORDO, IVA compresa — il «totale documento» della fattura. Una nota di credito va col meno davanti: toglie. L'IVA si scorpora da qui con l'aliquota della colonna accanto: mettendoci l'imponibile, l'IVA esce sbagliata." },
-      { chiave: "aliquota_iva", titolo: "IVA %", tipo: "numero", decimali: 0, larghezza: 70, minimo: 0, massimo: 22,
+      { chiave: "aliquota_iva", titolo: "IVA %", tipo: "numero", formato: "aliquota", larghezza: 70, minimo: 0, massimo: 22,
         aiuto: "Aliquota della fattura, per lo scorporo (22, 10 o 0)" },
       { chiave: "iva_eur", titolo: "di cui IVA", tipo: "numero", formato: "euro", larghezza: 105, sola_lettura: true,
         aiuto: "Calcolata: l'IVA contenuta nel totale, con l'aliquota della colonna accanto." },
@@ -190,7 +190,7 @@ const Spese = defineComponent({
       { chiave: "oggetto", titolo: "Oggetto", tipo: "testo", larghezza: 190 },
       { chiave: "importo", titolo: "Importo previsto", tipo: "numero", formato: "euro", larghezza: 125, minimo: 0,
         aiuto: "IVA compresa, come il totale di una fattura: l'IVA si scorpora con l'aliquota accanto, e i totali qui sotto sono al netto." },
-      { chiave: "aliquota_iva", titolo: "IVA %", tipo: "numero", decimali: 0, larghezza: 70, minimo: 0, massimo: 22,
+      { chiave: "aliquota_iva", titolo: "IVA %", tipo: "numero", formato: "aliquota", larghezza: 70, minimo: 0, massimo: 22,
         aiuto: "Aliquota prevista, per lo scorporo (22, 10 o 0)" },
       { chiave: "iva_eur", titolo: "di cui IVA", tipo: "numero", formato: "euro", larghezza: 105, sola_lettura: true,
         aiuto: "Calcolata: l'IVA contenuta nell'importo previsto, con l'aliquota della colonna accanto." },

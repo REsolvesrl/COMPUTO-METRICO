@@ -158,6 +158,37 @@ def _tutti(root, nome):
 TIPI_NOTA_CREDITO = {"TD04", "TD08"}
 
 
+def _scorporo(lordo, aliquota):
+    """Come fattibilita.iva_scorporata: l'IVA dentro un lordo."""
+    if not aliquota or aliquota <= 0:
+        return 0.0
+    return round(lordo - lordo / (1 + aliquota / 100), 2)
+
+
+def _aliquota_esatta(dati, imposta):
+    """L'aliquota che, scorporata dall'importo, ridà l'IVA del documento.
+
+    Le spese tengono l'importo e l'aliquota, e l'IVA la ricavano. Con
+    un'aliquota arrotondata l'IVA ricavata scappava: sulla parcella del
+    notaio (12.748 € di imposte senza IVA, il resto al 22%) il 2,5%
+    scorporava 359,12 € contro i 356,31 scritti, e su due fatture Amazon il
+    22% tondo sbagliava di un centesimo. Se l'aliquota letta non ridà
+    l'IVA del documento al centesimo, la si scrive con la precisione che
+    serve; la tabella la mostra coi decimali solo quando ci sono.
+    """
+    lordo = abs(float(dati.get("importo") or 0.0))
+    iva = abs(float(imposta or 0.0))
+    aliquota = float(dati.get("aliquota_iva") or 0.0)
+    if imposta is None or not lordo or not iva:
+        return dati
+    if abs(_scorporo(lordo, aliquota) - iva) < 0.005:
+        return dati
+    netto = lordo - iva
+    if netto > 0:
+        dati["aliquota_iva"] = round(iva / netto * 100, 6)
+    return dati
+
+
 def _da_nota_di_credito(dati):
     """Una nota di credito toglie: l'importo entra col meno davanti.
 
@@ -257,6 +288,7 @@ def _dati_da_xml(contenuto):
         "oggetto": _oggetto(descrizione),
         "note": note,
     }
+    _aliquota_esatta(dati, imposta_tot)
     if tipo_txt in TIPI_AUTOFATTURA:
         return _senza_iva(dati, imposta_tot)
     if tipo_txt in TIPI_NOTA_CREDITO:
@@ -449,6 +481,7 @@ def dati_da_pdf_testo(testo):
         "oggetto": _oggetto(descrizione),
         "note": _nota_ritenuta(ritenuta) if ritenuta else "",
     }
+    _aliquota_esatta(dati, imposta)
     # Il foglio SdI intitola «AUTOFATTURA» il documento che emette chi
     # compra. Sul PDF il codice del tipo non c'è, quindi non si distingue
     # un'integrazione (TD16-TD19) da una regolarizzazione (TD20, dove l'IVA

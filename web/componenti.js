@@ -513,6 +513,11 @@ export const Griglia = defineComponent({
       if (v === null || v === undefined || v === "") return "";
       if (col.tipo === "numero") {
         if (col.formato === "euro") return euro(v);
+        if (col.formato === "aliquota") {
+          // fino a due decimali, e solo quelli che ci sono: «22», «2,48»
+          const t = numeroIt(v, 2);
+          return t.includes(",") ? t.replace(/0+$/, "").replace(/,$/, "") : t;
+        }
         return numeroIt(v, col.decimali ?? 2);
       }
       return v;
