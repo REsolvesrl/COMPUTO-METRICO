@@ -156,6 +156,22 @@ def _tutti(root, nome):
 
 
 TIPI_NOTA_CREDITO = {"TD04", "TD08"}
+
+
+def _da_nota_di_credito(dati):
+    """Una nota di credito toglie: l'importo entra col meno davanti.
+
+    ⚠️ Col meno anche se il documento lo scrive positivo, che è il caso
+    normale: nel tracciato il tipo (TD04) dice già che si storna, e gli
+    importi si scrivono senza segno. Solo alcuni fornitori (HERA) li mettono
+    negativi, e quelli si lasciano come sono. Prima la nota di credito di
+    Deghi da 125 € era entrata come una spesa da +125.
+    """
+    dati["importo"] = -abs(dati["importo"])
+    if "Nota di credito" not in dati["note"]:
+        dati["note"] = " · ".join(n for n in ("Nota di credito", dati["note"])
+                                  if n)
+    return dati
 # Le autofatture d'integrazione: reverse charge interno (TD16), servizi
 # dall'estero (TD17), beni intra-UE (TD18), beni già in Italia (TD19).
 # L'IVA ci si scrive, si versa e si detrae nello stesso momento: al
@@ -243,6 +259,8 @@ def _dati_da_xml(contenuto):
     }
     if tipo_txt in TIPI_AUTOFATTURA:
         return _senza_iva(dati, imposta_tot)
+    if tipo_txt in TIPI_NOTA_CREDITO:
+        return _da_nota_di_credito(dati)
     return dati
 
 
@@ -437,4 +455,7 @@ def dati_da_pdf_testo(testo):
     # si paga davvero): si legge come integrazione, che è il caso normale.
     if re.match(r"\s*AUTOFATTURA\b", testo):
         return _senza_iva(dati, imposta)
+    # il foglio SdI intitola così le TD04 e le TD08
+    if re.match(r"\s*NOTA\s+DI\s+CREDITO\b", testo, re.IGNORECASE):
+        return _da_nota_di_credito(dati)
     return dati

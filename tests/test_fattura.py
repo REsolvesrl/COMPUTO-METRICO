@@ -432,3 +432,22 @@ Totale documento
 1.220,00 €
 """
     assert dati_da_pdf_testo(testo)["oggetto"] == "Lavori di tinteggiatura"
+
+
+# --------------------------------------------------- le note di credito
+
+def test_la_nota_di_credito_in_pdf_toglie_anche_se_scritta_positiva():
+    # come quella di Deghi: titolo «NOTA DI CREDITO», importi senza segno
+    testo = PDF_FATTURA.replace("FATTURA\n", "NOTA DI CREDITO\n", 1)
+    d = dati_da_pdf_testo(testo)
+    assert d["importo"] == -122.0
+    assert d["note"] == "Nota di credito"
+
+
+def test_la_nota_di_credito_xml_toglie_anche_se_scritta_positiva():
+    d = dati_da_xml(XML_FATTURA.replace("TD01", "TD04"))
+    assert d["importo"] == -122.0
+
+
+def test_una_nota_gia_negativa_non_cambia_segno_due_volte():
+    assert dati_da_pdf_testo(PDF_NOTA)["importo"] == -23.72

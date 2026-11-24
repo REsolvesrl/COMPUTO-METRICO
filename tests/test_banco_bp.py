@@ -278,3 +278,15 @@ def test_il_confronto_col_computo_e_fra_netti(b):
     c = vista_bp(b)["spese"]["confronto"]
     assert c["speso"] == 10000.0
     assert c["scostamento"] == round(10000.0 - c["preventivo"], 2)
+
+
+def test_una_nota_di_credito_toglie_dai_totali(b):
+    b.scrivi_spese("spese", [
+        {"importo": 134.30, "aliquota_iva": 22, "categoria": "MATERIALE"},
+        {"importo": -125.00, "aliquota_iva": 22, "categoria": "MATERIALE"}])
+    # la riga negativa resta negativa: non si scarta e non cambia segno
+    assert [r["importo"] for r in b.dati["spese"]] == [134.30, -125.00]
+    v = vista_bp(b)["spese"]
+    assert v["sostenute"][1]["iva_eur"] == pytest.approx(-22.54)
+    assert v["totale_sostenute"] == pytest.approx(110.08 - 102.46, abs=0.01)
+    assert v["iva_sostenute"] == pytest.approx(24.22 - 22.54, abs=0.01)
